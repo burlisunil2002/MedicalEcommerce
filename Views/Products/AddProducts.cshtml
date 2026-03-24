@@ -1,0 +1,112 @@
+﻿@model VivekMedicalProducts.Models.ProductModel
+
+<link rel="stylesheet" href="~/css/AddProduct.css" />
+
+<div class="page-container">
+    <div class="card product-card shadow-lg">
+
+        <!-- Header with Back Button -->
+        <div class="card-header-custom">
+            <h3>Add New Product</h3>
+
+            <a asp-controller="Products"
+               asp-action="ProductManagement"
+               class="btn-back">
+                ← Back
+            </a>
+        </div>
+
+        <div class="card-body">
+
+            <form asp-action="AddProducts" method="post" enctype="multipart/form-data">
+
+                <!-- Product Name -->
+                <div class="mb-3">
+                    <label asp-for="Name" class="form-label"></label>
+                    <input asp-for="Name" class="form-control modern-input" placeholder="Enter product name" />
+                </div>
+
+                <!-- Category -->
+                <div class="mb-3">
+                    <label asp-for="Category" class="form-label"></label>
+                    <select asp-for="Category" class="form-select modern-input searchable-dropdown">
+                        <option value="">-- Select Category --</option>
+                        <option>Mother & Child Care</option>
+                        <option>Radiology</option>
+                        <option>Critical Care Equipment</option>
+                        <option>Lab & Diagnostics</option>
+                        <option>Consumables & Disposables</option>
+                        <option>Thermal Camera</option>
+                        <option>Medicine Vending Machine</option>
+                        <option>Surgical Instruments</option>
+                        <option>Hospital Furniture</option>
+                        <option>iLAB</option>
+                        <option>Safe Zone Container</option>
+                        <option>Oxy Wheel</option>
+                        <option>Water Recycling System</option>
+                        <option>Portable Ventilators</option>
+                        <option>Anesthesia Machine</option>
+                        <option>Point of Care Devices</option>
+                        <option>Prosthesis</option>
+                        <option>Instruments</option>
+                        <option>Uroflowrometry</option>
+                    </select>
+                </div>
+
+                <!-- Description -->
+                <div class="mb-3">
+                    <label asp-for="Description" class="form-label"></label>
+                    <textarea asp-for="Description"
+                              class="form-control modern-input"
+                              rows="3"
+                              placeholder="Enter product description"></textarea>
+                </div>
+
+                <!-- Price & GST -->
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label asp-for="Price" class="form-label"></label>
+                        <input asp-for="Price" class="form-control modern-input" placeholder="Enter price" />
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label asp-for="GSTPercentage" class="form-label"></label>
+                        <input asp-for="GSTPercentage" class="form-control modern-input" placeholder="Enter GST %" />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Price Type</label>
+
+                    <select asp-for="PriceType" class="form-control">
+                        <option value="">-- Select Price Type --</option>
+                        <option value="Normal">Normal</option>
+                        <option value="AskForPrice">Ask For Price</option>
+                    </select>
+
+                    <span asp-validation-for="PriceType" class="text-danger"></span>
+                </div>
+
+                <!-- Upload Image -->
+                <div class="mb-3">
+                    <label class="form-label">Upload Product Image</label>
+                    <input type="file" name="ImageFile" class="form-control modern-input" />
+                </div>
+
+                <!-- Upload Quotation -->
+                <div class="mb-3">
+                    <label class="form-label">Upload Quotation (PDF / DOC)</label>
+                    <input type="file" name="quotationFile" class="form-control modern-input" />
+                </div>
+
+                <!-- Submit -->
+                <div class="text-center mt-4">
+                    <button type="submit" class="btn-save">
+                        Save Product
+                    </button>
+                </div>
+
+            </form>
+        </div>
+    </div>
+</div>

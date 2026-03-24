@@ -1,0 +1,109 @@
+﻿@model VivekMedicalProducts.ViewModels.RegisterViewModel
+
+@section Styles {
+    <script src="https://cdn.tailwindcss.com"></script>
+}
+
+<!-- SUCCESS MESSAGE -->
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="max-w-4xl mx-auto mt-4 p-4 bg-green-100 text-green-800 rounded-lg shadow">
+        @TempData["SuccessMessage"]
+    </div>
+}
+
+<div class="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 flex items-center justify-center p-6">
+
+    <div class="w-full max-w-6xl grid md:grid-cols-2 bg-white rounded-3xl shadow-2xl overflow-hidden">
+
+        <!-- LEFT SIDE (BRANDING) -->
+        <div class="hidden md:flex flex-col justify-center items-center bg-blue-600 text-white p-10">
+            <h2 class="text-4xl font-bold mb-4">Welcome Back!</h2>
+            <p class="text-center text-blue-100">Register to manage your orders, profile and support requests easily.</p>
+        </div>
+
+        <!-- RIGHT SIDE (FORM) -->
+        <div class="p-10">
+
+            <h2 class="text-3xl font-bold text-gray-800 mb-2">Create Account</h2>
+            <p class="text-gray-500 mb-6">Fill your details below</p>
+
+            <form asp-action="Register" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+
+                <div asp-validation-summary="All" class="text-red-500 mb-4"></div>
+
+                <div class="grid md:grid-cols-2 gap-5">
+
+                    <input asp-for="CompanyName" placeholder="Company Name" class="input" />
+                    <input asp-for="CustomerName" placeholder="Customer Name" class="input" />
+                    <input asp-for="IndustrySector" placeholder="Industry" class="input" />
+                    <input asp-for="MobileNo" placeholder="Mobile Number" class="input" />
+                    <input asp-for="Email" placeholder="Email Address" class="input" />
+                    <input asp-for="SecondaryEmail" placeholder="Secondary Email" class="input" />
+                    <input asp-for="SecondaryMobile" placeholder="Secondary Mobile" class="input" />
+                    <input asp-for="GSTNo" placeholder="GST Number" class="input uppercase" />
+                    <input asp-for="PANNo" placeholder="PAN Number" class="input uppercase" />
+
+                    <textarea asp-for="Address" placeholder="Full Address" class="input md:col-span-2"></textarea>
+
+                    <input asp-for="Document" type="file" class="input md:col-span-2 bg-gray-50" />
+
+                </div>
+
+                <div class="flex items-center mt-5">
+                    <input asp-for="AcceptPrivacy" type="checkbox" class="mr-2" />
+                    <span class="text-sm text-gray-600">I accept Privacy Policy</span>
+                </div>
+
+                <button type="submit" class="w-full mt-6 bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 transition">
+                    Register Now
+                </button>
+
+                <p class="text-sm text-center text-gray-500 mt-4">
+                    Already have an account?
+                    <a asp-action="Login" class="text-blue-600 font-medium">Login</a>
+                </p>
+
+            </form>
+        </div>
+
+    </div>
+</div>
+
+
+
+<style>
+    .input {
+        border: 1px solid #e5e7eb;
+        padding: 12px;
+        border-radius: 12px;
+        width: 100%;
+        outline: none;
+        transition: 0.3s;
+    }
+
+        .input:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 2px rgba(37,99,235,0.2);
+        }
+
+    .profile-input {
+        border: 1px solid #e5e7eb;
+        padding: 10px;
+        border-radius: 10px;
+        background: #f9fafb;
+    }
+
+        .profile-input:enabled {
+            background: white;
+            border-color: #2563eb;
+        }
+</style>
+
+<script>
+    function enableEdit() {
+        document.querySelectorAll('.profile-input').forEach(x => x.disabled = false);
+        document.getElementById('saveBtn').classList.remove('hidden');
+    }
+</script>

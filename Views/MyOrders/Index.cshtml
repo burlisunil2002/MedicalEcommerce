@@ -1,0 +1,131 @@
+﻿@model IEnumerable<VivekMedicalProducts.ViewModels.MyOrderViewModel>
+
+<div class="max-w-5xl mx-auto px-4 py-10">
+
+    <h1 class="text-3xl font-bold text-gray-800 mb-8 text-center">
+        My Orders
+    </h1>
+
+    @if (!Model.Any())
+    {
+        <div class="bg-blue-50 border border-blue-200 text-blue-700 p-5 rounded-lg text-center">
+            You have not placed any orders yet.
+        </div>
+    }
+    else
+    {
+
+        <div class="space-y-6">
+
+            @foreach (var item in Model)
+            {
+
+                <div id="order-@item.OrderId"
+                     class="bg-white rounded-xl shadow-sm border hover:shadow-md transition p-5">
+
+                    <div class="flex flex-col md:flex-row gap-6">
+
+                        <!-- PRODUCT IMAGE -->
+
+                        <div class="flex justify-center md:block">
+
+                            <img src="@item.ProductImage"
+                                 alt="@item.ProductName"
+                                 class="w-28 h-28 object-contain border rounded-lg p-2 bg-white" />
+
+                        </div>
+
+
+                        <!-- ORDER DETAILS -->
+
+                        <div class="flex-1">
+
+                            <h3 class="text-lg font-semibold text-gray-800 mb-2">
+                                @item.ProductName
+                            </h3>
+
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm text-gray-600 mb-3">
+
+                                <p>
+                                    <span class="font-medium">Order ID:</span> #@item.OrderId
+                                </p>
+
+                                <p>
+                                    <span class="font-medium">Date:</span>
+                                    @item.OrderDate.ToShortDateString()
+                                </p>
+
+                                <p>
+                                    <span class="font-medium">Quantity:</span>
+                                    @item.Quantity
+                                </p>
+
+                                <p>
+                                    <span class="font-medium">Total:</span>
+                                    ₹@item.Total
+                                </p>
+
+                            </div>
+
+
+                            <!-- STATUS BADGES -->
+
+                            <div class="flex flex-wrap gap-2">
+
+                                <span class="px-3 py-1 text-xs font-medium rounded-full
+        @(item.ItemStatus.ToLower() == "pending" ? "bg-yellow-100 text-yellow-700" :
+                                      item.ItemStatus.ToLower() == "processing" ? "bg-blue-100 text-blue-700" :
+                                      item.ItemStatus.ToLower() == "shipped" ? "bg-purple-100 text-purple-700" :
+                                      item.ItemStatus.ToLower() == "delivered" ? "bg-green-100 text-green-700" :
+                                      "bg-red-100 text-red-700")">
+
+                                    Order: @item.ItemStatus
+
+                                </span>
+
+
+                                <span class="px-3 py-1 text-xs font-medium rounded-full
+        @(item.PaymentStatus.ToLower() == "pending" ? "bg-gray-200 text-gray-700" :
+                                      item.PaymentStatus.ToLower() == "verified" ? "bg-green-100 text-green-700" :
+                                      "bg-red-100 text-red-700")">
+
+                            Payment: @item.PaymentStatus
+
+                                </span>
+
+                            </div>
+
+                        </div>
+
+
+                        <!-- ACTION BUTTONS -->
+
+                        <div class="flex flex-col gap-2 md:items-end justify-center">
+
+                            <a href="/Orders/Invoice/@item.OrderId"
+                               class="px-4 py-2 text-sm bg-green-500 hover:bg-green-600 text-white rounded-lg text-center">
+
+                                Download Invoice
+
+                            </a>
+
+                    @if (item.ItemStatus.ToLower() == "delivered")
+                            {
+                                <button class="px-4 py-2 text-sm bg-gray-100 text-gray-600 rounded-lg cursor-not-allowed">
+                                    Reorder
+                                </button>
+                            }
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            }
+
+        </div>
+
+    }
+
+</div>

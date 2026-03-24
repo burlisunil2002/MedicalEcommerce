@@ -1,0 +1,118 @@
+﻿@model IEnumerable<VivekMedicalProducts.Models.ProductModel>
+
+<link href="~/css/products.css" rel="stylesheet" />
+
+<div class="products-hero">
+
+    <a asp-controller="Home"
+       asp-action="HomePage"
+       class="btn-back">
+        ← Back
+    </a>
+
+    <div class="container text-center">
+        <h1>Our Medical Products</h1>
+        <p>High-quality certified healthcare equipment & supplies</p>
+    </div>
+
+</div>
+
+<div class="container py-5">
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success text-center shadow-sm">
+            @TempData["SuccessMessage"]
+        </div>
+    }
+
+    <!-- SEARCH -->
+    <form method="get" asp-action="Index" class="mb-4">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <input type="text"
+                           name="searchString"
+                           value="@Context.Request.Query["searchString"]"
+                           class="form-control"
+                           placeholder="Search Medical Products..." />
+
+                    <button type="submit" class="btn btn-success">
+                        Search
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <!-- PRODUCT GRID -->
+    <div class="row g-4">
+
+        @if (Model != null && Model.Any())
+        {
+            foreach (var product in Model)
+            {
+                <div class="col-lg-4 col-md-6 col-sm-12">
+                    <div class="product-card">
+
+                        <div class="product-img">
+                            <a asp-controller="Products"
+                               asp-action="Details"
+                               asp-route-id="@product.Id">
+
+                                @if (!string.IsNullOrEmpty(product.ImagePath))
+                                {
+                                    <img src="@product.ImagePath" alt="@product.Name" />
+                                }
+                                else
+                                {
+                                    <img src="~/images/no-image.png" />
+                                }
+                            </a>
+                        </div>
+
+                        <div class="product-details">
+                            <h5>@product.Name</h5>
+
+                            <p class="price">
+                                <span class="ask-price">Ask for price</span>
+
+                                @if (product.GSTPercentage != null && product.GSTPercentage != 0)
+                                {
+                                    <small> + GST @product.GSTPercentage%</small>
+                                }
+                            </p>
+                        </div>
+
+                        <div class="product-actions">
+                            <a asp-controller="Home"
+                               asp-action="Enquiry"
+                               asp-route-productId="@product.Id"
+                               class="btn enquiry-btn">
+                                Enquiry
+                            </a>
+
+                            <a asp-controller="Cart"
+                               asp-action="AddToCart"
+                               asp-route-id="@product.Id"
+                               class="btn cart-btn">
+                                Add to Cart
+                            </a>
+                        </div>
+
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="col-12 text-center">
+                <div class="no-products">
+                    No products available.
+                </div>
+            </div>
+        }
+
+    </div>
+
+</div>

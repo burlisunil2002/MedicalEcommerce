@@ -1,0 +1,223 @@
+﻿@{
+    var carts = ViewBag.Carts;
+    var total = ViewBag.Total;
+    var address = ViewBag.Address;
+}
+
+<div class="max-w-5xl mx-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    <!-- LEFT: ADDRESS -->
+    <div class="bg-white p-6 rounded-xl shadow">
+        <h2 class="text-xl font-bold mb-4">Shipping Address</h2>
+
+        @if (address != null)
+        {
+            <p class="font-semibold">@address.FullName</p>
+            <p>@address.Address</p>
+            <p>@address.City - @address.Pincode</p>
+            <p>📞 @address.PhoneNumber</p>
+        }
+        else
+        {
+            <p class="text-red-500">No address found</p>
+        }
+    </div>
+
+    <!-- RIGHT: ORDER SUMMARY -->
+    <div class="bg-white p-6 rounded-xl shadow">
+
+        <h2 class="text-xl font-bold mb-4">Order Summary</h2>
+
+        @if (carts != null && carts.Count > 0)
+        {
+            foreach (var item in carts)
+            {
+                <div class="flex justify-between mb-2">
+                    <span>@item.Product.Name (x @item.Quantity)</span>
+                    <span>₹ @(item.Product.Price* item.Quantity)</span>
+                </div>
+            }
+        }
+        else
+        {
+            <p class="text-red-500">Cart is empty</p>
+        }
+
+        <hr class="my-3" />
+
+        <div class="flex justify-between font-bold text-lg">
+            <span>Total</span>
+            <span>₹ @total</span>
+        </div>
+
+        <!-- PAY BUTTON -->
+        <button id="payBtn"
+                class="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl transition">
+            Pay Securely
+        </button>
+
+        <p class="text-sm text-gray-500 mt-2">
+            🔒 Secure payment powered by Razorpay
+        </p>
+    </div>
+
+    <!-- LOADER -->
+    <div id="loader" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white p-6 rounded-xl shadow-lg flex flex-col items-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-t-4 border-indigo-600 mb-3"></div>
+            <p class="text-gray-700 font-medium">Processing Payment...</p>
+        </div>
+    </div>
+</div>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+    document.getElementById('payBtn').onclick = async function () {
+
+        const loader = document.getElementById('loader');
+        const btn = document.getElementById('payBtn');
+
+        try {
+            loader.classList.remove('hidden');
+            btn.disabled = true;
+            btn.innerText = "Processing...";
+
+            const orderData = {
+                FullName: "@address?.FullName",
+                PhoneNumber: "@address?.PhoneNumber",
+                Address: "@address?.Address",
+                City: "@address?.City",
+                Pincode: "@address?.Pincode",
+                State: "@address?.State",
+                Email: "@address?.Email"
+            };
+
+            const createOrderResponse = await fetch('/Order/CreateOrder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(orderData)
+            });
+
+            const data = await createOrderResponse.json();
+
+            loader.classList.add('hidden');
+
+            const options = {
+                key: "@ViewBag.RazorpayKey",
+                amount: data.amountInPaise,
+                currency: "INR",
+                name: "Vivek Medical Products",
+                description: "Order Payment",
+                order_id: data.razorpayOrderId,
+
+                handler: async function (response) {
+
+                    loader.classList.remove('hidden');
+
+                    try {
+                        const verifyResponse = await fetch('/Order/VerifyPayment', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                orderId: data.orderId,
+                                razorpay_order_id: response.razorpay_order_id,
+                                razorpay_payment_id: response.razorpay_payment_id,
+                                razorpay_signature: response.razorpay_signature
+                            })
+                        });
+
+                        const result = await verifyResponse.json();
+
+                        if (result.success) {
+                            Swal.fire("Success", "Payment successful", "success")
+                                .then(() => window.location.href = result.redirectUrl);
+                            return;
+                        }
+
+                        // 🔥 FALLBACK: START POLLING
+                        startPolling(data.orderId);
+
+                    } catch {
+                        startPolling(data.orderId);
+                    }
+                },
+
+                modal: {
+                    ondismiss: function () {
+                        loader.classList.add('hidden');
+                        btn.disabled = false;
+                        btn.innerText = "Pay Securely";
+                    }
+                }
+            };
+
+            const rzp = new Razorpay(options);
+
+            // ❌ PAYMENT FAILED (SAFE HANDLING)
+            rzp.on('payment.failed', function () {
+                console.warn("Payment failed event - starting verification polling");
+                startPolling(data.orderId);
+            });
+
+            rzp.open();
+
+            // 🔥 POLLING FUNCTION (KEY FIX)
+            async function startPolling(orderId) {
+
+                loader.classList.remove('hidden');
+
+                let attempts = 0;
+                const maxAttempts = 10;
+
+                const interval = setInterval(async () => {
+
+                    attempts++;
+
+                    try {
+                        const res = await fetch('/Order/CheckPaymentStatus?orderId=' + orderId);
+                        const result = await res.json();
+
+                        console.log("Polling:", result);
+
+                        if (result.success) {
+                            clearInterval(interval);
+
+                            Swal.fire({
+                                title: "Payment Successful 🎉",
+                                icon: "success"
+                            }).then(() => {
+                                window.location.href = "/MyOrders";
+                            });
+                        }
+
+                        if (attempts >= maxAttempts) {
+                            clearInterval(interval);
+
+                            Swal.fire({
+                                title: "Payment Pending",
+                                text: "If amount is deducted, it will be confirmed shortly.",
+                                icon: "info"
+                            }).then(() => {
+                                window.location.href = "/MyOrders";
+                            });
+                        }
+
+                    } catch (err) {
+                        console.error("Polling error:", err);
+                    }
+
+                }, 3000); // every 3 sec
+            }
+
+        } catch (error) {
+
+            loader.classList.add('hidden');
+            btn.disabled = false;
+            btn.innerText = "Pay Securely";
+
+            Swal.fire("Error", error.message, "error");
+        }
+    };
+</script>

@@ -1,0 +1,125 @@
+﻿body {
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+/* HERO */
+.contact-hero {
+    background: url('/images/contact-banner.jpg') center/cover no-repeat;
+    height: 300px;
+    position: relative;
+}
+
+.hero-overlay {
+    background: rgba(0,0,0,0.6);
+    height: 100%;
+    display: flex;
+    align-items: center;
+}
+
+.hero-content {
+    color: white;
+    padding-left: 80px;
+}
+
+    .hero-content h1 {
+        font-size: 42px;
+        margin: 10px 0;
+    }
+
+    .hero-content a {
+        color: #ffc107;
+        text-decoration: none;
+    }
+
+/* CONTACT SECTION */
+.contact-section {
+    padding: 60px 40px;
+    background: #f8f9fa;
+}
+
+.container-contact {
+    max-width: 1200px;
+    margin: auto;
+    display: flex;
+    gap: 50px;
+}
+
+/* FORM */
+.contact-form {
+    flex: 1;
+}
+
+    .contact-form h2 {
+        margin-bottom: 25px;
+    }
+
+    .contact-form input,
+    .contact-form textarea {
+        width: 100%;
+        padding: 14px;
+        margin-bottom: 15px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 14px;
+    }
+
+        .contact-form input:focus,
+        .contact-form textarea:focus {
+            border-color: #ffc107;
+            outline: none;
+        }
+
+    .contact-form button {
+        width: 100%;
+        padding: 14px;
+        background: #ffc107;
+        border: none;
+        border-radius: 30px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+        .contact-form button:hover {
+            background: #e0a800;
+        }
+
+/* INFO */
+.contact-info {
+    flex: 1;
+}
+
+    .contact-info h2 {
+        margin-bottom: 25px;
+    }
+
+.info-box {
+    margin-bottom: 25px;
+}
+
+    .info-box h4 {
+        margin-bottom: 8px;
+        color: #ffc107;
+    }
+
+/* MAP */
+.map-section {
+    margin-top: 40px;
+}
+
+/* RESPONSIVE */
+@media (max-width: 992px) {
+    .container-contact {
+        flex-direction: column;
+    }
+
+    .hero-content {
+        padding-left: 30px;
+    }
+
+        .hero-content h1 {
+            font-size: 28px;
+        }
+}
+

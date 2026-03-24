@@ -1,0 +1,64 @@
+﻿@model VivekMedicalProducts.Models.ProductModel
+
+<link href="~/css/product-details.css" rel="stylesheet" />
+
+<div class="container py-5">
+    <div class="row product-detail-card shadow-lg p-4 rounded">
+
+        <!-- Image Section -->
+        <div class="col-md-5 text-center">
+            @if (!string.IsNullOrEmpty(Model.ImagePath))
+            {
+                <img src="@Model.ImagePath" class="img-fluid detail-img" />
+            }
+            else
+            {
+                <img src="~/images/no-image.png" class="img-fluid detail-img" />
+            }
+        </div>
+
+        <!-- Details Section -->
+        <div class="col-md-7">
+
+            <h2 class="mb-3">@Model.Name</h2>
+
+            <p class="text-muted">@Model.Description</p>
+
+            <h5>
+                Price :
+                <span class="ask-price">Ask for price</span>
+
+                @if (Model.GSTPercentage != null && Model.GSTPercentage > 0)
+                {
+                    <small class="text-success">
+                        + GST @Model.GSTPercentage%
+                    </small>
+                }
+            </h5>
+
+            <div class="mt-4">
+                <a href="/Home/Enquiry?productId=@Model.Id"
+                   class="btn enquiry-btn me-3">
+                    Enquiry
+                </a>
+
+                <a href="/Cart/AddToCart/@Model.Id"
+                   class="btn cart-btn">
+                    Add to Cart
+                </a>
+
+                @if (!string.IsNullOrEmpty(Model.QuotationPath))
+                {
+                    <a asp-action="ViewQuotation"
+                       asp-route-id="@Model.Id"
+                       target="_blank"
+                       class="btn btn-primary">
+                        View Quotation
+                    </a>
+                }
+
+            </div>
+
+        </div>
+    </div>
+</div>

@@ -1,0 +1,149 @@
+﻿@model VivekMedicalProducts.ViewModels.CheckoutViewModel
+
+<div class="max-w-7xl mx-auto px-6 py-10">
+
+    <h1 class="text-3xl font-bold text-gray-800 mb-8 text-center">
+        Checkout
+    </h1>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+        <!-- SHIPPING ADDRESS -->
+
+        <div class="lg:col-span-2 bg-white shadow-lg rounded-xl p-8">
+
+            <h2 class="text-xl font-semibold text-gray-700 mb-6">
+                Shipping Address
+            </h2>
+
+           @* <form asp-action="ProceedToPayment" method="post" class="space-y-5">*@
+                <form method="post" action="/Order/Review">
+
+
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">
+                        Full Name
+                    </label>
+                    <input asp-for="FullName"
+                           class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-400 outline-none"
+                           required />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">
+                        Phone Number
+                    </label>
+                    <input asp-for="PhoneNumber"
+                           class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-400 outline-none"
+                           required />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">
+                        Address
+                    </label>
+<textarea asp-for="Address"
+          rows="3"
+          class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-400 outline-none"
+          required></textarea>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1">
+                            City
+                        </label>
+                        <input asp-for="City"
+                               class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-400 outline-none"
+                               required />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1">
+                            Pincode
+                        </label>
+                        <input asp-for="Pincode"
+                               class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-400 outline-none"
+                               required />
+                    </div>
+
+                </div>
+
+                @*<button type="submit"
+                        class="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-lg transition">
+                    Proceed To Payment
+                </button>*@
+
+                    <button class="w-full bg-green-600 text-white py-3 rounded-xl">
+                        Continue to Review
+                    </button>
+
+            </form>
+
+        </div>
+
+
+        <!-- ORDER SUMMARY -->
+
+        <div class="bg-white shadow-lg rounded-xl p-6 h-fit sticky top-24">
+
+            <h2 class="text-xl font-semibold text-gray-700 mb-5">
+                Your Order
+            </h2>
+
+            <div class="space-y-4 max-h-72 overflow-y-auto pr-2">
+
+                @foreach (var item in Model.CartItems)
+                {
+                    <div class="flex justify-between items-center border-b pb-3">
+
+                        <div>
+                            <p class="font-medium text-gray-700">
+                                @item.Product.Name
+                            </p>
+
+                            <p class="text-sm text-gray-500">
+                                Qty : @item.Quantity
+                            </p>
+                        </div>
+
+                        <p class="text-green-600 font-semibold">
+                            ₹ @(item.Product.Price* item.Quantity)
+                        </p>
+
+                    </div>
+                }
+
+            </div>
+
+
+            <!-- PRICE SUMMARY -->
+
+            <div class="mt-6 space-y-3">
+
+                <div class="flex justify-between text-gray-600">
+                    <span>Subtotal</span>
+                    <span>₹ @Model.SubTotal.ToString("0.")</span>
+                </div>
+
+                <div class="flex justify-between text-gray-600">
+                    <span>GST</span>
+                    <span>₹ @Model.GST.ToString("0.")</span>
+                </div>
+
+                <hr>
+
+                <div class="flex justify-between text-lg font-semibold text-green-600">
+                    <span>Total</span>
+                    <span>₹ @Model.GrandTotal.ToString("0.")</span>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>

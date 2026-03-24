@@ -1,0 +1,61 @@
+﻿@model VivekMedicalProducts.Models.ProductModel
+
+<link rel="stylesheet" href="~/css/product_edit.css" />
+
+<div class="page-container">
+
+    <div class="edit-card">
+
+        <div class="card-header">
+            <h2>Edit Product</h2>
+
+            <a asp-controller="Products"
+               asp-action="ProductManagement"
+               class="btn-back">
+                ← Back
+            </a>
+        </div>
+
+        <form asp-action="ProductEdit" method="post" enctype="multipart/form-data">
+
+            <input type="hidden" asp-for="Id" />
+
+            <div class="form-grid">
+
+                <div class="form-group">
+                    <label>Product Name</label>
+                    <input asp-for="Name" class="form-input" />
+                </div>
+
+                <div class="form-group">
+                    <label>Price</label>
+                    <input asp-for="Price" class="form-input" />
+                </div>
+
+                <div class="form-group">
+                    <label>GST (%)</label>
+                    <input asp-for="GSTPercentage" class="form-input" />
+                </div>
+
+                <div class="form-group">
+                    <label>Upload Image</label>
+                    <input type="file" name="ImageFile" class="form-input file-style" />
+                </div>
+
+                <div class="form-group full">
+                    <label>Upload Quotation</label>
+                    <input type="file" name="QuotationFile" class="form-input file-style" />
+                </div>
+
+            </div>
+
+            <div class="action-area">
+                <button type="submit" class="btn-save">
+                    Update Product
+                </button>
+            </div>
+
+        </form>
+    </div>
+
+</div>

@@ -1,0 +1,57 @@
+﻿
+<link rel="stylesheet" href="~/css/admin_layout.css" />
+<link rel="stylesheet" href="~/css/admin_pages.css" />
+
+<body>
+
+    <div class="admin-container">
+
+        <!-- SIDEBAR -->
+        <div class="sidebar">
+            <div class="logo">
+                <i class="fa-solid fa-layer-group"></i>
+                <span>Admin Panel</span>
+            </div>
+
+            <ul class="nav-links">
+
+                <li>
+                    <a asp-controller="Products" asp-action="Index">
+                        <i class="fa-solid fa-box"></i>
+                        <span>Explore Products</span>
+                    </a>
+                </li>
+
+                <li>
+                    <a asp-controller="Products" asp-action="AddProducts">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Add Products</span>
+                    </a>
+                </li>
+
+                <li>
+                    <a asp-controller="Home" asp-action="EnquiryList">
+                        <i class="fa-solid fa-clipboard-list"></i>
+                        <span>Enquiry List</span>
+                    </a>
+                </li>
+
+            </ul>
+        </div>
+
+        <!-- MAIN CONTENT -->
+        <div class="main-section">
+
+            <div class="topbar">
+                <h2>@ViewData["Title"]</h2>
+            </div>
+
+            <div class="content-area">
+                @RenderBody()
+            </div>
+
+        </div>
+
+    </div>
+
+</body>

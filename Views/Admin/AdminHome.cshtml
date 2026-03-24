@@ -1,0 +1,67 @@
+﻿@{
+    ViewData["Title"] = "Admin Dashboard";
+}
+
+<link href="~/css/admin.css" rel="stylesheet" asp-append-version="true" />
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet" />
+
+<div class="admin-wrapper">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="logo">
+            <i class="fa-solid fa-layer-group"></i>
+            <span>Admin Panel</span>
+        </div>
+
+        <ul class="menu">
+
+            <li>
+                <a asp-controller="Products" asp-action="Index">
+                    <i class="fa-solid fa-box"></i>
+                    <span>Explore Products</span>
+                </a>
+            </li>
+
+
+            <li>
+                <a asp-controller="Products" asp-action="ProductManagement">
+                    <i class="fa-solid fa-edit"></i>
+                    <span>Product Management</span>
+                </a>
+            </li>
+
+            <li>
+                <a asp-controller="Home" asp-action="EnquiryList">
+                    <i class="fa-solid fa-clipboard-list"></i>
+                    <span>Enquiry List</span>
+                </a>
+            </li>
+
+            <li>
+                <a asp-controller="Admin" asp-action="AdminOrders">
+                    <i class="fa-solid fa-clipboard-list"></i>
+                    <span>Admin Order Management</span>
+                </a>
+            </li>
+
+            <li>
+                <a asp-controller="Home" asp-action="HomePage">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span>Logout</span>
+                </a>
+            </li>
+
+        </ul>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+
+        <div class="topbar">
+            <h2>Welcome Admin</h2>
+        </div>
+
+    </main>
+
+</div>

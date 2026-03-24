@@ -1,0 +1,341 @@
+﻿@model IEnumerable<VivekMedicalProducts.Models.AdminOrderModel>
+
+<link rel="stylesheet" href="~/css/admin-orders.css" />
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<div class="dashboard">
+
+    <h2>Admin Order Dashboard</h2>
+
+    <div class="search-wrapper">
+
+        <div class="search-box">
+
+            <span class="search-icon">🔍</span>
+
+            <input type="text"
+                   id="searchBox"
+                   placeholder="Search by Order ID, Customer, Product, UTR..."
+                   onkeyup="searchOrders()" />
+
+        </div>
+
+    </div>
+
+    <div class="card">
+
+        <table>
+
+            <thead>
+                <tr>
+                    <th>Order</th>
+                    <th>Date</th>
+                    <th>Customer</th>
+                    <th>Product</th>
+                    <th>Qty</th>
+                    <th>Total</th>
+                    <th>UTR</th>
+                    <th>Payment Screenshot</th>
+                    <th>Payment Status</th>
+                    <th>Order Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+                @foreach (var item in Model)
+                {
+                    <tr ondblclick="openAdminOrderModal(@item.OrderId)">
+
+                        <td>
+                            <input type="hidden" class="OrderItemId" value="@item.OrderItemId" />
+                            <input type="hidden" class="OrderId" value="@item.OrderId" />
+                            @item.OrderId
+                        </td>
+
+                        <td>
+                            @item.OrderDate.ToShortDateString()
+                        </td>
+
+                        <td>
+                            @item.Customer
+                        </td>
+
+                        <td>
+                            @item.ProductName
+                        </td>
+
+                        <td>
+                            @item.Quantity
+                        </td>
+
+                        <td>
+                            ₹@item.Total
+                        </td>
+
+                        <td>
+                            @item.UTRNumber
+                        </td>
+
+                        <td>
+                            @if (!string.IsNullOrEmpty(item.PaymentScreenshot))
+                            {
+                                <a href="@item.PaymentScreenshot" target="_blank">
+                                    <img src="@item.PaymentScreenshot"
+                                         width="60"
+                                         height="60"
+                                         style="border-radius:6px;border:1px solid #ddd;" />
+                                </a>
+                            }
+                            else
+                            {
+                                <span style="color:red;">No Image</span>
+                            }
+
+                        </td>
+
+                   <td>
+
+                            <select class="PaymentStatus">
+
+                                <option value="Pending" selected="@(item.PaymentStatus == "Pending")">Pending</option>
+
+                                <option value="Verified" selected="@(item.PaymentStatus == "Verified")">Verified</option>
+
+                                <option value="Rejected" selected="@(item.PaymentStatus == "Rejected")">Rejected</option>
+
+                            </select>
+<td>
+
+                            <select class="OrderStatus">
+
+                                <option value="Pending" selected="@(item.ItemStatus == "Pending")">Pending</option>
+
+                                <option value="Processing" selected="@(item.ItemStatus == "Processing")">Processing</option>
+
+                                <option value="Shipped" selected="@(item.ItemStatus == "Shipped")">Shipped</option>
+
+                                <option value="Delivered" selected="@(item.ItemStatus == "Delivered")">Delivered</option>
+
+                                <option value="Order Cancelled" selected="@(item.ItemStatus == "Order Cancelled")">Order Cancelled</option>
+
+                            </select>
+</td>
+
+                    
+
+                        <td>
+                            <button class="update" onclick="updateOrder(this)">Update</button>
+                        </td>
+
+                    </tr>
+                }
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+
+<!-- ORDER DETAILS MODAL -->
+
+<div id="orderModal" class="modal-overlay">
+
+    <div class="modal-card">
+
+        <span class="close-btn" onclick="closeOrderModal()">×</span>
+
+        <h2>Order Details</h2>
+
+        <div id="modal-body"></div>
+
+    </div>
+
+</div>
+
+
+<script>
+
+        function searchOrders(){
+
+    let input=document.getElementById("searchBox").value.toLowerCase();
+
+    let rows=document.querySelectorAll("tbody tr");
+
+    rows.forEach(row=>{
+
+    let text=row.innerText.toLowerCase();
+
+    row.style.display=text.includes(input)?"":"none";
+
+    });
+
+    }
+
+
+    // UPDATE ORDER
+        function updateOrder(btn) {
+
+            console.log("Update button clicked");
+
+        let row = btn.closest("tr");
+
+        let orderItemId = row.querySelector(".OrderItemId").value;
+        let orderId = row.querySelector(".OrderId").value;
+
+        let orderStatus = row.querySelector(".OrderStatus").value;
+        let paymentStatus = row.querySelector(".PaymentStatus").value;
+
+        console.log("OrderItemId:", orderItemId);
+        console.log("OrderId:", orderId);
+        console.log("OrderStatus:", orderStatus);
+        console.log("PaymentStatus:", paymentStatus);
+
+        fetch('/Admin/UpdateOrder', {
+
+            method: 'POST',
+
+            headers: {
+                'Content-Type': 'application/json'
+            },
+
+            body: JSON.stringify({
+
+                OrderItemId: parseInt(orderItemId),
+                OrderId: parseInt(orderId),
+                ItemStatus: orderStatus,
+                PaymentStatus: paymentStatus
+
+            })
+
+        })
+
+        .then(response => response.json())
+
+        .then(data => {
+            
+            console.log(data);
+
+            if (data.success) {
+
+                Swal.fire("Success","Order updated successfully","success")
+                .then(()=>location.reload());
+
+            }
+            else {
+
+                Swal.fire("Error",data.message,"error");
+
+            }
+
+        })
+
+        .catch(error => {
+
+            console.error(error);
+
+            Swal.fire("Error","Something went wrong","error");
+
+        });
+
+    }
+
+
+
+    // OPEN MODAL
+
+    function openAdminOrderModal(orderId){
+
+    fetch(`/Admin/GetOrderDetails?id=${orderId}`)
+
+    .then(res=>res.json())
+
+    .then(data=>{
+
+    let html=`
+
+    <p><b>Order ID:</b> ${data.orderId}</p>
+
+    <p><b>Date:</b> ${new Date(data.orderDate).toLocaleDateString()}</p>
+
+    <p><b>Status:</b> ${data.itemStatus}</p>
+
+    <hr>
+
+    <p><b>Name:</b> ${data.fullName}</p>
+
+    <p><b>Phone:</b> ${data.phoneNumber}</p>
+
+    <hr>
+
+    <p><b>Address:</b><br>
+
+    ${data.address}, ${data.city} - ${data.pincode}
+
+    </p>
+
+    `;
+
+    document.getElementById("modal-body").innerHTML=html;
+
+    document.getElementById("orderModal").style.display="flex";
+
+    });
+
+    }
+
+
+    // CLOSE MODAL
+
+    function closeOrderModal(){
+
+    document.getElementById("orderModal").style.display="none";
+
+    }
+
+        function applyStatusColors(){
+
+    document.querySelectorAll(".PaymentStatus").forEach(select=>{
+
+    let value=select.value.toLowerCase();
+
+    select.classList.remove("pending","verified","rejected");
+
+    if(value==="pending") select.classList.add("pending");
+    if(value==="verified") select.classList.add("verified");
+    if(value==="rejected") select.classList.add("rejected");
+
+    });
+
+    document.querySelectorAll(".OrderStatus").forEach(select=>{
+
+    let value=select.value.toLowerCase();
+
+    select.classList.remove("pending","processing","shipped","delivered","cancelled");
+
+    if(value==="pending") select.classList.add("pending");
+    if(value==="processing") select.classList.add("processing");
+    if(value==="shipped") select.classList.add("shipped");
+    if(value==="delivered") select.classList.add("delivered");
+    if(value==="order cancelled") select.classList.add("cancelled");
+
+    });
+
+    }
+
+    /* Run when page loads */
+    document.addEventListener("DOMContentLoaded", applyStatusColors);
+
+    /* Run when dropdown changes */
+    document.addEventListener("change", function(e){
+    if(e.target.classList.contains("PaymentStatus") || e.target.classList.contains("OrderStatus")){
+    applyStatusColors();
+    }
+    });
+
+</script>
+

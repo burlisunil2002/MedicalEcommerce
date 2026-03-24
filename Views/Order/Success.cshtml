@@ -1,0 +1,8 @@
+﻿<h2>Payment Successful ✅</h2>
+
+<p>Order ID: @Model.OrderNumber</p>
+
+@foreach (var item in Model.OrderItems)
+{
+    <p>@item.ProductName - @item.Quantity</p>
+}

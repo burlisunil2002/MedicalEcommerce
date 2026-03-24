@@ -1,0 +1,289 @@
+﻿@model IEnumerable<VivekMedicalProducts.ViewModels.ProductViewModel>
+
+<!-- ✅ PAYMENT SUCCESS -->
+@if (TempData["PaymentSuccess"] != null)
+{
+    <div id="paymentSuccessBox"
+         class="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-white shadow-2xl border border-green-200 rounded-2xl px-6 py-4 w-[380px] flex items-start gap-4 animate-fadeIn">
+
+        <div class="text-green-500 text-2xl">✔</div>
+
+        <div class="flex-1">
+            <h3 class="text-base font-semibold text-gray-800">Payment Submitted</h3>
+            <p class="text-sm text-gray-500 mt-1">
+                Your payment is under verification.
+            </p>
+        </div>
+
+        <button onclick="closePaymentBox()" class="text-gray-400 hover:text-red-500 text-lg">×</button>
+    </div>
+}
+
+<!-- ✅ HERO -->
+<div class="bg-gradient-to-r from-blue-600 to-blue-500 text-white py-14 text-center shadow">
+    <h1 class="text-4xl font-bold">Medical Products Store</h1>
+    <p class="text-sm mt-2 opacity-90">Trusted Healthcare Equipment & Supplies</p>
+</div>
+
+<!-- ✅ CATEGORY -->
+<div class="max-w-7xl mx-auto px-4 my-6">
+
+    <div class="flex flex-wrap gap-3 justify-center">
+
+        <button class="filter-pill active-pill" data-category="all">
+            All
+        </button>
+
+        @foreach (var category in ViewBag.Categories)
+        {
+            <button class="filter-pill" data-category="@category">
+                @category
+            </button>
+        }
+
+    </div>
+
+</div>
+
+<!-- ✅ PRODUCTS -->
+<div class="max-w-7xl mx-auto px-4 pb-12">
+
+    <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+
+        @foreach (var product in Model)
+        {
+            <div class="product-card bg-white rounded-2xl shadow-sm hover:shadow-xl transition duration-300 flex flex-col h-full p-4 group"
+                 data-category="@product.Category">
+
+                <!-- IMAGE -->
+                <a asp-controller="Products"
+                   asp-action="Details"
+                   asp-route-id="@product.Id"
+                   class="flex justify-center overflow-hidden rounded-lg bg-gray-50">
+
+                    <img src="@(string.IsNullOrEmpty(product.ImagePath) ? "/images/no-image.png" : product.ImagePath)"
+                         class="h-44 object-contain group-hover:scale-105 transition duration-300" />
+
+                </a>
+
+                <!-- CONTENT -->
+                <div class="flex flex-col flex-grow mt-4">
+
+                    <h4 class="font-semibold text-gray-800 text-sm line-clamp-2 min-h-[44px]">
+                        @product.Name
+                    </h4>
+
+                    @if (product.PriceType?.ToLower() == "normal")
+                    {
+                        <div class="mt-2">
+                            <span class="text-blue-600 font-bold text-lg">
+                                ₹ @product.Price.ToString("N0")
+                            </span>
+                            <p class="text-xs text-gray-400">Inclusive of GST</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mt-2 text-orange-500 font-semibold text-sm">
+                            Price on Request
+                        </div>
+                    }
+
+                    <!-- ACTION -->
+                    <div class="mt-auto pt-4">
+
+                        @if (product.PriceType?.ToLower() == "normal")
+                        {
+                            <div class="cart-area" data-id="@product.Id">
+
+                                <button class="add-cart-btn w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition">
+                                    🛒 Add to Cart
+                                </button>
+
+                                <div class="qty-controller hidden flex justify-between items-center border rounded-lg mt-2 bg-gray-50">
+
+                                    <button class="minus px-4 py-2 text-lg">−</button>
+
+                                    <span class="qty font-semibold">1</span>
+
+                                    <button class="plus px-4 py-2 text-lg">+</button>
+
+                                </div>
+
+                            </div>
+                        }
+                        else
+                        {
+                            <a asp-controller="Home"
+                               asp-action="Enquiry"
+                               asp-route-productId="@product.Id"
+                               class="block text-center w-full bg-orange-500 text-white py-2 rounded-lg hover:bg-orange-600 transition">
+                                Request Quote
+                            </a>
+                        }
+
+                    </div>
+
+                </div>
+
+            </div>
+        }
+
+    </div>
+</div>
+
+<!-- ✅ STYLES -->
+<style>
+    .filter-pill {
+        padding: 8px 16px;
+        border-radius: 999px;
+        background: #e5e7eb;
+        transition: 0.3s;
+    }
+
+        .filter-pill:hover {
+            background: #2563eb;
+            color: white;
+        }
+
+    .active-pill {
+        background: #2563eb;
+        color: white;
+    }
+
+    <style >
+    @@keyframes fadeIn {
+        from
+
+    {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    }
+
+    .animate-fadeIn {
+        animation: fadeIn 0.4s ease-in-out;
+    }
+</style>
+
+<!-- ✅ SCRIPTS -->
+<script>
+
+    $(document).ready(function () {
+
+        loadCartCount();
+
+        // ADD TO CART
+        $(".add-cart-btn").click(function () {
+
+            var parent = $(this).closest(".cart-area");
+            var productId = parent.data("id");
+
+            parent.find(".add-cart-btn").hide();
+            parent.find(".qty-controller").removeClass("hidden");
+
+            $.post("/Cart/AddToCart",
+            {
+                productId: productId,
+                quantity: 1
+            },
+            function () {
+                loadCartCount();
+            });
+
+        });
+
+        // INCREASE
+        $(".plus").click(function () {
+
+            var parent = $(this).closest(".cart-area");
+            var qtySpan = parent.find(".qty");
+
+            var qty = parseInt(qtySpan.text()) + 1;
+            qtySpan.text(qty);
+
+            var productId = parent.data("id");
+
+            $.post("/Cart/AddToCart",
+            {
+                productId: productId,
+                quantity: 1
+            });
+
+        });
+
+        // DECREASE
+        $(".minus").click(function () {
+
+            var parent = $(this).closest(".cart-area");
+            var qtySpan = parent.find(".qty");
+
+            var qty = parseInt(qtySpan.text());
+            var productId = parent.data("id");
+
+            if (qty > 1)
+            {
+                qty--;
+                qtySpan.text(qty);
+
+                $.post("/Cart/DecreaseQuantity",
+                {
+                    productId: productId
+                });
+            }
+            else
+            {
+                $.post("/Cart/RemoveFromCart",
+                {
+                    productId: productId
+                },
+                function () {
+
+                    parent.find(".qty-controller").addClass("hidden");
+                    parent.find(".add-cart-btn").show();
+
+                    loadCartCount();
+
+                });
+            }
+
+        });
+
+    });
+
+    // CART COUNT
+    function loadCartCount() {
+        $.get("/Cart/GetCartCount", function (data) {
+            $("#cartCount").text(data);
+        });
+    }
+
+    // FILTER
+    $(document).on("click", ".filter-pill", function () {
+
+        $(".filter-pill").removeClass("active-pill");
+        $(this).addClass("active-pill");
+
+        var category = $(this).data("category");
+
+        if (!category || category === "all") {
+            $(".product-card").show();
+        } else {
+            $(".product-card").hide();
+            $('.product-card[data-category="' + category + '"]').show();
+        }
+
+    });
+
+    // CLOSE ALERT
+    function closePaymentBox(){
+        document.getElementById("paymentSuccessBox").style.display="none";
+    }
+
+</script>
