@@ -17,6 +17,6 @@ namespace VivekMedicalProducts.Models
 
         public string? QuotationPath { get; set; }   // 👈 Add this
 
-        public DateTime CreatedDate { get; set; } = DateTime.Now;
-     }
+        public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
+    }
 }

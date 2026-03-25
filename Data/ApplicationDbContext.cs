@@ -34,7 +34,7 @@ public class ApplicationDbContext
 
         modelBuilder.Entity<ProductModel>()
             .Property(p => p.CreatedDate)
-            .HasDefaultValueSql("GETDATE()");
+            ;
 
         modelBuilder.Entity<ProductModel>()
             .Property(p => p.Name)

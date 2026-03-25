@@ -28,7 +28,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 builder.Services.AddAuthorization();
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
@@ -76,29 +76,55 @@ using (var scope = app.Services.CreateScope())
 
 using (var scope = app.Services.CreateScope())
 {
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-
-    if (!await roleManager.RoleExistsAsync("Admin"))
-        await roleManager.CreateAsync(new IdentityRole("Admin"));
-
-    var adminEmail = "burlisunil357@gmail.com";
-    var adminUser = await userManager.FindByEmailAsync(adminEmail);
-
-    if (adminUser == null)
+    try
     {
-        adminUser = new ApplicationUser
-        {
-            UserName = adminEmail,
-            Email = adminEmail,
-            EmailConfirmed = true
-        };
+        var services = scope.ServiceProvider;
 
-        await userManager.CreateAsync(adminUser, "Admin@123"); // password
-        await userManager.AddToRoleAsync(adminUser, "Admin");
+        var context = services.GetRequiredService<ApplicationDbContext>();
+        await context.Database.MigrateAsync(); // ensure DB is ready
+
+        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+
+        // Create Admin Role
+        if (!await roleManager.RoleExistsAsync("Admin"))
+        {
+            await roleManager.CreateAsync(new IdentityRole("Admin"));
+        }
+
+        var adminEmail = "burlisunil357@gmail.com";
+        var adminUser = await userManager.FindByEmailAsync(adminEmail);
+
+        // Create Admin User
+        if (adminUser == null)
+        {
+            adminUser = new ApplicationUser
+            {
+                UserName = adminEmail,
+                Email = adminEmail,
+                EmailConfirmed = true
+            };
+
+            var result = await userManager.CreateAsync(adminUser, "Admin@123");
+
+            if (result.Succeeded)
+            {
+                await userManager.AddToRoleAsync(adminUser, "Admin");
+            }
+            else
+            {
+                foreach (var error in result.Errors)
+                {
+                    Console.WriteLine("User creation error: " + error.Description);
+                }
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("Startup Error: " + ex.Message);
     }
 }
-
 
 // Middleware pipeline
 if (!app.Environment.IsDevelopment())
