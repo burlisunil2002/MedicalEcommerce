@@ -1,64 +1,105 @@
 ﻿@model VivekMedicalProducts.Models.ProductModel
 
-<link href="~/css/product-details.css" rel="stylesheet" />
+<div class="min-h-screen bg-gray-100 py-10 px-4">
+    <div class="max-w-6xl mx-auto bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div class="grid md:grid-cols-2 gap-6 p-6">
 
-<div class="container py-5">
-    <div class="row product-detail-card shadow-lg p-4 rounded">
-
-        <!-- Image Section -->
-        <div class="col-md-5 text-center">
-            @if (!string.IsNullOrEmpty(Model.ImagePath))
-            {
-                <img src="@Model.ImagePath" class="img-fluid detail-img" />
-            }
-            else
-            {
-                <img src="~/images/no-image.png" class="img-fluid detail-img" />
-            }
-        </div>
-
-        <!-- Details Section -->
-        <div class="col-md-7">
-
-            <h2 class="mb-3">@Model.Name</h2>
-
-            <p class="text-muted">@Model.Description</p>
-
-            <h5>
-                Price :
-                <span class="ask-price">Ask for price</span>
-
-                @if (Model.GSTPercentage != null && Model.GSTPercentage > 0)
-                {
-                    <small class="text-success">
-                        + GST @Model.GSTPercentage%
-                    </small>
-                }
-            </h5>
-
-            <div class="mt-4">
-                <a href="/Home/Enquiry?productId=@Model.Id"
-                   class="btn enquiry-btn me-3">
-                    Enquiry
-                </a>
-
-                <a href="/Cart/AddToCart/@Model.Id"
-                   class="btn cart-btn">
-                    Add to Cart
-                </a>
-
-                @if (!string.IsNullOrEmpty(Model.QuotationPath))
-                {
-                    <a asp-action="ViewQuotation"
-                       asp-route-id="@Model.Id"
-                       target="_blank"
-                       class="btn btn-primary">
-                        View Quotation
-                    </a>
-                }
-
+            <!-- IMAGE -->
+            <div class="flex items-center justify-center bg-gray-50 rounded-xl p-4">
+                <img src="@(string.IsNullOrEmpty(Model.ImagePath) ? "/images/no-image.png" : Model.ImagePath)"
+                     class="rounded-xl max-h-[400px] object-contain transition hover:scale-105" />
             </div>
 
+            <!-- DETAILS -->
+            <div class="flex flex-col justify-between">
+
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800 mb-3">
+                        @Model.Name
+                    </h1>
+
+                    <p class="text-gray-500 mb-6">
+                        @Model.Description
+                    </p>
+
+                    <!-- PRICE SECTION -->
+                    @if (Model.PriceType?.ToLower() == "normal")
+                    {
+                        <div class="mb-4">
+                            <h2 class="text-2xl font-semibold text-green-600">
+                                ₹ @Model.Price.ToString("N2")
+                            </h2>
+
+                            @if (Model.GSTPercentage > 0)
+                            {
+                                <p class="text-sm text-green-500 mt-1">
+                                    + GST @Model.GSTPercentage%
+                                </p>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mb-4">
+                            <h2 class="text-xl font-semibold text-red-500">
+                                Ask for Price
+                            </h2>
+                        </div>
+                    }
+                </div>
+
+                <!-- ACTION BUTTONS -->
+                <div class="mt-6 flex flex-wrap gap-3">
+
+                    @if (Model.PriceType?.ToLower() == "normal")
+                    {
+                        <!-- ✅ ADD TO CART (POST FIXED) -->
+                        <form asp-controller="Cart"
+                              asp-action="AddToCart"
+                              method="post"
+                              class="inline">
+
+                            <input type="hidden" name="productId" value="@Model.Id" />
+
+                            <button type="submit"
+                                    class="px-6 py-3 bg-blue-600 text-white rounded-xl shadow hover:bg-blue-700 transition">
+                                Add to Cart
+                            </button>
+                        </form>
+
+                        <!-- ✅ VIEW QUOTATION -->
+                        @if (!string.IsNullOrEmpty(Model.QuotationPath))
+                        {
+                            <a asp-controller="Products"
+                               asp-action="ViewQuotation"
+                               asp-route-id="@Model.Id"
+                               target="_blank"
+                               class="px-6 py-3 bg-green-600 text-white rounded-xl shadow hover:bg-green-700 transition">
+                                Product Document
+                            </a>
+                        }
+                    }
+                    else
+                    {
+                        <!-- ✅ REQUEST FOR QUOTE -->
+                        <a asp-controller="Home"
+                           asp-action="Enquiry"
+                           asp-route-productId="@Model.Id"
+                           class="px-6 py-3 bg-orange-500 text-white rounded-xl shadow hover:bg-orange-600 transition">
+                            Request for Quote
+                        </a>
+                        <a asp-controller="Products"
+                           asp-action="ViewQuotation"
+                           asp-route-id="@Model.Id"
+                           target="_blank"
+                           class="px-6 py-3 bg-green-600 text-white rounded-xl shadow hover:bg-green-700 transition">
+                            Product Document
+                        </a>
+                    }
+
+                </div>
+
+            </div>
         </div>
     </div>
 </div>

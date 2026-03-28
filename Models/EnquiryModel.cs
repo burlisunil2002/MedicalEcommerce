@@ -23,6 +23,6 @@ namespace VivekMedicalProducts.Models
         [Required]
         public string Remarks { get; set; }
 
-        public DateTime CreatedDate { get; set; } = DateTime.Now;
+        public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
     }
 }

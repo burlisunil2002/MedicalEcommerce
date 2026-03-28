@@ -15,7 +15,7 @@ namespace VivekMedicalProducts.Models
 
         public string? SessionId { get; set; }  // Guest user
 
-        public DateTime CreatedDate { get; set; } = DateTime.Now;
+        public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
 
         public ProductModel Product { get; set; }
     }

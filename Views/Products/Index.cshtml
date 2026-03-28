@@ -79,7 +79,6 @@
                             <span class="text-blue-600 font-bold text-lg">
                                 ₹ @product.Price.ToString("N0")
                             </span>
-                            <p class="text-xs text-gray-400">Inclusive of GST</p>
                         </div>
                     }
                     else
@@ -188,14 +187,17 @@
             parent.find(".add-cart-btn").hide();
             parent.find(".qty-controller").removeClass("hidden");
 
-            $.post("/Cart/AddToCart",
-            {
-                productId: productId,
-                quantity: 1
-            },
-            function () {
-                loadCartCount();
-            });
+
+              $.post("/Cart/AddToCart", { productId: productId }, function () {
+
+            loadCartCount();
+
+            setTimeout(() => {
+                button.text("Add to Cart");
+                button.prop("disabled", false);
+            }, 500);
+
+        });
 
         });
 

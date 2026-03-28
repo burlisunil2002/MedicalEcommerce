@@ -39,9 +39,9 @@ namespace VivekMedicalProducts.Controllers
             var vm = new PaymentViewModel
             {
                 OrderId = order.OrderId,
-                SubTotal = order.SubTotal ?? 0,
-                GST = order.GST ?? 0,
-                GrandTotal = order.GrandTotal ?? 0
+                SubTotal = order.SubTotal,
+                GST = order.GST,
+                GrandTotal = order.GrandTotal
             };
 
             return View(vm);
@@ -95,7 +95,7 @@ namespace VivekMedicalProducts.Controllers
                     UserId = userId,
                     UTRNumber = model.UTRNumber.Trim(),
                     PaymentScreenshot = screenshotName,
-                    Amount = order.GrandTotal ?? 0,
+                    Amount = order.GrandTotal,
                     PaymentStatus = "Pending",
                     PaymentDate = DateTime.UtcNow
                 };

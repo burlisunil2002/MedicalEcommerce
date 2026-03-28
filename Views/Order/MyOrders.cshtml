@@ -1,0 +1,137 @@
+﻿@model IEnumerable<VivekMedicalProducts.ViewModels.MyOrderViewModel>
+
+<div id="toast" class="hidden fixed bottom-5 right-5 bg-black text-white px-4 py-2 rounded">
+    Invoice available after delivery
+</div>
+
+<div class="max-w-6xl mx-auto px-4 py-10">
+
+    <!-- HEADER -->
+    <h1 class="text-3xl font-bold text-gray-900 mb-10 text-center">
+        My Orders
+    </h1>
+
+    @if (!Model.Any())
+    {
+        <div class="bg-blue-50 border border-blue-200 text-blue-700 p-6 rounded-xl text-center shadow-sm">
+            You have not placed any orders yet.
+        </div>
+    }
+    else
+    {
+        <div class="space-y-6">
+
+            @foreach (var item in Model)
+            {
+                <div class="bg-white rounded-2xl border shadow-sm hover:shadow-lg transition p-6">
+
+                    <div class="flex flex-col md:flex-row gap-6 items-center md:items-start">
+
+                        <!-- IMAGE -->
+                        <img src="@item.ProductImage"
+                             class="w-24 h-24 object-contain border rounded-xl p-2 bg-white"
+                             onerror="this.src='/images/no-image.png'" />
+
+                        <!-- DETAILS -->
+                        <div class="flex-1 w-full">
+
+                            <h3 class="text-lg font-semibold text-gray-800 mb-2">
+                                @item.ProductName
+                            </h3>
+
+                            <!-- GRID -->
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600 mb-4">
+                                <p><span class="font-medium">Order ID:</span> #@item.OrderId</p>
+                                <p><span class="font-medium">Date:</span> @item.OrderDate.ToString("dd MMM yyyy")</p>
+                                <p><span class="font-medium">Qty:</span> @item.Quantity</p>
+                                <p><span class="font-medium">Total:</span> ₹@item.Total</p>
+                            </div>
+
+                            <!-- STATUS -->
+                            <div class="flex flex-wrap gap-2">
+
+                                <!-- ORDER STATUS -->
+                                <span class="px-3 py-1 text-xs font-semibold rounded-full
+                                            @(item.ItemStatus.ToLower() == "delivered" ? "bg-green-100 text-green-800" :
+                                                                            item.ItemStatus.ToLower() == "confirmed" ? "bg-blue-100 text-blue-800" :
+                                                                            item.ItemStatus.ToLower() == "pending" ? "bg-yellow-100 text-yellow-800" :
+                                                                            "bg-gray-100 text-gray-700")">
+                                                                                                      Order: @item.ItemStatus
+                                                                                                  </span>
+
+                                <!-- PAYMENT STATUS -->
+                                <span class="px-3 py-1 text-xs font-semibold rounded-full
+                                            @(item.PaymentStatus.ToLower() == "completed" ? "bg-green-100 text-green-800" :
+                                                                            item.PaymentStatus.ToLower() == "failed" ? "bg-red-100 text-red-800" :
+                                                                            "bg-gray-100 text-gray-700")">
+                            Payment: @item.PaymentStatus
+                        </span>
+
+                            </div>
+                        </div>
+
+                        <!-- ACTIONS -->
+                        <div class="flex flex-col gap-3 w-full md:w-auto md:items-end">
+
+                    @if (item.PaymentStatus == "Completed" && item.ItemStatus == "Confirmed")
+                            {
+                                <button onclick="openInvoice(@item.OrderId)"
+                                        class="px-4 py-2 bg-indigo-600 text-white rounded-lg">
+                                    View Invoice
+                                </button>
+                            }
+                            else
+                            {
+                                <button onclick="showInvoiceAlert()"
+                                        class="px-4 py-2 bg-gray-300 text-gray-600 rounded-lg cursor-not-allowed">
+                                    View Invoice
+                                </button>
+                            }
+                    @if (item.ItemStatus.ToLower() == "delivered")
+                            {
+                                <button class="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg">
+                                    Reorder
+                                </button>
+                            }
+
+                        </div>
+
+                    </div>
+
+                </div>
+            }
+
+        </div>
+    }
+
+</div>
+
+<div id="invoiceModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="bg-white w-11/12 md:w-3/4 mx-auto mt-10 p-4 rounded-lg relative">
+
+        <button onclick="closeModal()" class="absolute top-2 right-3 text-xl">×</button>
+
+        <iframe id="invoiceFrame" class="w-full h-[80vh] border"></iframe>
+
+    </div>
+</div>
+
+<script>
+    function openInvoice(orderId) {
+        document.getElementById("invoiceModal").classList.remove("hidden");
+
+       document.getElementById("invoiceFrame").src =
+    '/Order/Invoice?id=' + orderId;
+    }
+
+    function closeModal() {
+        document.getElementById("invoiceModal").classList.add("hidden");
+    }
+
+    <script>
+    function showInvoiceAlert() {
+        let t = document.getElementById("toast");
+        t.classList.remove("hidden");
+        setTimeout(() => t.classList.add("hidden"), 3000);
+    }
+</script>

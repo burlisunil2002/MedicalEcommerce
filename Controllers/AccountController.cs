@@ -72,18 +72,24 @@ public class AccountController : Controller
                 {
                     Email = email,
                     UserName = email,
+                    CompanyName = "Temp",
+                    CustomerName = "User",
                     IsApproved = true,
-                    IsProfileCompleted = false
+                    IsProfileCompleted = false,
+                    GSTVerified = false
                 };
 
-                var result = await _userManager.CreateAsync(user, Guid.NewGuid().ToString());
+                var result = await _userManager.CreateAsync(user, "Temp@1234");
 
                 if (!result.Succeeded)
-                    return Json(new { success = false, message = "User creation failed" });
+                {
+                    var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                    return Json(new { success = false, message = errors });
+                }
             }
 
             // 🔐 Optional: Prevent OTP spam (30 sec cooldown)
-            if (user.OTPExpiry != null && user.OTPExpiry > DateTime.Now.AddMinutes(4))
+            if (user.OTPExpiry != null && user.OTPExpiry > DateTime.UtcNow.AddMinutes(4))
             {
                 return Json(new
                 {
@@ -100,7 +106,7 @@ public class AccountController : Controller
             var otp = GenerateOTP();
 
             user.LoginOTP = otp;
-            user.OTPExpiry = DateTime.Now.AddMinutes(5);
+            user.OTPExpiry = DateTime.UtcNow.AddMinutes(5);
 
             await _userManager.UpdateAsync(user);
 
@@ -116,9 +122,13 @@ public class AccountController : Controller
                 message = "OTP sent successfully"
             });
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            return Json(new { success = false, message = "Something went wrong" });
+            return Json(new
+            {
+                success = false,
+                message = ex.ToString()
+            });
         }
     }
 
@@ -142,7 +152,7 @@ public class AccountController : Controller
             }
 
             // Expiry check
-            if (user.OTPExpiry == null || user.OTPExpiry < DateTime.Now)
+            if (user.OTPExpiry == null || user.OTPExpiry < DateTime.UtcNow)
             {
                 return Json(new { success = false, message = "OTP expired" });
             }
@@ -250,6 +260,8 @@ public class AccountController : Controller
         await _userManager.UpdateAsync(user);
         await _userManager.AddToRoleAsync(user, "Customer");
 
+        TempData["SuccessMessage"] = "Profile completed successfully!";
+
         return RedirectToAction("Index", "Products");
     }
 
@@ -288,10 +300,10 @@ public class AccountController : Controller
 
     public IActionResult Profile()
     {
-        string email = _userContext.GetUserId(); // ✅ FIX
+        string userId = _userContext.GetUserId(); // ✅ FIX
 
         var user = _context.Users
-            .Where(x => x.Email == email)
+            .Where(x => x.Id == userId)
             .Select(x => new RegisterViewModel
             {
                 CustomerName = x.CustomerName,
@@ -300,6 +312,11 @@ public class AccountController : Controller
                 Address = x.Address
             })
             .FirstOrDefault();
+
+        if (user == null)
+        {
+            return RedirectToAction("Login");
+        }
 
         return View(user);
     }

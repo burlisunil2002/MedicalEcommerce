@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 
 public class ApplicationUser : IdentityUser
 {
-    [Required, StringLength(200)]
+   
     public string? CompanyName { get; set; }
 
     public string? CustomerName { get; set; }

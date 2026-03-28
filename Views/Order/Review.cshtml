@@ -1,40 +1,89 @@
 ﻿@{
     var carts = ViewBag.Carts;
-    var total = ViewBag.Total;
     var address = ViewBag.Address;
+
+    decimal subtotal = 0m;
+    decimal gstTotal = 0m;
 }
 
-<div class="max-w-5xl mx-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="max-w-6xl mx-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
 
-    <!-- LEFT: ADDRESS -->
-    <div class="bg-white p-6 rounded-xl shadow">
-        <h2 class="text-xl font-bold mb-4">Shipping Address</h2>
+    <!-- SHIPPING ADDRESS -->
+    <div class="bg-white p-6 rounded-2xl shadow border border-gray-100">
+
+        <h2 class="text-xl font-bold mb-4 text-gray-800 flex items-center gap-2">
+            📦 Shipping Address
+        </h2>
 
         @if (address != null)
         {
-            <p class="font-semibold">@address.FullName</p>
-            <p>@address.Address</p>
-            <p>@address.City - @address.Pincode</p>
-            <p>📞 @address.PhoneNumber</p>
+            <div class="space-y-1 text-gray-700">
+                <p class="font-semibold text-lg">@address.FullName</p>
+                <p>@address.Address</p>
+                <p>@address.City - @address.Pincode</p>
+                <p class="text-sm">📞 @address.PhoneNumber</p>
+            </div>
         }
         else
         {
-            <p class="text-red-500">No address found</p>
+            <p class="text-red-500 font-semibold">No address found</p>
         }
+
+        <div class="mt-6 border-t pt-4">
+
+            <h3 class="font-semibold text-gray-800 mb-2">💳 Payment Method</h3>
+
+            <div class="flex items-center gap-3 bg-gray-50 p-3 rounded-lg">
+                <span class="text-green-600 font-semibold">Razorpay</span>
+                <span class="text-sm text-gray-500">UPI / Cards / Net Banking</span>
+            </div>
+
+        </div>
+
     </div>
 
-    <!-- RIGHT: ORDER SUMMARY -->
-    <div class="bg-white p-6 rounded-xl shadow">
+    <!-- ORDER SUMMARY -->
+    <div class="bg-white p-6 rounded-2xl shadow border border-gray-100">
 
-        <h2 class="text-xl font-bold mb-4">Order Summary</h2>
+        <h2 class="text-xl font-bold mb-5 text-gray-800 flex items-center gap-2">
+            🧾 Order Summary
+        </h2>
 
         @if (carts != null && carts.Count > 0)
         {
             foreach (var item in carts)
             {
-                <div class="flex justify-between mb-2">
-                    <span>@item.Product.Name (x @item.Quantity)</span>
-                    <span>₹ @(item.Product.Price* item.Quantity)</span>
+                decimal price = Convert.ToDecimal(item.Product.Price);
+                decimal qty = Convert.ToDecimal(item.Quantity);
+                decimal gstPercent = Convert.ToDecimal(item.Product.GSTPercentage);
+
+                decimal net = price * qty;
+                decimal gst = net * (gstPercent / 100m);
+                decimal total = net + gst;
+
+                subtotal += net;
+                gstTotal += gst;
+
+                <div class="mb-4 pb-3 border-b">
+
+                    <!-- PRODUCT -->
+                    <div class="flex justify-between font-medium text-gray-800">
+                        <span>@item.Product.Name (x @item.Quantity)</span>
+                        <span>₹ @net.ToString("0.00")</span>
+                    </div>
+
+                    <!-- GST -->
+                    <div class="flex justify-between text-sm text-gray-500">
+                        <span>GST (@gstPercent%)</span>
+                        <span>₹ @gst.ToString("0.00")</span>
+                    </div>
+
+                    <!-- ITEM TOTAL -->
+                    <div class="flex justify-between text-sm font-semibold text-green-600 mt-1">
+                        <span>Item Total</span>
+                        <span>₹ @total.ToString("0.00")</span>
+                    </div>
+
                 </div>
             }
         }
@@ -43,31 +92,49 @@
             <p class="text-red-500">Cart is empty</p>
         }
 
-        <hr class="my-3" />
+        <!-- TOTAL SECTION -->
+        <div class="mt-5 space-y-2 text-gray-700">
 
-        <div class="flex justify-between font-bold text-lg">
-            <span>Total</span>
-            <span>₹ @total</span>
+            <div class="flex justify-between">
+                <span>Subtotal</span>
+                <span>₹ @subtotal.ToString("0.00")</span>
+            </div>
+
+            <div class="flex justify-between">
+                <span>Total GST</span>
+                <span>₹ @gstTotal.ToString("0.00")</span>
+            </div>
+
+            <div class="flex justify-between text-lg font-bold text-green-600 border-t pt-3">
+                <span>Grand Total</span>
+                <span>₹ @((subtotal + gstTotal).ToString("0.00"))</span>
+            </div>
+
         </div>
 
         <!-- PAY BUTTON -->
         <button id="payBtn"
-                class="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl transition">
-            Pay Securely
+                class="mt-6 w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-semibold shadow-lg transition duration-200">
+            💳 Pay Securely
         </button>
 
-        <p class="text-sm text-gray-500 mt-2">
+        <p class="text-sm text-gray-500 mt-3 text-center">
             🔒 Secure payment powered by Razorpay
         </p>
+
     </div>
 
     <!-- LOADER -->
-    <div id="loader" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div id="loader"
+         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+
         <div class="bg-white p-6 rounded-xl shadow-lg flex flex-col items-center">
             <div class="animate-spin rounded-full h-12 w-12 border-t-4 border-indigo-600 mb-3"></div>
             <p class="text-gray-700 font-medium">Processing Payment...</p>
         </div>
+
     </div>
+
 </div>
 
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
@@ -80,33 +147,43 @@
         const btn = document.getElementById('payBtn');
 
         try {
-            loader.classList.remove('hidden');
             btn.disabled = true;
             btn.innerText = "Processing...";
+            loader.classList.remove('hidden');
+
+            // ✅ Validate address properly
+            if (!"@address?.FullName") {
+                throw new Error("Address missing");
+            }
 
             const orderData = {
                 FullName: "@address?.FullName",
                 PhoneNumber: "@address?.PhoneNumber",
                 Address: "@address?.Address",
                 City: "@address?.City",
-                Pincode: "@address?.Pincode",
-                State: "@address?.State",
-                Email: "@address?.Email"
+                Pincode: "@address?.Pincode"
             };
 
+            // ✅ NO AntiForgery Token (fixes 400)
             const createOrderResponse = await fetch('/Order/CreateOrder', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify(orderData)
             });
 
             const data = await createOrderResponse.json();
 
+            if (!data.success) {
+                throw new Error(data.message || "Order creation failed");
+            }
+
             loader.classList.add('hidden');
 
             const options = {
                 key: "@ViewBag.RazorpayKey",
-                amount: data.amountInPaise,
+                amount: data.amount,
                 currency: "INR",
                 name: "Vivek Medical Products",
                 description: "Order Payment",
@@ -116,99 +193,62 @@
 
                     loader.classList.remove('hidden');
 
-                    try {
-                        const verifyResponse = await fetch('/Order/VerifyPayment', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                orderId: data.orderId,
-                                razorpay_order_id: response.razorpay_order_id,
-                                razorpay_payment_id: response.razorpay_payment_id,
-                                razorpay_signature: response.razorpay_signature
-                            })
-                        });
+                    const verifyResponse = await fetch('/Order/VerifyPayment', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            orderId: data.orderId,
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature
+                        })
+                    });
 
-                        const result = await verifyResponse.json();
+                    const result = await verifyResponse.json();
 
-                        if (result.success) {
-                            Swal.fire("Success", "Payment successful", "success")
-                                .then(() => window.location.href = result.redirectUrl);
-                            return;
-                        }
-
-                        // 🔥 FALLBACK: START POLLING
-                        startPolling(data.orderId);
-
-                    } catch {
-                        startPolling(data.orderId);
+                    if (result.success) {
+                        Swal.fire("Success", "Payment successful", "success")
+                            .then(() => window.location.href = "/Order/MyOrders");
+                        return;
                     }
-                },
 
-                modal: {
-                    ondismiss: function () {
-                        loader.classList.add('hidden');
-                        btn.disabled = false;
-                        btn.innerText = "Pay Securely";
-                    }
+                    startPolling(data.orderId);
                 }
             };
 
             const rzp = new Razorpay(options);
 
-            // ❌ PAYMENT FAILED (SAFE HANDLING)
             rzp.on('payment.failed', function () {
-                console.warn("Payment failed event - starting verification polling");
                 startPolling(data.orderId);
             });
 
             rzp.open();
 
-            // 🔥 POLLING FUNCTION (KEY FIX)
+            // 🔁 Polling fallback
             async function startPolling(orderId) {
 
-                loader.classList.remove('hidden');
-
                 let attempts = 0;
-                const maxAttempts = 10;
 
                 const interval = setInterval(async () => {
 
                     attempts++;
 
-                    try {
-                        const res = await fetch('/Order/CheckPaymentStatus?orderId=' + orderId);
-                        const result = await res.json();
+                    const res = await fetch('/Order/CheckPaymentStatus?orderId=' + orderId);
+                    const result = await res.json();
 
-                        console.log("Polling:", result);
-
-                        if (result.success) {
-                            clearInterval(interval);
-
-                            Swal.fire({
-                                title: "Payment Successful 🎉",
-                                icon: "success"
-                            }).then(() => {
-                                window.location.href = "/MyOrders";
-                            });
-                        }
-
-                        if (attempts >= maxAttempts) {
-                            clearInterval(interval);
-
-                            Swal.fire({
-                                title: "Payment Pending",
-                                text: "If amount is deducted, it will be confirmed shortly.",
-                                icon: "info"
-                            }).then(() => {
-                                window.location.href = "/MyOrders";
-                            });
-                        }
-
-                    } catch (err) {
-                        console.error("Polling error:", err);
+                    if (result.success) {
+                        clearInterval(interval);
+                        window.location.href = "/Order/MyOrders";
                     }
 
-                }, 3000); // every 3 sec
+                    if (attempts >= 10) {
+                        clearInterval(interval);
+                        window.location.href = "/Order/MyOrders";
+                    }
+
+                }, 3000);
             }
 
         } catch (error) {

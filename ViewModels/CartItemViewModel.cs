@@ -11,5 +11,8 @@ namespace VivekMedicalProducts.ViewModels
         public decimal GSTTotal { get; set; }
 
         public decimal GrandTotal { get; set; }
+
+        public decimal GST { get; set; }
+
     }
 }

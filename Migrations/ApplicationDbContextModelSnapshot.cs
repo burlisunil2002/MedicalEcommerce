@@ -34,9 +34,7 @@ namespace VivekMedicalProducts.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("CompanyName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("text");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
@@ -281,6 +279,9 @@ namespace VivekMedicalProducts.Migrations
 
                     b.Property<decimal>("GSTPercentage")
                         .HasColumnType("decimal(5,2)");
+
+                    b.Property<DateTime?>("ItemOrderModifiedDate")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("ItemStatus")
                         .IsRequired()
@@ -541,10 +542,10 @@ namespace VivekMedicalProducts.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
-                    b.Property<decimal?>("GST")
+                    b.Property<decimal>("GST")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal?>("GrandTotal")
+                    b.Property<decimal>("GrandTotal")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("IpAddress")
@@ -554,7 +555,7 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
-                    b.Property<bool?>("IsPaymentVerified")
+                    b.Property<bool>("IsPaymentVerified")
                         .HasColumnType("boolean");
 
                     b.Property<DateTime>("OrderDate")
@@ -565,9 +566,11 @@ namespace VivekMedicalProducts.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("OrderStatus")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("PaymentStatus")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("PaymentVerifiedAt")
@@ -613,7 +616,7 @@ namespace VivekMedicalProducts.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<decimal?>("SubTotal")
+                    b.Property<decimal>("SubTotal")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime?>("UpdatedAt")
@@ -878,8 +881,7 @@ namespace VivekMedicalProducts.Migrations
                 {
                     b.Navigation("OrderItems");
 
-                    b.Navigation("Payment")
-                        .IsRequired();
+                    b.Navigation("Payment");
                 });
 #pragma warning restore 612, 618
         }

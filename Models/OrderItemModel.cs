@@ -37,4 +37,6 @@ public class OrderItemModel
 
     [ForeignKey("ProductId")]
     public ProductModel Product { get; set; }
+
+    public DateTime? ItemOrderModifiedDate { get; set; }
 }

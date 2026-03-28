@@ -271,21 +271,48 @@ namespace VivekMedicalProducts.Controllers
         }
         public IActionResult ViewQuotation(int id)
         {
-            var product = _context.Products.FirstOrDefault(p => p.Id == id);
+            try
+            {
+                var product = _context.Products.FirstOrDefault(p => p.Id == id);
 
-            if (product == null || string.IsNullOrEmpty(product.QuotationPath))
-                return NotFound();
+                if (product == null)
+                    return NotFound("Product not found");
 
-            var filePath = Path.Combine(_env.WebRootPath, product.QuotationPath.TrimStart('/'));
+                if (string.IsNullOrWhiteSpace(product.QuotationPath))
+                    return NotFound("Quotation not available");
 
-            if (!System.IO.File.Exists(filePath))
-                return NotFound();
+                // ✅ Ensure path starts with /
+                var relativePath = product.QuotationPath.StartsWith("/")
+                    ? product.QuotationPath
+                    : "/" + product.QuotationPath;
 
-            var fileBytes = System.IO.File.ReadAllBytes(filePath);
-            var contentType = "application/pdf";  // mainly for PDF viewing
+                // ✅ Build full file path
+                var filePath = Path.Combine(_env.WebRootPath, relativePath.TrimStart('/'));
 
-            return File(fileBytes, contentType);
+                // ✅ Fix missing extension (VERY IMPORTANT - your current issue)
+                if (!Path.HasExtension(filePath))
+                {
+                    filePath += ".pdf";
+                }
 
+                // ✅ Check file exists
+                if (!System.IO.File.Exists(filePath))
+                {
+                    Console.WriteLine("File NOT FOUND: " + filePath);
+                    return NotFound("Quotation file not found on server");
+                }
+
+                // ✅ Determine content type
+                var contentType = "application/pdf";
+
+                // 🔥 BEST PRACTICE: stream file (no memory load)
+                return PhysicalFile(filePath, contentType);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("ERROR in ViewQuotation: " + ex.Message);
+                return StatusCode(500, "Internal server error");
+            }
         }
     }
 }

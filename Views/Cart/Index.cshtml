@@ -2,69 +2,58 @@
 
 <div class="max-w-7xl mx-auto px-6 py-10">
 
-    <h2 class="text-3xl font-semibold text-gray-800 mb-8 text-center">
-        Your Shopping Cart
+    <h2 class="text-3xl font-bold text-gray-800 mb-8 text-center">
+        🛒 Your Cart
     </h2>
 
     @if (!Model.CartItems.Any())
     {
-        <div id="emptyCart"
-             class="bg-blue-50 border border-blue-200 text-blue-700 p-5 rounded-lg text-center">
+        <div class="bg-blue-50 text-blue-700 p-6 rounded-xl text-center shadow">
             Your cart is empty
         </div>
     }
     else
     {
+        <div class="grid lg:grid-cols-3 gap-8">
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-            <!-- CART ITEMS -->
-
+            <!-- LEFT -->
             <div id="cartItems" class="lg:col-span-2 space-y-5">
 
                 @foreach (var item in Model.CartItems)
                 {
-                    decimal netAmount = item.Product.Price * item.Quantity;
-                    decimal gstAmount = netAmount * ((decimal)item.Product.GSTPercentage / 100);
-                    decimal totalAmount = netAmount + gstAmount;
+                    decimal price = item.Product.Price;
+                    decimal qty = item.Quantity;
+                    decimal gstPercent = item.Product.GSTPercentage;
 
-                    <div class="cart-item bg-white shadow-md rounded-xl p-5 flex justify-between items-center"
+                    decimal net = price * qty;
+                    decimal gst = net * (gstPercent / 100m);
+                    decimal total = net + gst;
+
+                    <div class="cart-item bg-white p-5 rounded-2xl shadow-sm border flex justify-between items-center"
                          data-cartid="@item.Id">
-
-                        <!-- PRODUCT -->
 
                         <div class="flex gap-4 items-center">
 
                             <img src="@item.Product.ImagePath"
-                                 class="w-20 h-20 rounded-lg object-cover" />
+                                 class="w-20 h-20 rounded-lg object-cover border" />
 
                             <div>
+                                <h3 class="font-semibold text-gray-800">@item.Product.Name</h3>
 
-                                <h3 class="font-semibold text-gray-800">
-                                    @item.Product.Name
-                                </h3>
+                                <span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                                    GST @gstPercent%
+                                </span>
 
-                                <p class="text-sm text-gray-500">
-                                    GST : @item.Product.GSTPercentage %
-                                </p>
-
-                                <p class="text-green-600 font-semibold">
-                                    ₹ @item.Product.Price
-                                </p>
+                                <p class="text-green-600 font-semibold mt-1">₹ @price</p>
 
                             </div>
 
                         </div>
 
                         <!-- QUANTITY -->
-
                         <div class="flex items-center gap-2">
-
-                            <button class="qty-btn bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded"
-                                    data-cartid="@item.Id"
-                                    data-price="@item.Product.Price"
-                                    data-gst="@item.Product.GSTPercentage"
-                                    data-change="-1">
+                            <button class="qty-btn px-3 py-1 bg-gray-200 rounded"
+                                    data-cartid="@item.Id" data-change="-1">
                                 -
                             </button>
 
@@ -72,25 +61,18 @@
                                    value="@item.Quantity"
                                    class="qty-input w-14 text-center border rounded"
                                    data-cartid="@item.Id"
-                                   data-price="@item.Product.Price"
-                                   data-gst="@item.Product.GSTPercentage" />
+                                   data-price="@price"
+                                   data-gst="@gstPercent" />
 
-                            <button class="qty-btn bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded"
-                                    data-cartid="@item.Id"
-                                    data-price="@item.Product.Price"
-                                    data-gst="@item.Product.GSTPercentage"
-                                    data-change="1">
+                            <button class="qty-btn px-3 py-1 bg-gray-200 rounded"
+                                    data-cartid="@item.Id" data-change="1">
                                 +
                             </button>
-
                         </div>
-                       
 
                         <!-- REMOVE -->
-
-                        <button class="remove-btn text-red-500 text-xl hover:text-red-700"
-                                data-cartid="@item.Id">
-                            ✕
+                        <button class="remove-btn text-red-500 text-sm hover:underline">
+                            Remove
                         </button>
 
                     </div>
@@ -98,179 +80,179 @@
 
             </div>
 
-            <!-- ORDER SUMMARY -->
+            <!-- RIGHT -->
+            <div class="bg-white rounded-2xl shadow-md p-6 sticky top-24">
 
-            <div class="bg-white shadow-lg rounded-xl p-6 h-fit sticky top-24">
-
-                <h3 class="text-lg font-semibold mb-4">
+                <h2 class="text-lg font-semibold text-gray-700 mb-5 border-b pb-3">
                     Order Summary
-                </h3>
+                </h2>
 
-                <div class="flex justify-between mb-2 text-gray-600">
-                    <span>Subtotal</span>
-                    <span id="subtotal">₹ @Model.SubTotal.ToString("0.00")</span>
+                <!-- ITEMS -->
+                <div class="space-y-4 max-h-72 overflow-y-auto">
+
+                    @foreach (var item in Model.CartItems)
+                    {
+                        decimal price = item.Product.Price;
+                        decimal qty = item.Quantity;
+                        decimal gstPercent = item.Product.GSTPercentage;
+
+                        decimal net = price * qty;
+                        decimal gst = net * (gstPercent / 100m);
+                        decimal total = net + gst;
+
+                        <div id="summary-@item.Id" class="border-b pb-3 text-sm">
+
+                            <div class="flex justify-between font-medium">
+                                <span>@item.Product.Name (x <span id="sum-qty-@item.Id">@item.Quantity</span>)</span>
+                                <span id="sum-net-@item.Id">₹ @net.ToString("0.00")</span>
+                            </div>
+
+                            <div class="flex justify-between text-xs text-gray-500">
+                                <span>GST (@gstPercent%)</span>
+                                <span id="sum-gst-@item.Id">₹ @gst.ToString("0.00")</span>
+                            </div>
+
+                            <div class="flex justify-between text-xs text-green-600 font-semibold">
+                                <span>Total</span>
+                                <span id="sum-total-@item.Id">₹ @total.ToString("0.00")</span>
+                            </div>
+
+                        </div>
+                    }
+
                 </div>
 
-                <div class="flex justify-between mb-3 text-gray-600">
-                    <span>GST</span>
-                    <span id="gsttotal">₹ @Model.GSTTotal.ToString("0.00")</span>
-                </div>
+                <!-- TOTALS -->
+                <div class="mt-6 space-y-3 text-sm">
 
-                <hr class="my-3">
+                    <div class="flex justify-between">
+                        <span>Subtotal</span>
+                        <span id="subtotal">₹ @Model.SubTotal.ToString("0.00")</span>
+                    </div>
 
-                <div class="flex justify-between text-lg font-semibold text-green-600">
-                    <span>Total</span>
-                    <span id="grandtotal">₹ @Model.GrandTotal.ToString("0.00")</span>
+                    <div class="flex justify-between">
+                        <span>GST</span>
+                        <span id="gsttotal">₹ @Model.GSTTotal.ToString("0.00")</span>
+                    </div>
+
+                    <hr>
+
+                    <div class="flex justify-between text-lg font-bold text-green-600">
+                        <span>Total</span>
+                        <span id="grandtotal">₹ @Model.GrandTotal.ToString("0.00")</span>
+                    </div>
+
                 </div>
 
                 <a asp-controller="Checkout"
                    asp-action="Index"
-                   class="block mt-5 bg-green-500 hover:bg-green-600 text-white text-center py-2 rounded-lg">
-                    Proceed to Checkout
+                   class="block mt-5 w-full text-center bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-semibold shadow">
+                    ➡️ Proceed to Checkout
                 </a>
+
+                <p class="text-xs text-gray-400 mt-4 text-center">
+                    🔒 Secure checkout powered by Razorpay
+                </p>
 
             </div>
 
         </div>
-
     }
-
 </div>
 
 <script>
+    document.addEventListener("DOMContentLoaded", () => {
 
-    function updateCart(cartId, qty){
+        function updateCart(cartId, qty){
+            fetch('/Cart/UpdateQuantity', {
+                method:'POST',
+                headers:{ 'Content-Type':'application/x-www-form-urlencoded' },
+                body:`cartId=${cartId}&quantity=${qty}`
+            });
+        }
 
-    fetch('/Cart/UpdateQuantity', {
+        function updateItem(cartId, input){
 
-    method:'POST',
+            let price = +input.dataset.price;
+            let gst = +input.dataset.gst;
+            let qty = Math.max(1, parseInt(input.value) || 1);
 
-    headers:{
-    'Content-Type':'application/x-www-form-urlencoded'
-    },
+            input.value = qty;
 
-    body:`cartId=${cartId}&quantity=${qty}`
+            let net = price * qty;
+            let gstAmount = net * (gst / 100);
+            let total = net + gstAmount;
 
-    })
-    .then(res=>res.json())
-    .then(data=>{
+            // LEFT UPDATE
+            let totalEl = document.querySelector(`.item-total[data-cartid='${cartId}']`);
+            if(totalEl) totalEl.innerText = "₹ " + total.toFixed(2);
 
-    if(data.success){
+            // RIGHT UPDATE
+            document.getElementById(`sum-qty-${cartId}`).innerText = qty;
+            document.getElementById(`sum-net-${cartId}`).innerText = "₹ " + net.toFixed(2);
+            document.getElementById(`sum-gst-${cartId}`).innerText = "₹ " + gstAmount.toFixed(2);
+            document.getElementById(`sum-total-${cartId}`).innerText = "₹ " + total.toFixed(2);
 
-    updateTotals();
+            updateCart(cartId, qty);
+            updateTotals();
+        }
 
-    }
+        document.body.addEventListener("click", function(e){
 
-    });
+            if(e.target.classList.contains("qty-btn")){
+                let cartId = e.target.dataset.cartid;
+                let change = parseInt(e.target.dataset.change);
 
-    }
+                let input = document.querySelector(`.qty-input[data-cartid='${cartId}']`);
+                let newQty = (parseInt(input.value) || 1) + change;
 
-    // QUANTITY BUTTON
+                if(newQty < 1) return;
 
-    document.querySelectorAll(".qty-btn").forEach(btn=>{
+                input.value = newQty;
+                updateItem(cartId, input);
+            }
 
-    btn.addEventListener("click",function(){
+            if(e.target.classList.contains("remove-btn")){
+                let cartItem = e.target.closest(".cart-item");
+                let cartId = cartItem.dataset.cartid;
 
-    let cartId=this.dataset.cartid;
-    let price=parseFloat(this.dataset.price);
-    let gst=parseFloat(this.dataset.gst);
-    let change=parseInt(this.dataset.change);
+                fetch('/Cart/Remove',{
+                    method:'POST',
+                    headers:{ 'Content-Type':'application/x-www-form-urlencoded' },
+                    body:`id=${cartId}`
+                })
+                .then(res=>res.json())
+                .then(data=>{
+                    if(data.success){
+                        cartItem.remove();
+                        document.getElementById(`summary-${cartId}`)?.remove();
+                        updateTotals();
+                    }
+                });
+            }
+        });
 
-    let input=document.querySelector(`.qty-input[data-cartid='${cartId}']`);
+        function updateTotals(){
 
-    let qty=parseInt(input.value)+change;
+            let subtotal = 0;
+            let gsttotal = 0;
 
-    if(qty<1) return;
+            document.querySelectorAll(".qty-input").forEach(input=>{
+                let qty = +input.value;
+                let price = +input.dataset.price;
+                let gst = +input.dataset.gst;
 
-    input.value=qty;
+                let net = qty * price;
+                let gstAmount = net * (gst / 100);
 
-    let net=price*qty;
-    let gstAmount=net*(gst/100);
-    let total=net+gstAmount;
+                subtotal += net;
+                gsttotal += gstAmount;
+            });
 
-    document.querySelector(`.item-total[data-cartid='${cartId}']`)
-    .innerText="₹ "+total.toFixed(2);
-
-    updateCart(cartId,qty);
-
-    updateTotals();
-
-    });
-
-    });
-
-    // REMOVE ITEM
-
-    document.querySelectorAll(".remove-btn").forEach(btn=>{
-
-    btn.addEventListener("click",function(){
-
-    let cartId=this.dataset.cartid;
-
-    fetch('/Cart/Remove',{
-
-    method:'POST',
-
-    headers:{
-    'Content-Type':'application/x-www-form-urlencoded'
-    },
-
-    body:`id=${cartId}`
-
-    })
-    .then(res=>res.json())
-    .then(data=>{
-
-    if(data.success){
-
-    let item=document.querySelector(`.cart-item[data-cartid='${cartId}']`);
-
-    item.remove();
-
-    updateTotals();
-
-    if(document.querySelectorAll(".cart-item").length===0){
-
-    document.getElementById("cartItems").innerHTML=
-    '<div class="bg-blue-50 border border-blue-200 text-blue-700 p-5 rounded-lg text-center">Your cart is empty</div>';
-
-    }
-
-    }
+            document.getElementById("subtotal").innerText = "₹ " + subtotal.toFixed(2);
+            document.getElementById("gsttotal").innerText = "₹ " + gsttotal.toFixed(2);
+            document.getElementById("grandtotal").innerText = "₹ " + (subtotal + gsttotal).toFixed(2);
+        }
 
     });
-
-    });
-
-    });
-
-    // UPDATE TOTALS
-
-    function updateTotals(){
-
-    let subtotal=0;
-    let gsttotal=0;
-
-    document.querySelectorAll(".qty-input").forEach(input=>{
-
-    let qty=parseInt(input.value);
-    let price=parseFloat(input.dataset.price);
-    let gst=parseFloat(input.dataset.gst);
-
-    let net=qty*price;
-    let gstAmount=net*(gst/100);
-
-    subtotal+=net;
-    gsttotal+=gstAmount;
-
-    });
-
-    let grand=subtotal+gsttotal;
-
-    document.getElementById("subtotal").innerText="₹ "+subtotal.toFixed(2);
-    document.getElementById("gsttotal").innerText="₹ "+gsttotal.toFixed(2);
-    document.getElementById("grandtotal").innerText="₹ "+grand.toFixed(2);
-
-    }
-
 </script>

@@ -1,3 +1,4 @@
+using DocumentFormat.OpenXml.Drawing;
 using DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
@@ -5,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using VivekMedicalProducts.Data;
 using VivekMedicalProducts.Models;
 using VivekMedicalProducts.Services;
+using Rotativa.AspNetCore;
 
 
 
@@ -51,81 +53,46 @@ builder.Services.Configure<EmailSettings>(
     builder.Configuration.GetSection("EmailSettings"));
 builder.Services.AddTransient<EmailService>();
 
+
 builder.Services.AddHttpClient<GstVerificationService>();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IUserContextService, UserContextService>();
 
+builder.Services.AddScoped<InvoiceService>();
+
+Rotativa.AspNetCore.RotativaConfiguration.Setup(builder.Environment.WebRootPath);
+
 var app = builder.Build();
 
+// ?? Single scope (BEST PRACTICE)
 using (var scope = app.Services.CreateScope())
 {
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    var services = scope.ServiceProvider;
 
-    string[] roles = { "Admin", "Customer" };
-
-    foreach (var role in roles)
-    {
-        
-        if (!await roleManager.RoleExistsAsync(role))
-        {
-            await roleManager.CreateAsync(new IdentityRole(role));
-        }
-    }
-}
-
-using (var scope = app.Services.CreateScope())
-{
     try
     {
-        var services = scope.ServiceProvider;
-
         var context = services.GetRequiredService<ApplicationDbContext>();
-        await context.Database.MigrateAsync(); // ensure DB is ready
+        await context.Database.MigrateAsync(); // DB ready
 
-        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
 
-        // Create Admin Role
-        if (!await roleManager.RoleExistsAsync("Admin"))
+        string[] roles = { "Admin", "Customer" };
+
+        foreach (var role in roles)
         {
-            await roleManager.CreateAsync(new IdentityRole("Admin"));
-        }
-
-        var adminEmail = "burlisunil357@gmail.com";
-        var adminUser = await userManager.FindByEmailAsync(adminEmail);
-
-        // Create Admin User
-        if (adminUser == null)
-        {
-            adminUser = new ApplicationUser
+            if (!await roleManager.RoleExistsAsync(role))
             {
-                UserName = adminEmail,
-                Email = adminEmail,
-                EmailConfirmed = true
-            };
-
-            var result = await userManager.CreateAsync(adminUser, "Admin@123");
-
-            if (result.Succeeded)
-            {
-                await userManager.AddToRoleAsync(adminUser, "Admin");
-            }
-            else
-            {
-                foreach (var error in result.Errors)
-                {
-                    Console.WriteLine("User creation error: " + error.Description);
-                }
+                await roleManager.CreateAsync(new IdentityRole(role));
             }
         }
     }
     catch (Exception ex)
     {
-        Console.WriteLine("Startup Error: " + ex.Message);
+        Console.WriteLine("ERROR: " + ex.Message);
+        Console.WriteLine("INNER: " + ex.InnerException?.Message);
     }
 }
-
 // Middleware pipeline
 if (!app.Environment.IsDevelopment())
 {

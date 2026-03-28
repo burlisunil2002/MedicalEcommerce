@@ -1,0 +1,277 @@
+﻿@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <base href="@($"{Context.Request.Scheme}://{Context.Request.Host}/")" />
+
+    <title>Invoice</title>
+
+    <style>
+        body {
+            font-family: "Segoe UI", 'Times New Roman', sans-serif;
+            font-size: 13px;
+            color: #000;
+            margin: 0;
+            padding: 20px;
+        }
+
+        /* CONTAINER */
+        .container {
+            max-width: 900px;
+            margin: auto;
+        }
+
+        /* ACTIONS */
+        .actions {
+            text-align: right;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            padding: 6px 12px;
+            background: #111;
+            color: #fff;
+            text-decoration: none;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+
+        /* HEADER */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+        }
+
+        .logo {
+            height: 45px;
+        }
+
+        .company {
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .invoice-title {
+            text-align: right;
+        }
+
+            .invoice-title h2 {
+                margin: 0;
+                font-size: 18px;
+                letter-spacing: 1px;
+            }
+
+        /* BILLING */
+        .billing {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+
+            .billing div {
+                width: 48%;
+            }
+
+        /* TABLE */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th {
+            text-align: left;
+            border-bottom: 2px solid #000;
+            padding: 8px;
+            font-size: 13px;
+        }
+
+        td {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        /* TOTAL */
+        .totals {
+            width: 300px;
+            margin-left: auto;
+            margin-top: 20px;
+            font-size: 13px;
+        }
+
+            .totals div {
+                display: flex;
+                justify-content: space-between;
+                padding: 5px 0;
+            }
+
+        .grand {
+            font-weight: bold;
+            border-top: 2px solid #000;
+            padding-top: 8px;
+            font-size: 15px;
+        }
+
+        /* SIGNATURE */
+        .signature {
+            margin-top: 50px;
+            text-align: right;
+        }
+
+            .signature img {
+                height: 40px;
+                width: 120px;
+                object-fit: contain;
+            }
+
+        /* FOOTER */
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            font-size: 11px;
+            color: #555;
+            border-top: 1px dashed #aaa;
+            padding-top: 10px;
+        }
+
+        /* PRINT */
+        @@media print {
+            .actions {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+
+        <!-- ACTION BUTTONS -->
+        <div class="actions">
+            <button class="btn" onclick="window.print()">Print</button>
+
+            <a href="@Url.Action("DownloadInvoice", "Order", new { id = Model.OrderId })"
+               class="btn">
+                Download PDF
+            </a>
+        </div>
+
+        <!-- HEADER -->
+        <div class="header">
+
+            <div>
+                <img src="@($"{Context.Request.Scheme}://{Context.Request.Host}/images/amtz png.png")" class="logo" />
+
+                <div class="company">
+                    <strong>@Model.CompanyName</strong><br />
+                    GSTIN: @Model.CompanyGST <br />
+                    @Model.CompanyAddress
+                </div>
+            </div>
+
+            <div class="invoice-title">
+                <h2>TAX INVOICE</h2>
+                <div>Invoice No: @Model.InvoiceNumber</div> 
+                <div>Date: @Model.Date.ToString("dd-MM-yyyy")</div>
+                <div>Order ID: #@Model.OrderId</div>
+            </div>
+
+        </div>
+
+        <!-- BILLING -->
+        <div class="billing">
+
+            <div>
+                <strong>Bill To:</strong><br />
+                @Model.CustomerName <br />
+                @Model.Address <br />
+                @Model.City - @Model.Pincode <br />
+                Phone: @Model.Phone
+            </div>
+
+            <div style="text-align:right;">
+                <strong>Payment:</strong> Completed <br />
+                <strong>Status:</strong> Confirmed <br />
+                <strong>Place of Supply:</strong> Andhra Pradesh
+            </div>
+
+        </div>
+
+        <!-- TABLE -->
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Description</th>
+                    <th>Qty</th>
+                    <th>Unit Price</th>
+                    <th>Tax(%)</th>
+                    <th>GST Price</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @{
+                    int i = 1;
+                    foreach (var item in Model.Items)
+                    {
+                        var gstpercentage = item.GSTPercentage;
+                        var gstamt = ((item.Price * item.Quantity) * gstpercentage/100m);
+                        var gst = item.GSTAmount;
+                        var itemtoatl = (item.Price * item.Quantity) + gstamt;
+                        <tr>
+                            <td>@i</td>
+                            <td>@item.ProductName</td>
+                            <td>@item.Quantity</td>
+                            <td>₹ @item.Price.ToString("0.00")</td>
+                            <td>@gstpercentage.ToString("0.00")</td>
+                            <td>₹ @gstamt.ToString("0.00")</td>
+                            <td>₹ @itemtoatl.ToString("0.00")</td>
+                        </tr>
+                        ;
+                        i++;
+                    }
+                }
+            </tbody>
+        </table>
+
+        <!-- TOTALS -->
+        <div class="totals">
+            <div>
+                <span>Sub Total</span>
+                <span>₹ @Model.SubTotal</span>
+            </div>
+            <div>
+                <span>GST Total</span>
+                <span>₹ @Model.GSTTotal</span>
+            </div>
+            <div class="grand">
+                <span>Grand Total</span>
+                <span>₹ @Model.GrandTotal</span>
+            </div>
+        </div>
+
+        <!-- SIGNATURE -->
+        <div class="signature">
+            <p>Authorized Signatory</p>
+            <img src="@($"{Context.Request.Scheme}://{Context.Request.Host}/images/signature.jpg")" />
+            <p><strong>Sunil</strong></p>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">
+            <p>This is a computer-generated invoice.</p>
+        </div>
+
+    </div>
+
+</body>
+</html>
