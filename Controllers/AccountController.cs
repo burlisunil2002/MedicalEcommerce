@@ -135,7 +135,7 @@ public class AccountController : Controller
                 return Json(new
                 {
                     success = false,
-                    message = "Failed to send OTP email. Please try again."
+                    message = ex.Message
                 });
             }
 
