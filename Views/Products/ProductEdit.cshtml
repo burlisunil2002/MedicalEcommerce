@@ -69,9 +69,9 @@
                         Product Image
                     </label>
 
-                    @if (!string.IsNullOrEmpty(Model.ImagePath))
+                    @if (!string.IsNullOrEmpty(Model.ImageUrl))
                     {
-                        <img src="@Model.ImagePath"
+                        <img src="@Model.ImageUrl"
                              class="h-24 mb-3 rounded-lg border object-cover" />
                     }
 
@@ -85,7 +85,7 @@
                         Quotation (PDF)
                     </label>
 
-                    @if (!string.IsNullOrEmpty(Model.QuotationPath))
+                    @if (!string.IsNullOrEmpty(Model.QuotationUrl))
                     {
                         <a asp-controller="Products"
                            asp-action="ViewQuotation"

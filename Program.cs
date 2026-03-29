@@ -3,10 +3,11 @@ using DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Rotativa.AspNetCore;
 using VivekMedicalProducts.Data;
 using VivekMedicalProducts.Models;
 using VivekMedicalProducts.Services;
-using Rotativa.AspNetCore;
+using VivekMedicalProducts.Services.Storage;
 
 
 
@@ -70,6 +71,8 @@ builder.Services.AddScoped<IUserContextService, UserContextService>();
 builder.Services.AddScoped<InvoiceService>();
 
 Rotativa.AspNetCore.RotativaConfiguration.Setup(builder.Environment.WebRootPath);
+
+builder.Services.AddScoped<IFileStorageService, CloudinaryService>();
 
 var app = builder.Build();
 

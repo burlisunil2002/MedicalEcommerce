@@ -19,9 +19,9 @@ namespace VivekMedicalProducts.ViewModels
         [Required(ErrorMessage = "Please select price type")]
         public string PriceType { get; set; }
 
-        public string ImagePath { get; set; }
+        public string ImageUrl { get; set; }
 
-        public string? QuotationPath { get; set; }
+        public string? QuotationUrl { get; set; }
 
         // ⭐ important for cart quantity
         public int CartQuantity { get; set; }

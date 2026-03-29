@@ -6,7 +6,7 @@
 
             <!-- IMAGE -->
             <div class="flex items-center justify-center bg-gray-50 rounded-xl p-4">
-                <img src="@(string.IsNullOrEmpty(Model.ImagePath) ? "/images/no-image.png" : Model.ImagePath)"
+                <img src="@(string.IsNullOrEmpty(Model.ImageUrl) ? "/images/no-image.png" : Model.ImageUrl)"
                      class="rounded-xl max-h-[400px] object-contain transition hover:scale-105" />
             </div>
 
@@ -68,7 +68,7 @@
                         </form>
 
                         <!-- ✅ VIEW QUOTATION -->
-                        @if (!string.IsNullOrEmpty(Model.QuotationPath))
+                        @if (!string.IsNullOrEmpty(Model.QuotationUrl))
                         {
                             <a asp-controller="Products"
                                asp-action="ViewQuotation"

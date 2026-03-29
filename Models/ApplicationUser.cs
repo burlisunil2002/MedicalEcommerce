@@ -36,7 +36,7 @@ public class ApplicationUser : IdentityUser
 
     public string? LoginOTP { get; set; }
 
-    public DateTime? OTPExpiry { get; set; }
+    public DateTime? OTPExpiry { get; set; } = DateTime.UtcNow;
 
     public bool IsProfileCompleted { get; set; } = false;
 }

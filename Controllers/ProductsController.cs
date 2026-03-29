@@ -3,59 +3,51 @@ using Microsoft.EntityFrameworkCore;
 using VivekMedicalProducts.Data;
 using VivekMedicalProducts.Models;
 using VivekMedicalProducts.Services;
+using VivekMedicalProducts.Services.Storage;
 
 namespace VivekMedicalProducts.Controllers
 {
     public class ProductsController : Controller
     {
         private readonly ProductService _service;
-        private readonly IWebHostEnvironment _env;
         private readonly ApplicationDbContext _context;
         private readonly IUserContextService _userContext;
+        private readonly IFileStorageService _fileStorage;
 
-
-        public ProductsController(ProductService service, IWebHostEnvironment env, ApplicationDbContext context, IUserContextService userContext)
+        public ProductsController(
+            ProductService service,
+            ApplicationDbContext context,
+            IUserContextService userContext,
+            IFileStorageService fileStorage)
         {
             _service = service;
-            _env = env;
             _context = context;
             _userContext = userContext;
-
+            _fileStorage = fileStorage;
         }
 
-        // Show all products + Search + Category filter
+        // ================= INDEX =================
         public IActionResult Index(string? searchString, string? category)
         {
             var products = _context.Products.AsQueryable();
 
-            // 🔍 Search
             if (!string.IsNullOrEmpty(searchString))
-            {
                 products = products.Where(p => p.Name.Contains(searchString));
-            }
 
-            // 📂 Category filter
             if (!string.IsNullOrEmpty(category))
-            {
                 products = products.Where(p => p.Category == category);
-            }
 
-            // 📦 Load categories
             ViewBag.Categories = _context.Products
                                 .Select(p => p.Category)
                                 .Distinct()
                                 .ToList();
 
-            // 👤 Get UserId or SessionId (Amazon style)
             var userId = _userContext.GetUserId();
 
-
-            // 🛒 Get cart items
             var cartItems = _context.Carts
                             .Where(c => c.UserId == userId)
                             .ToList();
 
-            // Convert to ViewModel
             var result = products
                 .ToList()
                 .Select(p => new VivekMedicalProducts.ViewModels.ProductViewModel
@@ -66,41 +58,80 @@ namespace VivekMedicalProducts.Controllers
                     Category = p.Category,
                     Price = p.Price,
                     GSTPercentage = p.GSTPercentage,
-                    ImagePath = p.ImagePath,
-                    QuotationPath = p.QuotationPath,
+                    ImageUrl = p.ImageUrl,
+                    QuotationUrl = p.QuotationUrl,
                     PriceType = p.PriceType,
 
                     CartQuantity = cartItems
-                            .Where(c => c.ProductId == p.Id)
-                            .Select(c => c.Quantity)
-                            .FirstOrDefault()
+                        .Where(c => c.ProductId == p.Id)
+                        .Select(c => c.Quantity)
+                        .FirstOrDefault()
                 })
                 .ToList();
 
             if (!result.Any())
-            {
                 TempData["InfoMessage"] = "No products available.";
-            }
 
             return View(result);
         }
 
-
-        // Show add product form
+        // ================= ADD (GET) =================
         [HttpGet]
         public IActionResult AddProducts()
         {
             return View();
         }
 
-        // PRODUCT LIST PAGE
+        // ================= ADD (POST) =================
+        [HttpPost]
+        public async Task<IActionResult> AddProducts(ProductModel product,
+                                                    IFormFile imageFile,
+                                                    IFormFile quotationFile)
+        {
+            if (!ModelState.IsValid)
+                return View(product);
+
+            // IMAGE UPLOAD
+            if (imageFile != null && imageFile.Length > 0)
+            {
+                var allowedTypes = new[] { "image/jpeg", "image/png", "image/jpg" };
+
+                if (!allowedTypes.Contains(imageFile.ContentType))
+                {
+                    ModelState.AddModelError("", "Only JPG/PNG allowed");
+                    return View(product);
+                }
+
+                product.ImageUrl = await _fileStorage.UploadAsync(imageFile, "products");
+            }
+
+            // QUOTATION UPLOAD (PDF)
+            if (quotationFile != null && quotationFile.Length > 0)
+            {
+                if (quotationFile.ContentType != "application/pdf")
+                {
+                    ModelState.AddModelError("", "Only PDF allowed");
+                    return View(product);
+                }
+
+                product.QuotationUrl = await _fileStorage.UploadAsync(quotationFile, "quotations");
+            }
+
+            _context.Products.Add(product);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Product added successfully!";
+            return RedirectToAction("Index");
+        }
+
+        // ================= PRODUCT MANAGEMENT =================
         public IActionResult ProductManagement()
         {
             var products = _context.Products.ToList();
             return View(products);
         }
 
-
+        // ================= EDIT (GET) =================
         [HttpGet]
         public IActionResult ProductEdit(int id)
         {
@@ -111,11 +142,13 @@ namespace VivekMedicalProducts.Controllers
             return View(product);
         }
 
-        // EDIT POST
+        // ================= EDIT (POST) =================
         [HttpPost]
-        public IActionResult ProductEdit(ProductModel model, IFormFile imageFile, IFormFile quotationFile)
+        public async Task<IActionResult> ProductEdit(ProductModel model,
+                                                     IFormFile imageFile,
+                                                     IFormFile quotationFile)
         {
-            var product = _context.Products.Find(model.Id);
+            var product = await _context.Products.FindAsync(model.Id);
 
             if (product == null)
                 return NotFound();
@@ -124,73 +157,55 @@ namespace VivekMedicalProducts.Controllers
             product.Price = model.Price;
             product.GSTPercentage = model.GSTPercentage;
             product.Description = model.Description;
+            product.Category = model.Category;
+            product.PriceType = model.PriceType;
 
-            // IMAGE UPLOAD
-            if (imageFile != null)
+            // IMAGE UPDATE
+            if (imageFile != null && imageFile.Length > 0)
             {
-                var fileName = Guid.NewGuid() + Path.GetExtension(imageFile.FileName);
-                var path = Path.Combine("wwwroot/images", fileName);
-
-                using (var stream = new FileStream(path, FileMode.Create))
-                {
-                    imageFile.CopyTo(stream);
-                }
-
-                product.ImagePath = "/images/" + fileName;
+                product.ImageUrl = await _fileStorage.UploadAsync(imageFile, "products");
             }
 
-            // QUOTATION UPLOAD
-            if (quotationFile != null)
+            // PDF UPDATE
+            if (quotationFile != null && quotationFile.Length > 0)
             {
-                var fileName = Guid.NewGuid() + Path.GetExtension(quotationFile.FileName);
-                var path = Path.Combine("wwwroot/quotations", fileName);
-
-                using (var stream = new FileStream(path, FileMode.Create))
-                {
-                    quotationFile.CopyTo(stream);
-                }
-
-                product.QuotationPath = "/quotations/" + fileName;
+                product.QuotationUrl = await _fileStorage.UploadAsync(quotationFile, "quotations");
             }
 
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
 
             TempData["SuccessMessage"] = "Product updated successfully!";
-
             return RedirectToAction("ProductManagement");
         }
 
-
-        // DELETE (POST)
+        // ================= DELETE =================
         [HttpPost]
-        public IActionResult Delete(int id)
+        public async Task<IActionResult> Delete(int id)
         {
-            var product = _context.Products.Find(id);
+            var product = await _context.Products.FindAsync(id);
 
             if (product == null)
                 return NotFound();
 
             _context.Products.Remove(product);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Product Deleted successfully!";
-
+            TempData["SuccessMessage"] = "Product deleted successfully!";
             return RedirectToAction("ProductManagement");
         }
 
+        // ================= DETAILS =================
         public IActionResult Details(int id)
         {
             var product = _context.Products.FirstOrDefault(p => p.Id == id);
 
             if (product == null)
-            {
                 return NotFound();
-            }
 
             return View(product);
         }
 
-        // GET: /Products/GetDetails/5
+        // ================= AJAX DETAILS =================
         [HttpGet]
         public IActionResult GetDetails(int id)
         {
@@ -203,7 +218,7 @@ namespace VivekMedicalProducts.Controllers
                                       p.Category,
                                       p.Price,
                                       p.Description,
-                                      p.ImagePath,
+                                      p.ImageUrl,
                                       p.PriceType
                                   })
                                   .FirstOrDefault();
@@ -212,107 +227,6 @@ namespace VivekMedicalProducts.Controllers
                 return NotFound();
 
             return Json(product);
-        }
-
-
-        // Handle form submission
-        [HttpPost]
-        public async Task<IActionResult> AddProducts(ProductModel product,
-                                            IFormFile imageFile,
-                                            IFormFile quotationFile)
-        {
-            if (product.PriceType == "Normal" && product.Price == null)
-            {
-                ModelState.AddModelError("Price", "Price is required for Normal price type");
-            }
-            if (!ModelState.IsValid)
-            {
-                return View(product);
-            }
-
-            // ================= IMAGE UPLOAD =================
-            if (imageFile != null && imageFile.Length > 0)
-            {
-                string imageFolder = Path.Combine(_env.WebRootPath, "images");
-                Directory.CreateDirectory(imageFolder);
-
-                string imageFileName = Guid.NewGuid() + Path.GetExtension(imageFile.FileName);
-                string imagePath = Path.Combine(imageFolder, imageFileName);
-
-                using (var stream = new FileStream(imagePath, FileMode.Create))
-                {
-                    await imageFile.CopyToAsync(stream);
-                }
-
-                product.ImagePath = "/images/" + imageFileName;
-            }
-
-            // ================= QUOTATION UPLOAD =================
-            if (quotationFile != null && quotationFile.Length > 0)
-            {
-                string quotationFolder = Path.Combine(_env.WebRootPath, "quotations");
-                Directory.CreateDirectory(quotationFolder);
-
-                string quotationFileName = Guid.NewGuid() + Path.GetExtension(quotationFile.FileName);
-                string quotationPath = Path.Combine(quotationFolder, quotationFileName);
-
-                using (var stream = new FileStream(quotationPath, FileMode.Create))
-                {
-                    await quotationFile.CopyToAsync(stream);
-                }
-
-                product.QuotationPath = "/quotations/" + quotationFileName;
-            }
-
-            _service.AddProducts(product);
-
-            TempData["SuccessMessage"] = "Product added successfully!";
-            return RedirectToAction("Index");
-        }
-        public IActionResult ViewQuotation(int id)
-        {
-            try
-            {
-                var product = _context.Products.FirstOrDefault(p => p.Id == id);
-
-                if (product == null)
-                    return NotFound("Product not found");
-
-                if (string.IsNullOrWhiteSpace(product.QuotationPath))
-                    return NotFound("Quotation not available");
-
-                // ✅ Ensure path starts with /
-                var relativePath = product.QuotationPath.StartsWith("/")
-                    ? product.QuotationPath
-                    : "/" + product.QuotationPath;
-
-                // ✅ Build full file path
-                var filePath = Path.Combine(_env.WebRootPath, relativePath.TrimStart('/'));
-
-                // ✅ Fix missing extension (VERY IMPORTANT - your current issue)
-                if (!Path.HasExtension(filePath))
-                {
-                    filePath += ".pdf";
-                }
-
-                // ✅ Check file exists
-                if (!System.IO.File.Exists(filePath))
-                {
-                    Console.WriteLine("File NOT FOUND: " + filePath);
-                    return NotFound("Quotation file not found on server");
-                }
-
-                // ✅ Determine content type
-                var contentType = "application/pdf";
-
-                // 🔥 BEST PRACTICE: stream file (no memory load)
-                return PhysicalFile(filePath, contentType);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("ERROR in ViewQuotation: " + ex.Message);
-                return StatusCode(500, "Internal server error");
-            }
         }
     }
 }

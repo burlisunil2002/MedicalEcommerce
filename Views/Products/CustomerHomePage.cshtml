@@ -60,9 +60,9 @@
                                asp-action="Details"
                                asp-route-id="@product.Id">
 
-                                @if (!string.IsNullOrEmpty(product.ImagePath))
+                                @if (!string.IsNullOrEmpty(product.ImageUrl))
                                 {
-                                    <img src="@product.ImagePath" alt="@product.Name" />
+                                    <img src="@product.ImageUrl" alt="@product.Name" />
                                 }
                                 else
                                 {

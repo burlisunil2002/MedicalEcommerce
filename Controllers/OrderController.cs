@@ -440,12 +440,19 @@ namespace VivekMedicalProducts.Controllers
                     OrderDate = i.Order.OrderDate,
 
                     ProductName = i.Product.Name,
-                    ProductImage = i.Product.ImagePath,
+
+                    // 🔥 FIX: Use Cloudinary URL
+                    ProductImage = string.IsNullOrEmpty(i.Product.ImageUrl)
+                        ? "/images/no-image.png"   // fallback (optional)
+                        : i.Product.ImageUrl,
+
                     Quantity = i.Quantity,
 
                     Total = i.Order.GrandTotal,
-                    ItemStatus = i.Order.OrderStatus,      // ✅ important
-                    PaymentStatus = i.Order.PaymentStatus  // ✅ important
+
+                    // ✅ statuses
+                    ItemStatus = i.Order.OrderStatus,
+                    PaymentStatus = i.Order.PaymentStatus
                 })
                 .ToListAsync();
 

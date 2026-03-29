@@ -61,7 +61,7 @@
 
                             <!-- IMAGE -->
                             <td class="px-6 py-4">
-                                <img src="@(string.IsNullOrEmpty(item.ImagePath) ? "/images/no-image.png" : item.ImagePath)"
+                                <img src="@(string.IsNullOrEmpty(item.ImageUrl) ? "/images/no-image.png" : item.ImageUrl)"
                                      class="h-14 w-14 object-cover rounded-lg border" />
                             </td>
 
@@ -89,7 +89,7 @@
 
                             <!-- QUOTATION -->
                             <td class="px-6 py-4">
-                                @if (!string.IsNullOrEmpty(item.QuotationPath))
+                                @if (!string.IsNullOrEmpty(item.QuotationUrl))
                                 {
                                     <a asp-controller="Products"
                                        asp-action="ViewQuotation"
