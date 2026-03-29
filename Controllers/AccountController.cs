@@ -88,7 +88,7 @@ public class AccountController : Controller
                 }
             }
 
-            // ✅ Cooldown check (safe)
+            // ✅ Cooldown check
             if (user.OTPLastSentAt.HasValue &&
                 (DateTime.UtcNow - user.OTPLastSentAt.Value).TotalSeconds < 30)
             {
@@ -106,25 +106,38 @@ public class AccountController : Controller
             user.OTPExpiry = DateTime.UtcNow.AddMinutes(5);
             user.OTPLastSentAt = DateTime.UtcNow;
 
-            await _userManager.UpdateAsync(user);
+            var updateResult = await _userManager.UpdateAsync(user);
 
-            // ✅ Send email safely (non-blocking + logged)
-            _ = Task.Run(async () =>
+            if (!updateResult.Succeeded)
             {
-                try
+                return Json(new
                 {
-                    await _emailService.SendEmailAsync(
-                        email,
-                        "Login OTP",
-                        $@"<h3>Login OTP</h3>
-               <p>Your OTP is: <b>{otp}</b></p>"
-                    );
-                }
-                catch (Exception ex)
+                    success = false,
+                    message = "Failed to save OTP"
+                });
+            }
+
+            // ✅ SEND EMAIL (IMPORTANT: await it)
+            try
+            {
+                await _emailService.SendEmailAsync(
+                    email,
+                    "Login OTP",
+                    $@"<h3>Login Verification</h3>
+                   <p>Your OTP is: <b>{otp}</b></p>
+                   <p>This OTP is valid for 5 minutes.</p>"
+                );
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("EMAIL ERROR: " + ex.Message);
+
+                return Json(new
                 {
-                    Console.WriteLine("OTP EMAIL FAILED: " + ex.Message);
-                }
-            });
+                    success = false,
+                    message = "Failed to send OTP email. Please try again."
+                });
+            }
 
             return Json(new
             {
