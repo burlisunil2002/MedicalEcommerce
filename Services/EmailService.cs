@@ -60,7 +60,7 @@ public class EmailService
     // =========================
     public async Task SendEmailAsync(string toEmail, string subject, string body)
     {
-        var mail = new MailMessage
+        using var mail = new MailMessage
         {
             From = new MailAddress(_settings.Email),
             Subject = subject,
@@ -73,12 +73,20 @@ public class EmailService
         using var smtp = new SmtpClient(_settings.Host, _settings.Port)
         {
             Credentials = new NetworkCredential(_settings.Email, _settings.AppPassword),
-            EnableSsl = true
+            EnableSsl = true,
+            Timeout = 10000 // ⏱️ 10 seconds max
         };
 
-        await smtp.SendMailAsync(mail);
+        try
+        {
+            await smtp.SendMailAsync(mail);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("SMTP ERROR: " + ex.Message);
+            throw; // important for debugging
+        }
     }
-
     // =========================
     // 🔥 INVOICE EMAIL (NEW)
     // =========================

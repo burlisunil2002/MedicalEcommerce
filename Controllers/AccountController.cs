@@ -65,7 +65,7 @@ public class AccountController : Controller
 
             var user = await _userManager.FindByEmailAsync(email);
 
-            // Create user if not exists (OTP-first flow)
+            // Create user if not exists
             if (user == null)
             {
                 user = new ApplicationUser
@@ -88,33 +88,43 @@ public class AccountController : Controller
                 }
             }
 
-            // 🔐 Optional: Prevent OTP spam (30 sec cooldown)
-            if (user.OTPExpiry != null && user.OTPExpiry > DateTime.UtcNow.AddMinutes(4))
+            // ✅ Cooldown check (safe)
+            if (user.OTPLastSentAt.HasValue &&
+                (DateTime.UtcNow - user.OTPLastSentAt.Value).TotalSeconds < 30)
             {
                 return Json(new
                 {
                     success = false,
-                    message = "Please wait before requesting another OTP"
+                    message = "Please wait 30 seconds before requesting another OTP"
                 });
             }
 
-            // Clear old OTP
-            user.LoginOTP = null;
-            user.OTPExpiry = null;
-
-            // Generate new OTP
+            // Generate OTP
             var otp = GenerateOTP();
 
             user.LoginOTP = otp;
             user.OTPExpiry = DateTime.UtcNow.AddMinutes(5);
+            user.OTPLastSentAt = DateTime.UtcNow;
 
             await _userManager.UpdateAsync(user);
 
-            // Send email
-            await _emailService.SendEmailAsync(
-                email,
-                "Login OTP",
-                $"Your OTP is: {otp}");
+            // ✅ Send email safely (non-blocking + logged)
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _emailService.SendEmailAsync(
+                        email,
+                        "Login OTP",
+                        $@"<h3>Login OTP</h3>
+               <p>Your OTP is: <b>{otp}</b></p>"
+                    );
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("OTP EMAIL FAILED: " + ex.Message);
+                }
+            });
 
             return Json(new
             {
@@ -127,7 +137,7 @@ public class AccountController : Controller
             return Json(new
             {
                 success = false,
-                message = ex.ToString()
+                message = ex.Message
             });
         }
     }

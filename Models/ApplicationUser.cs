@@ -39,4 +39,6 @@ public class ApplicationUser : IdentityUser
     public DateTime? OTPExpiry { get; set; } = DateTime.UtcNow;
 
     public bool IsProfileCompleted { get; set; } = false;
+
+    public DateTime? OTPLastSentAt { get; set; }
 }
