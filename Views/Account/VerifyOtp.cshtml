@@ -1,0 +1,99 @@
+﻿<link rel="stylesheet" href="~/css/auth.css" />
+
+<div class="auth-card">
+
+    ```
+    <h2>Email Verification</h2>
+    <p class="otp-info">Enter the 6 digit OTP sent to your email</p>
+
+    <form method="post">
+
+        <!-- OTP BOXES -->
+        <div class="otp-container">
+
+            <input type="text" maxlength="1" class="otp-box" />
+            <input type="text" maxlength="1" class="otp-box" />
+            <input type="text" maxlength="1" class="otp-box" />
+            <input type="text" maxlength="1" class="otp-box" />
+            <input type="text" maxlength="1" class="otp-box" />
+            <input type="text" maxlength="1" class="otp-box" />
+
+        </div>
+
+        <!-- Hidden OTP -->
+        <input type="hidden" name="otp" id="otpValue" />
+
+        <button type="submit">
+            Verify OTP
+        </button>
+
+    </form>
+
+    <!-- RESEND -->
+    <p class="resend-text">
+        Resend OTP in <span id="timer">30</span> seconds
+    </p>
+
+    <a href="/Account/ResendOtp" id="resendBtn" class="auth-link" style="display:none;">
+        Resend OTP
+    </a>
+    ```
+
+</div>
+
+<script>
+
+    const otpInputs = document.querySelectorAll(".otp-box");
+    const hiddenOtp = document.getElementById("otpValue");
+
+    otpInputs.forEach((input, index) => {
+
+        input.addEventListener("input", () => {
+
+            if (input.value.length === 1 && index < otpInputs.length - 1) {
+                otpInputs[index + 1].focus();
+            }
+
+            updateOtpValue();
+        });
+
+    });
+
+    function updateOtpValue(){
+
+        let otp = "";
+
+        otpInputs.forEach(box=>{
+            otp += box.value;
+        });
+
+        hiddenOtp.value = otp;
+    }
+
+</script>
+
+<script>
+
+    // TIMER
+
+    let time = 30;
+
+    let timer = setInterval(function(){
+
+        time--;
+
+        document.getElementById("timer").innerText = time;
+
+        if(time <= 0){
+
+            clearInterval(timer);
+
+            document.getElementById("resendBtn").style.display="block";
+
+            document.querySelector(".resend-text").style.display="none";
+
+        }
+
+    },1000);
+
+</script>

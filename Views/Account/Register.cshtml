@@ -1,0 +1,197 @@
+﻿@model VivekMedicalProducts.ViewModels.RegisterViewModel
+
+@section Styles {
+    <script src="https://cdn.tailwindcss.com"></script>
+}
+
+<div class="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 flex items-center justify-center p-6">
+
+    <div class="w-full max-w-6xl grid md:grid-cols-2 bg-white rounded-3xl shadow-2xl overflow-hidden">
+
+        <!-- LEFT SIDE -->
+        <div class="hidden md:flex flex-col justify-center items-center bg-blue-600 text-white p-10">
+            <h2 class="text-4xl font-bold mb-4">Join Us 🚀</h2>
+            <p class="text-center text-blue-100">
+                Manage your orders, invoices and business seamlessly.
+            </p>
+        </div>
+
+        <!-- RIGHT SIDE -->
+        <div class="p-8 md:p-10">
+
+            <h2 class="text-3xl font-bold text-gray-800 mb-2">Create Account</h2>
+            <p class="text-gray-500 mb-6">Fill in your business details</p>
+
+            <form id="registerForm" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+
+                <div class="grid md:grid-cols-2 gap-4">
+
+                    <!-- Company -->
+                    <div>
+                        <input asp-for="CompanyName" placeholder="Firm / Company Name"
+                               class="input" />
+                        <span asp-validation-for="CompanyName" class="error"></span>
+                    </div>
+
+                    <!-- Customer -->
+                    <div>
+                        <input asp-for="CustomerName" placeholder="Customer Name"
+                               class="input" />
+                    </div>
+
+                    <div>
+                        <input asp-for="IndustrySector" placeholder="Industry"
+                               class="input" />
+                    </div>
+
+                    <div>
+                        <input asp-for="MobileNo" placeholder="Mobile Number"
+                               class="input" />
+                        <span asp-validation-for="MobileNo" class="error"></span>
+                    </div>
+
+                    <div>
+                        <input asp-for="Email" placeholder="Email Address"
+                               class="input" />
+                    </div>
+
+                    <div>
+                        <input asp-for="SecondaryEmail" placeholder="Secondary Email"
+                               class="input" />
+                    </div>
+
+                    <div>
+                        <input asp-for="SecondaryMobile" placeholder="Secondary Mobile"
+                               class="input" />
+                    </div>
+
+                    <div>
+                        <input asp-for="GSTNo" placeholder="GST Number"
+                               class="input uppercase" />
+                        <span asp-validation-for="GSTNo" class="error"></span>
+                    </div>
+
+                    <div>
+                        <input asp-for="PANNo" placeholder="PAN Number"
+                               class="input uppercase" />
+                        <span asp-validation-for="PANNo" class="error"></span>
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <textarea asp-for="Address" placeholder="Full Address"
+                                  class="input"></textarea>
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <input asp-for="Document" type="file"
+                               class="input bg-gray-50" />
+                    </div>
+
+                </div>
+
+                <!-- Privacy -->
+                <div class="flex items-center mt-5">
+                    <input asp-for="AcceptPrivacy" type="checkbox" class="mr-2" />
+                    <span class="text-sm text-gray-600">
+                        I accept Privacy Policy
+                    </span>
+                </div>
+
+                <!-- Button -->
+                <button id="submitBtn"
+                        type="submit"
+                        class="w-full mt-6 bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 transition flex items-center justify-center gap-2">
+
+                    <span id="btnText">Register Now</span>
+                    <span id="btnLoader" class="hidden animate-spin border-2 border-white border-t-transparent rounded-full w-5 h-5"></span>
+                </button>
+
+                <p class="text-sm text-center text-gray-500 mt-4">
+                    Already have an account?
+                    <a asp-action="Login" class="text-blue-600 font-medium">Login</a>
+                </p>
+
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    .input {
+        width: 100%;
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid #e5e7eb;
+        transition: 0.3s;
+    }
+
+        .input:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 2px rgba(37,99,235,0.2);
+            outline: none;
+        }
+
+    .error {
+        color: #ef4444;
+        font-size: 12px;
+        margin-top: 4px;
+        display: block;
+    }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
+
+<script>
+    $("#registerForm").submit(function (e) {
+
+        e.preventDefault();
+
+        let formData = new FormData(this);
+
+        $("#btnText").hide();
+        $("#btnLoader").removeClass("hidden");
+
+        $.ajax({
+            url: "/Account/Register",
+            type: "POST",
+            data: formData,
+            processData: false,
+            contentType: false,
+
+            success: function (res) {
+
+                $("#btnText").show();
+                $("#btnLoader").addClass("hidden");
+
+                if (!res.success) {
+                    Swal.fire("Error", res.message, "error");
+                    return;
+                }
+
+                Swal.fire({
+                    icon: "success",
+                    title: "Registration Completed",
+                    text: res.message,
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+
+                setTimeout(() => {
+                    window.location.href = res.redirectUrl;
+                }, 1500);
+            },
+
+            error: function () {
+                $("#btnText").show();
+                $("#btnLoader").addClass("hidden");
+
+                Swal.fire("Error", "Something went wrong", "error");
+            }
+        });
+    });
+</script>

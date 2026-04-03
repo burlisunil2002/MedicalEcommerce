@@ -1,0 +1,27 @@
+# Visual Studio
+.vs/
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# ASP.NET Core config (IMPORTANT ??)
+appsettings.Development.json
+
+# Secrets
+secrets.json
+
+# Node (if used)
+node_modules/
+
+# Publish
+wwwroot/uploads/

@@ -1,0 +1,110 @@
+﻿/* ================================
+   CART PAGE STYLING
+================================ */
+
+body {
+    background-color: #f5f7fa;
+}
+
+/* Page Title */
+h2 {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+/* Table Styling */
+.table {
+    background: #ffffff;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+    .table thead {
+        background-color: #0d6efd;
+        color: white;
+    }
+
+    .table th {
+        font-weight: 600;
+    }
+
+    .table td {
+        vertical-align: middle;
+    }
+
+/* Quantity Input */
+input[type="number"] {
+    border-radius: 6px;
+    border: 1px solid #ced4da;
+    text-align: center;
+    font-weight: 500;
+}
+
+/* Update Button */
+.btn-primary {
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+/* Remove Button */
+.btn-danger {
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+/* Totals Card */
+.card {
+    border-radius: 10px;
+    border: none;
+}
+
+.card-body {
+    padding: 25px;
+}
+
+    /* Subtotal & GST text */
+    .card-body p {
+        font-size: 16px;
+        margin-bottom: 8px;
+    }
+
+    /* Grand Total */
+    .card-body h5 {
+        color: #198754;
+        font-size: 20px;
+    }
+
+/* Checkout Button */
+.btn-success {
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-weight: 600;
+    transition: 0.3s ease;
+}
+
+    .btn-success:hover {
+        background-color: #157347;
+        transform: translateY(-2px);
+    }
+
+/* Empty Cart Alert */
+.alert-info {
+    border-radius: 8px;
+    font-size: 16px;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+
+    .table {
+        font-size: 14px;
+    }
+
+    .card-body h5 {
+        font-size: 18px;
+    }
+
+    .btn-success {
+        width: 100%;
+    }
+}

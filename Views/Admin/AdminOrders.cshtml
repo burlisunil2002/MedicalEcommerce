@@ -1,0 +1,185 @@
+﻿@model IEnumerable<VivekMedicalProducts.Models.AdminOrderModel>
+
+<div class="min-h-screen bg-gray-50 p-6">
+
+    <!-- HEADER -->
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-gray-800 mb-4">Order Management</h1>
+
+        <!-- 🔍 BIG SEARCH BAR -->
+        <input type="text"
+               id="searchBox"
+               placeholder="🔍 Search by Order ID, Customer, Product..."
+               class="w-full px-6 py-4 text-lg border rounded-xl shadow focus:ring-2 focus:ring-blue-500"
+               onkeyup="searchOrders()" />
+
+    </div>
+
+    <!-- TABLE CARD -->
+    <div class="bg-white rounded-2xl shadow-lg overflow-x-auto">
+
+        <table class="min-w-full text-sm">
+
+            <thead class="bg-gray-100 text-gray-700 text-xs uppercase">
+                <tr>
+                    <th class="px-6 py-4">Order</th>
+                    <th class="px-6 py-4">Item</th>
+                    <th class="px-6 py-4">Date</th>
+                    <th class="px-6 py-4">User</th>
+                    <th class="px-6 py-4">Product</th>
+                    <th class="px-6 py-4">Qty</th>
+                    <th class="px-6 py-4">Total</th>
+                    <th class="px-6 py-4">Payment</th>
+                    <th class="px-6 py-4">Order Status</th>
+                    <th class="px-6 py-4">Action</th>
+                </tr>
+            </thead>
+
+            <tbody class="divide-y">
+
+                @foreach (var item in Model)
+                {
+                    <tr class="hover:bg-gray-50 transition">
+
+                        <td class="px-6 py-4 font-bold text-blue-600">
+                            #@item.OrderId
+                        </td>
+
+                        <td class="px-6 py-4">
+                            <input type="hidden" class="OrderId" value="@item.OrderId" />
+                            @item.OrderItemId
+                        </td>
+
+                        <td class="px-6 py-4">@item.OrderDate.ToString("dd MMM yyyy")</td>
+                        <td class="px-6 py-4">@item.Customer</td>
+                        <td class="px-6 py-4 font-medium">@item.ProductName</td>
+                        <td class="px-6 py-4">@item.Quantity</td>
+
+                        <td class="px-6 py-4 text-green-600 font-semibold">
+                            ₹ @(item.GrandTotal?.ToString("N2") ?? "0.00")
+                        </td>
+
+                        <!-- PAYMENT BADGE -->
+                        <td class="px-6 py-4">
+                            <span class="px-3 py-1 rounded-full text-white text-xs font-semibold
+                                    @(item.PaymentStatus == "Completed" ? "bg-green-500" :
+                                                                    item.PaymentStatus == "Initiated" ? "bg-yellow-500" :
+                                                                    "bg-red-500")">
+                                                                               @item.PaymentStatus
+                                                                           </span>
+                                                                       </td>
+
+                        <!-- 🎯 ORDER STATUS (DB VALUE + EDITABLE) -->
+                        <td class="px-6 py-4">
+
+                            <input type="hidden" class="OrderId" value="@item.OrderId" />
+
+                            <select class="OrderStatus px-4 py-2 rounded-lg text-white text-sm font-semibold border-none outline-none cursor-pointer"
+                                    onchange="updateStatusColor(this)">
+
+                                <option value="Pending" selected="@(item.OrderStatus == "Pending")">Pending</option>
+                                <option value="Processing" selected="@(item.OrderStatus == "Processing")">Processing</option>
+                                <option value="Shipped" selected="@(item.OrderStatus == "Shipped")">Shipped</option>
+                                <option value="Delivered" selected="@(item.OrderStatus == "Delivered")">Delivered</option>
+                                <option value="Confirmed" selected="@(item.OrderStatus == "Confirmed")">Confirmed</option>
+                                <option value="Cancelled" selected="@(item.OrderStatus == "Cancelled")">Cancelled</option>
+
+                            </select>
+
+                        </td>
+
+                        <!-- ACTION -->
+                        <td class="px-6 py-4">
+                            <button onclick="updateOrder(this)"
+                                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                                Update
+                            </button>
+                        </td>
+
+                    </tr>
+                                }
+
+            </tbody>
+
+        </table>
+
+    </div>
+</div>
+
+<script>
+
+    // apply color on change
+    function updateStatusColor(select) {
+
+        let status = select.value;
+
+        // reset base classes
+        select.className = "OrderStatus px-4 py-2 rounded-lg text-white text-sm font-semibold border-none outline-none cursor-pointer";
+
+        if (status === "Delivered") select.classList.add("bg-green-500");
+        else if (status === "Processing") select.classList.add("bg-blue-500");
+        else if (status === "Shipped") select.classList.add("bg-indigo-500");
+        else if (status === "Confirmed") select.classList.add("bg-purple-500");
+        else if (status === "Cancelled") select.classList.add("bg-red-500");
+        else select.classList.add("bg-yellow-500");
+    }
+
+    // 🔥 VERY IMPORTANT → apply color on page load (DB value)
+    document.addEventListener("DOMContentLoaded", function () {
+        document.querySelectorAll(".OrderStatus").forEach(select => {
+            updateStatusColor(select);
+        });
+    });
+
+</script>
+
+<script>
+    function searchOrders() {
+        const input = document.getElementById("searchBox").value.toLowerCase().trim();
+        const rows = document.querySelectorAll("tbody tr");
+
+        rows.forEach(row => {
+            const text = row.innerText.toLowerCase();
+
+            if (text.includes(input)) {
+                row.style.display = "";
+            } else {
+                row.style.display = "none";
+            }
+        });
+    }
+</script>
+
+<script>
+    function updateOrder(btn) {
+
+        let row = btn.closest("tr");
+
+        let orderId = row.querySelector(".OrderId").value;
+        let orderStatus = row.querySelector(".OrderStatus").value;
+
+        fetch('/Admin/UpdateOrder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                OrderId: parseInt(orderId),
+                OrderStatus: orderStatus
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Updated!',
+                    text: data.message,
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+            } else {
+                Swal.fire("Error", data.message, "error");
+            }
+        });
+    }
+</script>

@@ -1,0 +1,100 @@
+﻿@model List<EnquiryModel>
+
+<link rel="stylesheet" href="~/css/enquirylist.css" />
+
+<div class="page-wrapper">
+
+    <div class="enquiry-card">
+
+        <!-- HEADER -->
+        <div class="card-header">
+
+            <h2 class="page-title">Enquiry Management</h2>
+
+            <div class="right-actions">
+
+                <div class="count-badge">
+                    Total Records: <span>@Model.Count</span>
+                </div>
+
+                <a asp-controller="Admin"
+                   asp-action="AdminHome"
+                   class="back-btn">
+                    ← Back
+                </a>
+
+            </div>
+
+        </div>
+
+        <!-- FILTER SECTION -->
+        <div class="filter-container">
+            <form method="get" class="filter-row">
+
+                <div class="filter-group">
+                    <label>From Date</label>
+                    <input type="date" name="fromDate" />
+                </div>
+
+                <div class="filter-group">
+                    <label>To Date</label>
+                    <input type="date" name="toDate" />
+                </div>
+
+                <div class="filter-buttons">
+                    <button type="submit" class="btn-filter">
+                        Filter
+                    </button>
+
+                    <a href="/Home/ExportToExcel" class="btn-download">
+                        Download
+                    </a>
+                </div>
+
+            </form>
+        </div>
+
+        <!-- TABLE -->
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Contact</th>
+                        <th>Product</th>
+                        <th>Remarks</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @if (Model.Any())
+                    {
+                        foreach (var item in Model)
+                        {
+                            <tr>
+                                <td>@item.Name</td>
+                                <td>@item.Email</td>
+                                <td>@item.Contact</td>
+                                <td>@item.ProductName</td>
+                                <td>@item.Remarks</td>
+                                <td>@item.CreatedDate.ToString("dd MMM yyyy")</td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="6" class="no-data">
+                                No enquiries found.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+</div>

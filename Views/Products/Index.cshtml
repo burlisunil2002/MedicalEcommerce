@@ -1,0 +1,290 @@
+﻿@model IEnumerable<VivekMedicalProducts.ViewModels.ProductViewModel>
+
+<!-- ✅ PAYMENT SUCCESS -->
+@if (TempData["PaymentSuccess"] != null)
+{
+    <div id="paymentSuccessBox"
+         class="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-white shadow-xl border border-green-200 rounded-xl px-5 py-4 w-[360px] flex items-start gap-3 animate-fadeIn">
+
+        <div class="text-green-500 text-xl">✔</div>
+
+        <div class="flex-1">
+            <h3 class="text-sm font-semibold text-gray-800">Payment Submitted</h3>
+            <p class="text-xs text-gray-500 mt-1">
+                Your payment is under verification.
+            </p>
+        </div>
+
+        <button onclick="closePaymentBox()" class="text-gray-400 hover:text-red-500">×</button>
+    </div>
+}
+
+<!-- ✅ HERO -->
+<div class="swiper mySwiper mb-8">
+    <div class="swiper-wrapper">
+
+        <div class="swiper-slide bg-blue-600 text-white text-center py-14">
+            <h1 class="text-3xl font-bold">Medical Products Store</h1>
+            <p class="text-sm mt-2">Trusted Healthcare Equipment</p>
+        </div>
+
+        <div class="swiper-slide bg-blue-500 text-white text-center py-14">
+            <h1 class="text-3xl font-bold">Quality Devices</h1>
+            <p class="text-sm mt-2">Best price guaranteed</p>
+        </div>
+
+        <div class="swiper-slide bg-blue-700 text-white text-center py-14">
+            <h1 class="text-3xl font-bold">Hospital Equipment</h1>
+            <p class="text-sm mt-2">Bulk orders available</p>
+        </div>
+
+    </div>
+
+    <div class="swiper-pagination"></div>
+</div>
+
+<!-- ✅ CATEGORY -->
+<div class="max-w-7xl mx-auto px-4 mb-6">
+    <div class="flex flex-wrap gap-2 justify-center">
+
+        <button class="filter-pill active-pill" data-category="all">All</button>
+
+        @foreach (var category in ViewBag.Categories)
+        {
+            <button class="filter-pill" data-category="@category">@category</button>
+        }
+
+    </div>
+</div>
+
+<!-- ✅ PRODUCTS -->
+<div class="max-w-7xl mx-auto px-4 pb-12">
+
+    <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+
+        @foreach (var product in Model)
+        {
+            <div class="product-card bg-white rounded-xl border border-gray-100 hover:shadow-md transition flex flex-col p-4"
+                 data-category="@product.Category">
+
+                <!-- IMAGE -->
+                <a asp-controller="Products"
+                   asp-action="Details"
+                   asp-route-id="@product.Id"
+                   class="bg-gray-50 rounded-lg flex items-center justify-center h-40 overflow-hidden">
+
+                    <img src="@(string.IsNullOrEmpty(product.ImageUrl) ? "/images/no-image.png" : product.ImageUrl)"
+                         class="h-full object-contain transition duration-300 hover:scale-105" />
+                </a>
+
+                <!-- CONTENT -->
+                <div class="mt-3 flex flex-col flex-grow">
+
+                    <h4 class="text-sm font-medium text-gray-800 line-clamp-2 min-h-[40px]">
+                        @product.Name
+                    </h4>
+
+                    @if (product.PriceType?.ToLower() == "normal")
+                    {
+                        <p class="mt-2 text-blue-600 font-semibold">
+                            ₹ @product.Price.ToString("N0")
+                        </p>
+                    }
+                    else
+                    {
+                        <p class="mt-2 text-orange-500 text-sm font-medium">
+                            Price on Request
+                        </p>
+                    }
+
+                    <!-- ACTION -->
+                    <div class="mt-auto pt-3">
+
+                        @if (product.PriceType?.ToLower() == "normal")
+                        {
+                            <div class="cart-area" data-id="@product.Id">
+
+                                <!-- ADD -->
+                                <button class="add-cart-btn w-full bg-blue-600 text-white py-2 rounded-lg text-sm hover:bg-blue-700 transition">
+                                    Add to Cart
+                                </button>
+
+                                <!-- QTY -->
+                                <div class="qty-controller hidden items-center justify-between mt-2 bg-gray-100 rounded-lg">
+
+                                    <button class="minus px-3 py-2 text-lg">−</button>
+                                    <span class="qty font-medium">1</span>
+                                    <button class="plus px-3 py-2 text-lg">+</button>
+
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <a asp-controller="Home"
+                               asp-action="Enquiry"
+                               asp-route-productId="@product.Id"
+                               class="block text-center bg-orange-500 text-white py-2 rounded-lg text-sm hover:bg-orange-600 transition">
+                                Request Quote
+                            </a>
+                        }
+
+                    </div>
+                </div>
+
+            </div>
+        }
+
+    </div>
+</div>
+
+<!-- ✅ STYLES -->
+<style>
+    .filter-pill {
+        padding: 6px 14px;
+        border-radius: 999px;
+        background: #e5e7eb;
+        font-size: 13px;
+        transition: 0.2s;
+    }
+
+        .filter-pill:hover {
+            background: #2563eb;
+            color: white;
+        }
+
+    .active-pill {
+        background: #2563eb;
+        color: white;
+    }
+
+    @@keyframes fadeIn {
+        from
+
+    {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    }
+
+    .animate-fadeIn {
+        animation: fadeIn 0.3s ease-in-out;
+    }
+</style>
+
+<!-- ✅ SCRIPTS -->
+<script>
+    $(document).ready(function () {
+
+        loadCartCount();
+
+        // ✅ ADD TO CART
+        $(".add-cart-btn").click(function () {
+
+            var parent = $(this).closest(".cart-area");
+            var productId = parent.data("id");
+            var button = $(this);
+
+            button.prop("disabled", true).text("Adding...");
+
+            parent.find(".qty-controller").removeClass("hidden").addClass("flex");
+            button.hide();
+
+            $.post("/Cart/AddToCart", { productId: productId }, function () {
+                loadCartCount();
+
+                setTimeout(() => {
+                    button.text("Add to Cart").prop("disabled", false);
+                }, 300);
+            });
+        });
+
+        // ✅ PLUS
+        $(".plus").click(function () {
+
+            var parent = $(this).closest(".cart-area");
+            var qtySpan = parent.find(".qty");
+
+            var qty = parseInt(qtySpan.text()) + 1;
+            qtySpan.text(qty);
+
+            var productId = parent.data("id");
+
+            $.post("/Cart/AddToCart", { productId: productId }, function () {
+                loadCartCount();
+            });
+        });
+
+        // ✅ MINUS
+        $(".minus").click(function () {
+
+            var parent = $(this).closest(".cart-area");
+            var qtySpan = parent.find(".qty");
+
+            var qty = parseInt(qtySpan.text());
+            var productId = parent.data("id");
+
+            if (qty > 1) {
+
+                qty--;
+                qtySpan.text(qty);
+
+                $.post("/Cart/DecreaseQuantity", { productId: productId }, function () {
+                    loadCartCount();
+                });
+
+            } else {
+
+                $.post("/Cart/Remove", { productId: productId }, function () {
+
+                    parent.find(".qty-controller").addClass("hidden").removeClass("flex");
+                    parent.find(".add-cart-btn").show();
+
+                    loadCartCount();
+                });
+            }
+        });
+
+    });
+
+    // ✅ CART COUNT
+    function loadCartCount() {
+        $.get("/Cart/GetCartCount", function (data) {
+            $("#cartCount").text(data);
+        });
+    }
+
+    // ✅ FILTER
+    $(document).on("click", ".filter-pill", function () {
+
+        $(".filter-pill").removeClass("active-pill");
+        $(this).addClass("active-pill");
+
+        var category = $(this).data("category");
+
+        if (!category || category === "all") {
+            $(".product-card").show();
+        } else {
+            $(".product-card").hide();
+            $('.product-card[data-category="' + category + '"]').show();
+        }
+    });
+
+    // ✅ CLOSE ALERT
+    function closePaymentBox(){
+        $("#paymentSuccessBox").fadeOut();
+    }
+
+    // ✅ SWIPER
+    var swiper = new Swiper(".mySwiper", {
+        loop: true,
+        autoplay: { delay: 3000 },
+        pagination: { el: ".swiper-pagination", clickable: true }
+    });
+</script>

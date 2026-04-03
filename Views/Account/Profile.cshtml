@@ -1,0 +1,143 @@
+﻿@model VivekMedicalProducts.ViewModels.RegisterViewModel
+
+<div class="min-h-screen bg-gradient-to-br from-gray-100 to-gray-200 py-10 px-4">
+
+    <div class="max-w-7xl mx-auto grid md:grid-cols-4 gap-6">
+
+        <!-- SIDEBAR -->
+        <div class="bg-white/80 backdrop-blur-lg rounded-3xl shadow-lg p-6 sticky top-6 h-fit">
+
+            <!-- Avatar -->
+            <div class="flex flex-col items-center text-center">
+                <div class="w-20 h-20 rounded-full bg-blue-600 text-white flex items-center justify-center text-2xl font-bold shadow-md">
+                    @Model.CustomerName?.Substring(0, 1)
+                </div>
+
+                <h3 class="mt-3 font-semibold text-lg">@Model.CustomerName</h3>
+                <p class="text-gray-500 text-sm">@Model.Email</p>
+            </div>
+
+            <!-- Menu -->
+            <nav class="mt-6 space-y-2">
+
+                <a asp-controller="Order" asp-action="MyOrders"
+                   class="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 rounded-xl">
+
+                    📦 Orders
+                </a>
+
+                <a asp-controller="Home" asp-action="Enquiry"
+                   class="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 rounded-xl">
+
+                    🎧 Support
+                </a>
+
+            </nav>
+
+        </div>
+
+        <!-- MAIN PROFILE -->
+        <div class="md:col-span-3 bg-white/90 backdrop-blur-lg rounded-3xl shadow-xl p-8">
+
+            <!-- Header -->
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold">Profile Details</h2>
+                    <p class="text-gray-500 text-sm">Manage your account information</p>
+                </div>
+
+                <button onclick="enableEdit()"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl shadow-md transition">
+                    ✏️ Edit Profile
+                </button>
+            </div>
+
+            <!-- FORM -->
+            <form asp-action="UpdateProfile" method="post">
+
+                <input type="hidden" asp-for="Email" />
+
+                <div class="grid md:grid-cols-2 gap-6">
+
+                    <!-- Name -->
+                    <div>
+                        <label class="label">Customer Name</label>
+                        <input asp-for="CustomerName" class="input profile-input" readonly />
+                    </div>
+
+                    <!-- Email -->
+                    <div>
+                        <label class="label">Email</label>
+                        <input asp-for="Email" class="input bg-gray-100 cursor-not-allowed" readonly />
+                    </div>
+
+                    <!-- Mobile -->
+                    <div>
+                        <label class="label">Mobile Number</label>
+                        <input asp-for="MobileNo" class="input profile-input" readonly />
+                    </div>
+
+
+                    <!-- Address -->
+                    <div class="md:col-span-2">
+                        <label class="label">Address</label>
+                        <textarea asp-for="Address" rows="3"
+                                  class="input profile-input resize-none" readonly></textarea>
+                    </div>
+
+                </div>
+
+                <!-- Save Button -->
+                <div class="mt-6 text-right">
+                    <button type="submit"
+                            id="saveBtn"
+                            class="hidden bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-xl shadow-md transition">
+                        💾 Save Changes
+                    </button>
+                </div>
+
+            </form>
+
+        </div>
+
+    </div>
+</div>
+
+<!-- STYLES -->
+<style>
+    .label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 14px;
+        color: #6b7280;
+        font-weight: 500;
+    }
+
+    .input {
+        width: 100%;
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid #e5e7eb;
+        outline: none;
+        transition: 0.3s;
+        background: #f9fafb;
+    }
+
+        .input:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+            background: #fff;
+        }
+
+    .profile-input[readonly] {
+        background: #f3f4f6;
+    }
+</style>
+
+<!-- SCRIPT -->
+<script>
+    function enableEdit() {
+        document.querySelectorAll('.profile-input').forEach(x => x.removeAttribute('readonly'));
+        document.getElementById('saveBtn').classList.remove('hidden');
+    }
+</script>

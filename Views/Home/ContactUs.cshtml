@@ -1,0 +1,128 @@
+﻿@{
+    ViewData["Title"] = "Contact Us";
+}
+@model EnquiryModel
+
+
+<link href="~/css/contactus.css" rel="stylesheet" />
+
+<!-- HERO SECTION -->
+<section class="contact-hero">
+    <div class="hero-overlay">
+        <div class="hero-content">
+            <h5>VIVEK MEDICAL</h5>
+            <h1>CONTACT US</h1>
+            <p><a href="/">Home</a> / Contact Us</p>
+        </div>
+    </div>
+</section>
+
+
+<!-- CONTACT SECTION -->
+<section class="contact-section">
+    <div class="container-contact">
+
+        @{
+            ViewData["Title"] = "Product Enquiry";
+        }
+
+        <head>
+            <!-- Link to page-specific CSS -->
+            <link rel="stylesheet" href="~/css/enquiry.css" />
+        </head>
+
+        <div class="container mt-5 enquiry-form">
+            <h2 class="text-center">Product Enquiry</h2>
+            <hr />
+
+            @if (ViewBag.Message != null)
+            {
+                <div class="alert alert-success">
+                    @ViewBag.Message
+                </div>
+            }
+
+            <form method="post" asp-action="Enquiry" asp-controller="Home">
+                <div class="mb-3">
+                    <label>Name</label>
+                    <input type="text" name="Name" class="form-control" required />
+                </div>
+
+                <div class="mb-3">
+                    <label>Email</label>
+                    <input type="email" name="Email" class="form-control" required />
+                </div>
+
+                <div class="mb-3">
+                    <label>Contact Number</label>
+                    <input type="text" name="Contact" class="form-control" required />
+                </div>
+
+                <div class="mb-3">
+                    <label>Product Name</label>
+                    <input type="text" name="ProductName" class="form-control" required />
+                </div>
+
+                <div class="mb-3">
+                    <label>Remarks / Question</label>
+                    <textarea name="Remarks" class="form-control" rows="4" required></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary">
+                    Submit Enquiry
+                </button>
+            </form>
+        </div>
+
+        <!-- RIGHT: DETAILS -->
+        <div class="contact-info">
+            <h2>We Are Here To Help You</h2>
+
+            <div class="info-box">
+                <h4>📍 Corporate Office</h4>
+                <p>
+                    Vivek Medical Products,<br />
+                    AMTZ Campus, Pragati Maidan,<br />
+                    Visakhapatnam - 530031,<br />
+                    Andhra Pradesh, India.
+                </p>
+            </div>
+
+            <div class="info-box">
+                <h4>📧 Email</h4>
+                <p>support@vivekmedical.com</p>
+            </div>
+
+            <div class="info-box">
+                <h4>📞 Call Us</h4>
+                <p>+91 8885092122</p>
+            </div>
+
+            <div class="info-box">
+                <h4>🕒 Working Hours</h4>
+                <p>Mon - Sat : 10 AM - 7 PM</p>
+            </div>
+
+        </div>
+
+        <a href="https://api.whatsapp.com/send?phone=918885092122"
+           class="global-whatsapp"
+           target="_blank">
+            <i class="fab fa-whatsapp"></i>
+            <span>WhatsApp Enquiry</span>
+        </a>
+
+    </div>
+</section>
+
+
+<!-- MAP SECTION -->
+<section class="map-section">
+    <iframe src="https://www.google.com/maps?q=AMTZ%20Campus%20Visakhapatnam&output=embed"
+            width="100%"
+            height="400"
+            style="border:0;"
+            allowfullscreen=""
+            loading="lazy">
+    </iframe>
+</section>

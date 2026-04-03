@@ -1,0 +1,122 @@
+﻿@model VivekMedicalProducts.Models.ProductModel
+
+<div class="min-h-screen bg-gray-100 py-10 px-4">
+
+    <div class="max-w-5xl mx-auto bg-white rounded-2xl shadow-lg p-8">
+
+        <!-- HEADER -->
+        <div class="flex justify-between items-center mb-8">
+            <h2 class="text-2xl font-bold text-gray-800">
+                Add New Product
+            </h2>
+
+            <a asp-controller="Products"
+               asp-action="ProductManagement"
+               class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
+                ← Back
+            </a>
+        </div>
+
+        <!-- VALIDATION -->
+        <div asp-validation-summary="All" class="text-red-500 mb-4"></div>
+
+        <!-- FORM -->
+        <form asp-action="AddProducts" method="post" enctype="multipart/form-data" class="space-y-6">
+
+            <div class="grid md:grid-cols-2 gap-6">
+
+                <!-- NAME -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Product Name</label>
+                    <input asp-for="Name"
+                           class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" />
+                </div>
+
+                <!-- CATEGORY -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                    <select asp-for="Category"
+                            class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400 outline-none">
+                        <option value="">-- Select Category --</option>
+                        <option>Mother & Child Care</option>
+                        <option>Radiology</option>
+                        <option>Critical Care Equipment</option>
+                        <option>Lab & Diagnostics</option>
+                        <option>Consumables & Disposables</option>
+                        <option>Thermal Camera</option>
+                        <option>Medicine Vending Machine</option>
+                        <option>Surgical Instruments</option>
+                        <option>Hospital Furniture</option>
+                        <option>iLAB</option>
+                        <option>Safe Zone Container</option>
+                        <option>Oxy Wheel</option>
+                        <option>Water Recycling System</option>
+                        <option>Portable Ventilators</option>
+                        <option>Anesthesia Machine</option>
+                        <option>Point of Care Devices</option>
+                        <option>Prosthesis</option>
+                        <option>Instruments</option>
+                        <option>Uroflowrometry</option>
+                    </select>
+                </div>
+
+                <!-- PRICE -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Price</label>
+                    <input asp-for="Price"
+                           class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" />
+                </div>
+
+                <!-- GST -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">GST (%)</label>
+                    <input asp-for="GSTPercentage"
+                           class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" />
+                </div>
+
+                <!-- PRICE TYPE -->
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Price Type</label>
+                    <select asp-for="PriceType"
+                            class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400 outline-none">
+                        <option value="">-- Select Price Type --</option>
+                        <option value="Normal">Normal</option>
+                        <option value="AskForPrice">Ask For Price</option>
+                    </select>
+                </div>
+
+                <!-- DESCRIPTION -->
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea asp-for="Description"
+                              rows="3"
+                              class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"></textarea>
+                </div>
+
+                <!-- IMAGE -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Product Image</label>
+                    <input type="file" name="ImageFile"
+                           class="w-full text-sm border rounded-lg p-2 bg-gray-50" />
+                </div>
+
+                <!-- QUOTATION -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Quotation (PDF)</label>
+                    <input type="file" name="quotationFile"
+                           class="w-full text-sm border rounded-lg p-2 bg-gray-50" />
+                </div>
+
+            </div>
+
+            <!-- SUBMIT -->
+            <div class="flex justify-end pt-4">
+                <button type="submit"
+                        class="px-6 py-3 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition">
+                    Save Product
+                </button>
+            </div>
+
+        </form>
+    </div>
+</div>

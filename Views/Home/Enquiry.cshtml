@@ -1,0 +1,173 @@
+﻿@model VivekMedicalProducts.Models.EnquiryModel
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<ApplicationUser> UserManager
+
+
+@{
+    var user = await UserManager.GetUserAsync(User);
+    var displayName = user?.CustomerName ?? user?.Email;
+}
+
+<div class="min-h-screen bg-gray-100 py-10 px-4">
+
+    <div class="max-w-6xl mx-auto grid md:grid-cols-3 gap-6">
+
+        <!-- FAQ SECTION -->
+        <div class="md:col-span-1 bg-white rounded-2xl shadow p-6">
+
+            <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                ❓ FAQs
+            </h2>
+
+            <!-- Accordion -->
+            <div class="space-y-3">
+
+                <div class="faq-item">
+                    <button class="faq-btn">How to track order?</button>
+                    <div class="faq-content">Go to "My Orders" section to track your order status.</div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-btn">Payment done but not updated?</button>
+                    <div class="faq-content">Wait 5–10 minutes or contact support with payment proof.</div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-btn">Can I change GST details?</button>
+                    <div class="faq-content">GST changes require admin verification. Contact support.</div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-btn">Order not delivered?</button>
+                    <div class="faq-content">Check delivery status or contact courier/support team.</div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="fixed bottom-5 right-5 z-50 flex items-center space-x-3 group">
+
+            <!-- Label -->
+            <span class="bg-black text-white text-xs px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition">
+                Chat with us
+            </span>
+
+            <!-- Button -->
+            <a href="https://wa.me/919014060858?text=Hi%20Support"
+               target="_blank"
+               class="flex items-center justify-center w-14 h-14 rounded-full bg-green-500 shadow-lg hover:bg-green-600 hover:scale-110 transition">
+
+                💬
+            </a>
+
+        </div>
+
+        <!-- SUPPORT FORM -->
+        <div class="md:col-span-2 bg-white rounded-2xl shadow p-8">
+
+            <h2 class="text-2xl font-bold mb-2">Customer Support</h2>
+            <p class="text-gray-500 mb-6">Have a question? We’re here to help.</p>
+
+            @if (ViewBag.Message != null)
+            {
+                <div class="bg-green-100 text-green-700 p-3 rounded mb-4">
+                    @ViewBag.Message
+                </div>
+            }
+
+            <form method="post" asp-action="Enquiry" asp-controller="Home">
+
+                <div class="grid md:grid-cols-2 gap-4">
+
+                    <!-- Auto filled -->
+                    <input type="text" name="Name" value="@displayName"
+                           class="input bg-gray-100" readonly />
+
+                    <input type="email" name="Email" value="@User.Identity.Name"
+                           class="input bg-gray-100" readonly />
+
+                    <input type="text" name="Contact" placeholder="Mobile Number"
+                           class="input" required />
+
+                    <input type="text" name="ProductName" placeholder="Product (optional)"
+                           class="input" />
+
+                </div>
+
+                <div class="mt-4">
+                    <textarea name="Remarks" rows="4"
+                              placeholder="Type your question..."
+                              class="input resize-none" required></textarea>
+                </div>
+
+                <div class="mt-6 text-right">
+                    <button type="submit"
+                            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl shadow">
+                        Submit Enquiry
+                    </button>
+                </div>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- STYLES -->
+<style>
+    .input {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        outline: none;
+        transition: 0.3s;
+    }
+
+        .input:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37,99,235,0.2);
+        }
+
+    .faq-btn {
+        width: 100%;
+        text-align: left;
+        padding: 12px;
+        background: #f9fafb;
+        border-radius: 10px;
+        font-weight: 500;
+        transition: 0.3s;
+    }
+
+        .faq-btn:hover {
+            background: #eef2ff;
+        }
+
+    .faq-content {
+        display: none;
+        padding: 10px;
+        color: #555;
+        font-size: 14px;
+    }
+</style>
+
+<!-- SCRIPT -->
+<script>
+    document.querySelectorAll('.faq-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const content = this.nextElementSibling;
+
+            // Close others
+            document.querySelectorAll('.faq-content').forEach(c => {
+                if (c !== content) c.style.display = 'none';
+            });
+
+            // Toggle current
+            content.style.display =
+                content.style.display === 'block' ? 'none' : 'block';
+        });
+    });
+</script>
