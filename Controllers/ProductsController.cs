@@ -85,49 +85,57 @@ namespace VivekMedicalProducts.Controllers
         // ================= ADD (POST) =================
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddProducts(ProductModel product,
-                                            IFormFile imageFile,
-                                            IFormFile quotationFile)
+        public async Task<IActionResult> AddProducts(
+    ProductModel product,
+    IFormFile imageFile,
+    IFormFile quotationFile)
         {
             if (!ModelState.IsValid)
                 return View(product);
 
             try
             {
-                // ================= IMAGE =================
+                // ✅ COMMON ALLOWED TYPES
+                var allowedTypes = new[]
+                {
+            "image/jpeg",
+            "image/png",
+            "image/jpg",
+            "application/pdf",
+            "application/msword", // .doc
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" // .docx
+        };
+
+                // ================= IMAGE FILE =================
                 if (imageFile != null && imageFile.Length > 0)
                 {
-                    var allowedTypes = new[] { "image/jpeg", "image/png", "image/jpg", "image/webp" };
-
                     if (!allowedTypes.Contains(imageFile.ContentType))
                     {
-                        ModelState.AddModelError("", "Only JPG, PNG, WEBP allowed");
+                        ModelState.AddModelError("", "Only JPG, PNG, PDF, DOC, DOCX allowed");
                         return View(product);
                     }
 
-                    if (imageFile.Length > 5 * 1024 * 1024)
+                    if (imageFile.Length > 10 * 1024 * 1024)
                     {
-                        ModelState.AddModelError("", "Image must be less than 5MB");
+                        ModelState.AddModelError("", "File must be less than 10MB");
                         return View(product);
                     }
 
                     product.ImageUrl = await _fileStorage.UploadAsync(imageFile, "products");
                 }
 
-                // ================= PDF =================
+                // ================= QUOTATION FILE =================
                 if (quotationFile != null && quotationFile.Length > 0)
                 {
-                    var ext = Path.GetExtension(quotationFile.FileName).ToLower();
-
-                    if (ext != ".pdf")
+                    if (!allowedTypes.Contains(quotationFile.ContentType))
                     {
-                        ModelState.AddModelError("", "Only PDF allowed");
+                        ModelState.AddModelError("", "Only JPG, PNG, PDF, DOC, DOCX allowed");
                         return View(product);
                     }
 
                     if (quotationFile.Length > 10 * 1024 * 1024)
                     {
-                        ModelState.AddModelError("", "PDF must be less than 10MB");
+                        ModelState.AddModelError("", "File must be less than 10MB");
                         return View(product);
                     }
 
@@ -139,7 +147,7 @@ namespace VivekMedicalProducts.Controllers
                 await _context.SaveChangesAsync();
 
                 TempData["SuccessMessage"] = "Product added successfully!";
-                return RedirectToAction("Index");
+                return RedirectToAction("AddProducts");
             }
             catch (Exception ex)
             {

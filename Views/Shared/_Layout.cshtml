@@ -258,20 +258,105 @@
     </main>
 
     <!-- 🔥 FOOTER -->
-    <footer class="bg-white border-t mt-10">
-        <div class="max-w-7xl mx-auto px-4 py-6 text-center text-gray-600">
+    <footer class="bg-gray-900 text-gray-300 mt-16">
 
-            <h5 class="font-semibold text-lg">Sunil Medical Products</h5>
+        <div class="max-w-7xl mx-auto px-6 py-12 grid md:grid-cols-4 gap-10">
 
-            <p class="text-sm mt-1">
-                Advanced Medical Equipment & Trusted Healthcare Solutions
-            </p>
+            <!-- 🏥 COMPANY -->
+            <div>
+                <h2 class="text-white text-xl font-semibold mb-3">
+                    Sunil Medical Products
+                </h2>
 
-            <p class="text-xs mt-2 text-gray-400">
-                © @DateTime.UtcNow.Year Sunil Medical. All Rights Reserved
-            </p>
+                <p class="text-sm text-gray-400 leading-6">
+                    Delivering trusted medical equipment and healthcare solutions
+                    with quality, reliability, and innovation.
+                </p>
+
+                <div class="mt-4 space-y-1 text-sm">
+                    <p>📍 Visakhapatnam, Andhra Pradesh</p>
+                    <p>📞 +91 9876543210</p>
+                    <p>✉️ support@sunilmedical.com</p>
+                </div>
+            </div>
+
+            <!-- 🔗 QUICK LINKS -->
+            <div>
+                <h3 class="text-white font-semibold mb-3">Quick Links</h3>
+
+                <ul class="space-y-2 text-sm">
+                    <li>
+                        <a asp-controller="Home" asp-action="Index"
+                           class="hover:text-white transition">Home</a>
+                    </li>
+                    <li>
+                        <a asp-controller="Products" asp-action="Index"
+                           class="hover:text-white transition">Products</a>
+                    </li>
+                    <li>
+                        <a asp-controller="Cart" asp-action="Index"
+                           class="hover:text-white transition">Cart</a>
+                    </li>
+                    <li>
+                        <a asp-controller="Order" asp-action="MyOrders"
+                           class="hover:text-white transition">My Orders</a>
+                    </li>
+                    <li>
+                        <a asp-controller="Home" asp-action="Contact"
+                           class="hover:text-white transition">Contact</a>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- 🏥 CATEGORIES -->
+            <div>
+                <h3 class="text-white font-semibold mb-3">Medical Categories</h3>
+
+                <ul class="space-y-2 text-sm">
+                    <li><a href="#" class="hover:text-white">Surgical Equipment</a></li>
+                    <li><a href="#" class="hover:text-white">Diagnostic Devices</a></li>
+                    <li><a href="#" class="hover:text-white">Hospital Furniture</a></li>
+                    <li><a href="#" class="hover:text-white">Pharmacy Supplies</a></li>
+                    <li><a href="#" class="hover:text-white">Emergency Care</a></li>
+                </ul>
+            </div>
+
+            <!-- 📩 NEWSLETTER / ENQUIRY -->
+            <div>
+                <h3 class="text-white font-semibold mb-3">Stay Connected</h3>
+
+                <p class="text-sm text-gray-400 mb-3">
+                    Get updates on new products & offers.
+                </p>
+
+                <form asp-controller="Home" asp-action="SendEnquiry" method="post" class="flex">
+                    <input type="email" name="Email"
+                           placeholder="Enter your email"
+                           required
+                           class="w-full px-3 py-2 text-sm rounded-l-md text-black focus:outline-none" />
+
+                    <button type="submit"
+                            class="bg-green-600 px-4 py-2 text-sm text-white rounded-r-md hover:bg-green-700 transition">
+                        Send
+                    </button>
+                </form>
+
+                <!-- SOCIAL -->
+                <div class="flex gap-4 mt-4 text-lg">
+                    <a href="#" class="hover:text-white transition">🌐</a>
+                    <a href="#" class="hover:text-white transition">📘</a>
+                    <a href="#" class="hover:text-white transition">🐦</a>
+                    <a href="#" class="hover:text-white transition">📸</a>
+                </div>
+            </div>
 
         </div>
+
+        <!-- 🔻 BOTTOM -->
+        <div class="border-t border-gray-700 text-center py-4 text-sm text-gray-400">
+            © @DateTime.UtcNow.Year Sunil Medical Products. All Rights Reserved.
+        </div>
+
     </footer>
 
     <!-- 🔥 SCRIPTS -->

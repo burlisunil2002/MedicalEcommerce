@@ -1,5 +1,13 @@
 ﻿@model VivekMedicalProducts.Models.ProductModel
 
+
+@if (TempData["Success"] != null)
+{
+    <div id="successBox" class="success-box">
+        @TempData["SuccessMessage"]
+    </div>
+}
+
 <div class="min-h-screen bg-gray-100 py-10 px-4">
 
     <div class="max-w-5xl mx-auto bg-white rounded-2xl shadow-lg p-8">
@@ -96,14 +104,16 @@
                 <!-- IMAGE -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Product Image</label>
-                    <input type="file" name="ImageFile"
+                    <input type="file" name="imageFile"
+                           accept=".jpg,.jpeg,.png,.webp,.pdf"
                            class="w-full text-sm border rounded-lg p-2 bg-gray-50" />
                 </div>
 
                 <!-- QUOTATION -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Quotation (PDF)</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Quotation</label>
                     <input type="file" name="quotationFile"
+                           accept=".pdf"
                            class="w-full text-sm border rounded-lg p-2 bg-gray-50" />
                 </div>
 

@@ -74,7 +74,6 @@ Rotativa.AspNetCore.RotativaConfiguration.Setup(builder.Environment.WebRootPath)
 
 builder.Services.AddScoped<IFileStorageService, SupabaseService>();
 
-builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 
 var app = builder.Build();
 
