@@ -30,6 +30,8 @@
         public string PaymentMethod { get; set; }
         public string OrderStatus { get; set; }
 
+        public bool IsPdf { get; set; }
+
         // 📦 Items
         public List<InvoiceItemViewModel> Items { get; set; } = new();
     }

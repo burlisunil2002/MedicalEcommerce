@@ -527,9 +527,11 @@ namespace VivekMedicalProducts.Controllers
 
         public async Task<byte[]> GenerateInvoicePdf(OrderInvoiceViewModel model, ControllerContext context)
         {
+            model.IsPdf = true; // 👈 important
+
             var pdf = new ViewAsPdf("Invoice", model);
 
-            return await pdf.BuildFile(context); // ✅ FIXED
+            return await pdf.BuildFile(context);
         }
 
         private OrderInvoiceViewModel BuildInvoiceModel(OrderModel order)
@@ -576,6 +578,36 @@ namespace VivekMedicalProducts.Controllers
                     };
                 }).ToList() ?? new List<InvoiceItemViewModel>()
             };
+        }
+
+        public async Task<IActionResult> DownloadInvoice(int id)
+        {
+            var userId = _userContext.GetUserId();
+
+            var order = _context.Orders
+                .Include(o => o.OrderItems)
+                .FirstOrDefault(o => o.OrderId == id && o.UserId == userId);
+
+            if (order == null)
+                return NotFound();
+
+            // 🔒 Security check
+            if (order.PaymentStatus != "Completed" || order.OrderStatus != "Confirmed")
+            {
+                TempData["Error"] = "Invoice not available.";
+                return RedirectToAction("MyOrders");
+            }
+
+            var model = BuildInvoiceModel(order);
+            model.IsPdf = true;
+
+            var pdfBytes = await GenerateInvoicePdf(model, ControllerContext);
+
+            return File(
+                pdfBytes,
+                "application/pdf",
+                $"Invoice-{order.OrderNumber}.pdf"
+            );
         }
 
     }

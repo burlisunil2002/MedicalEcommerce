@@ -82,7 +82,7 @@ using VivekMedicalProducts.Models;
 
                 _emailService.SendEnquiryMail(model);
 
-                TempData["SuccessMessage"] = "Your enquiry submitted successfully";
+                TempData["Success"] = "Your Enquiry submitted successfully";
 
                 return RedirectToAction("Enquiry");
             }

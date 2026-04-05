@@ -8,6 +8,13 @@
     var displayName = user?.CustomerName ?? user?.Email;
 }
 
+@if (TempData["Success"] != null)
+{
+    <div id="successBox" class="success-box">
+        @TempData["Success"]
+    </div>
+}
+
 <div class="min-h-screen bg-gray-100 py-10 px-4">
 
     <div class="max-w-6xl mx-auto grid md:grid-cols-3 gap-6">
@@ -152,6 +159,16 @@
         color: #555;
         font-size: 14px;
     }
+
+    .success-box {
+        background-color: #28a745;
+        color: white;
+        padding: 12px;
+        text-align: center;
+        border-radius: 6px;
+        margin-bottom: 15px;
+    }
+
 </style>
 
 <!-- SCRIPT -->
@@ -170,4 +187,12 @@
                 content.style.display === 'block' ? 'none' : 'block';
         });
     });
+
+    setTimeout(function () {
+        var box = document.getElementById("successBox");
+        if (box) {
+            box.style.display = "none";
+        }
+    }, 3000); // hides after 3 sec
+
 </script>

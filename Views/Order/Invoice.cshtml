@@ -6,146 +6,211 @@
 <html>
 <head>
     <meta charset="utf-8" />
-    <base href="@($"{Context.Request.Scheme}://{Context.Request.Host}/")" />
-
     <title>Invoice</title>
 
     <style>
         body {
-            font-family: "Segoe UI", 'Times New Roman', sans-serif;
+            font-family: "Times New Roman", serif;
             font-size: 13px;
-            color: #000;
             margin: 0;
-            padding: 20px;
+            padding: 15px;
         }
 
-        /* CONTAINER */
         .container {
             max-width: 900px;
             margin: auto;
+            border: 1px solid #000;
+            padding: 15px;
         }
 
-        /* ACTIONS */
-        .actions {
-            text-align: right;
-            margin-bottom: 15px;
+        /* 🔥 FORCE HIDE BUTTONS */
+        .no-print {
+            display: block;
         }
 
-        .btn {
-            padding: 6px 12px;
-            background: #111;
-            color: #fff;
-            text-decoration: none;
-            font-size: 12px;
-            margin-left: 5px;
+        @@media print {
+            .no-print {
+                display: none !important;
+                visibility: hidden !important;
+                height: 0 !important;
+                overflow: hidden !important;
+            }
+
+            .container {
+                border: none;
+            }
+
+            body {
+                padding: 0;
+            }
         }
 
         /* HEADER */
         .header {
-            display: flex;
-            justify-content: space-between;
-            border-bottom: 2px solid #000;
+            width: 100%;
+            border-bottom: 1px solid #000;
             padding-bottom: 10px;
         }
 
-        .logo {
-            height: 45px;
+        .header-table {
+            width: 100%;
         }
 
-        .company {
-            font-size: 13px;
-            line-height: 1.6;
+        .logo {
+            height: 40px; /* increased from 40px */
+            width: auto; /* keeps aspect ratio */
+            display: block;
+            margin-bottom: 5px;
+        }
+        .right-header {
+            text-align: right;
+            vertical-align: top;
         }
 
         .invoice-title {
-            text-align: right;
+            font-size: 15px;
+            color: #666;
         }
-
-            .invoice-title h2 {
-                margin: 0;
-                font-size: 18px;
-                letter-spacing: 1px;
-            }
 
         /* BILLING */
-        .billing {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 20px;
+        .billing-table {
+            width: 100%;
+            margin-top: 10px;
+            border-bottom: 1px solid #000;
+            padding-bottom: 10px;
         }
 
-            .billing div {
-                width: 48%;
+            .billing-table td {
+                vertical-align: top;
+                width: 50%;
             }
+
+        .right {
+            text-align: right;
+        }
 
         /* TABLE */
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
+            margin-top: 15px;
+        }
+
+        table, th, td {
+            border: 1px solid #000;
+        }
+
+        th, td {
+            padding: 8px;
         }
 
         th {
-            text-align: left;
-            border-bottom: 2px solid #000;
-            padding: 8px;
-            font-size: 13px;
+            background: #f2f2f2;
         }
 
-        td {
-            padding: 8px;
-            border-bottom: 1px solid #ddd;
-        }
-
-        /* TOTAL */
+        /* TOTAL BOX */
         .totals {
             width: 300px;
             margin-left: auto;
-            margin-top: 20px;
-            font-size: 13px;
+            margin-top: 15px;
+            border: 1px solid #000;
         }
 
             .totals div {
                 display: flex;
                 justify-content: space-between;
-                padding: 5px 0;
+                padding: 6px;
+                border-bottom: 1px solid #000;
+            }
+
+                .totals div:last-child {
+                    border-bottom: none;
+                }
+
+            /* 🔥 RIGHT ALIGN VALUES */
+            .totals span:last-child {
+                text-align: right;
+                min-width: 100px;
             }
 
         .grand {
             font-weight: bold;
-            border-top: 2px solid #000;
-            padding-top: 8px;
-            font-size: 15px;
         }
 
         /* SIGNATURE */
         .signature {
-            margin-top: 50px;
+            margin-top: 25px;
             text-align: right;
         }
 
             .signature img {
-                height: 40px;
-                width: 120px;
-                object-fit: contain;
+                height: 45px;
             }
 
         /* FOOTER */
         .footer {
             text-align: center;
-            margin-top: 40px;
+            margin-top: 20px;
             font-size: 11px;
-            color: #555;
-            border-top: 1px dashed #aaa;
-            padding-top: 10px;
+            border-top: 1px solid #000;
+            padding-top: 8px;
         }
 
-        /* PRINT */
-        @@media print {
-            .actions {
-                display: none;
-            }
+        /* BUTTONS */
+        .actions {
+            text-align: center;
+            margin-top: 20px;
         }
+
+        .btn {
+            padding: 6px 12px;
+            background: #000;
+            color: #fff;
+            text-decoration: none;
+            margin: 0 5px;
+        }
+
+    </style>
+
+    <style>
+        .action-buttons {
+            display: flex;
+            justify-content: flex-end; /* 👉 moves to right */
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        /* Common button style */
+        .btn {
+            padding: 10px 18px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        /* Print button */
+        .print-btn {
+            background-color: #6c757d;
+            color: white;
+        }
+
+            .print-btn:hover {
+                background-color: #5a6268;
+            }
+
+        /* Download button */
+        .download-btn {
+            background-color: #007bff;
+            color: white;
+        }
+
+            .download-btn:hover {
+                background-color: #0056b3;
+            }
     </style>
 </head>
 
@@ -153,58 +218,48 @@
 
     <div class="container">
 
-        <!-- ACTION BUTTONS -->
-        <div class="actions">
-            <button class="btn" onclick="window.print()">Print</button>
-
-            <a href="@Url.Action("DownloadInvoice", "Order", new { id = Model.OrderId })"
-               class="btn">
-                Download PDF
-            </a>
-        </div>
-
         <!-- HEADER -->
         <div class="header">
+            <table class="header-table">
+                <tr>
+                    <td>
+                        <img src="@($"{Context.Request.Scheme}://{Context.Request.Host}/images/sunillogo.png")" class="logo" />
 
-            <div>
-                <img src="@($"{Context.Request.Scheme}://{Context.Request.Host}/images/amtz png.png")" class="logo" />
+                        <strong>@Model.CompanyName</strong><br />
+                        GSTIN: @Model.CompanyGST <br />
+                        @Model.CompanyAddress
+                    </td>
 
-                <div class="company">
-                    <strong>@Model.CompanyName</strong><br />
-                    GSTIN: @Model.CompanyGST <br />
-                    @Model.CompanyAddress
-                </div>
-            </div>
-
-            <div class="invoice-title">
-                <h2>TAX INVOICE</h2>
-                <div>Invoice No: @Model.InvoiceNumber</div> 
-                <div>Date: @Model.Date.ToString("dd-MM-yyyy")</div>
-                <div>Order ID: #@Model.OrderId</div>
-            </div>
-
+                    <td class="right-header">
+                        <div class="invoice-title">TAX INVOICE</div>
+                        Invoice No: @Model.InvoiceNumber<br />
+                        Date: @Model.Date.ToString("dd-MM-yyyy")<br />
+                        Order ID: #@Model.OrderId
+                    </td>
+                </tr>
+            </table>
         </div>
 
         <!-- BILLING -->
-        <div class="billing">
+        <table class="billing-table">
+            <tr>
+                <td>
+                    <strong>Bill To:</strong><br />
+                    @Model.CustomerName <br />
+                    @Model.Address <br />
+                    @Model.City - @Model.Pincode <br />
+                    Phone: @Model.Phone
+                </td>
 
-            <div>
-                <strong>Bill To:</strong><br />
-                @Model.CustomerName <br />
-                @Model.Address <br />
-                @Model.City - @Model.Pincode <br />
-                Phone: @Model.Phone
-            </div>
+                <td class="right">
+                    <strong>Payment:</strong> Completed<br />
+                    <strong>Status:</strong> Confirmed<br />
+                    <strong>Place of Supply:</strong> Andhra Pradesh
+                </td>
+            </tr>
+        </table>
 
-            <div style="text-align:right;">
-                <strong>Payment:</strong> Completed <br />
-                <strong>Status:</strong> Confirmed <br />
-                <strong>Place of Supply:</strong> Andhra Pradesh
-            </div>
-
-        </div>
-
-        <!-- TABLE -->
+        <!-- ITEMS -->
         <table>
             <thead>
                 <tr>
@@ -221,54 +276,62 @@
             <tbody>
                 @{
                     int i = 1;
-                    foreach (var item in Model.Items)
-                    {
-                        var gstpercentage = item.GSTPercentage;
-                        var gstamt = ((item.Price * item.Quantity) * gstpercentage/100m);
-                        var gst = item.GSTAmount;
-                        var itemtoatl = (item.Price * item.Quantity) + gstamt;
-                        <tr>
-                            <td>@i</td>
-                            <td>@item.ProductName</td>
-                            <td>@item.Quantity</td>
-                            <td>₹ @item.Price.ToString("0.00")</td>
-                            <td>@gstpercentage.ToString("0.00")</td>
-                            <td>₹ @gstamt.ToString("0.00")</td>
-                            <td>₹ @itemtoatl.ToString("0.00")</td>
-                        </tr>
-                        ;
-                        i++;
-                    }
+                }
+
+                @foreach (var item in Model.Items)
+                {
+                    var gstpercentage = item.GSTPercentage;
+                    var gstamt = ((item.Price * item.Quantity) * gstpercentage / 100m);
+                    var itemtoatl = (item.Price * item.Quantity) + gstamt;
+
+                    <tr>
+                        <td>@i</td>
+                        <td>@item.ProductName</td>
+                        <td>@item.Quantity</td>
+                        <td>₹ @item.Price.ToString("0.00")</td>
+                        <td>@gstpercentage.ToString("0.00")</td>
+                        <td>₹ @gstamt.ToString("0.00")</td>
+                        <td>₹ @itemtoatl.ToString("0.00")</td>
+                    </tr>
+
+                    i++;
                 }
             </tbody>
         </table>
 
-        <!-- TOTALS -->
+        <!-- TOTAL -->
         <div class="totals">
-            <div>
-                <span>Sub Total</span>
-                <span>₹ @Model.SubTotal</span>
-            </div>
-            <div>
-                <span>GST Total</span>
-                <span>₹ @Model.GSTTotal</span>
-            </div>
-            <div class="grand">
-                <span>Grand Total</span>
-                <span>₹ @Model.GrandTotal</span>
-            </div>
+            <div><span>Sub Total</span><span>₹ @Model.SubTotal</span></div>
+            <div><span>GST Total</span><span>₹ @Model.GSTTotal</span></div>
+            <div class="grand"><span>Grand Total</span><span>₹ @Model.GrandTotal</span></div>
         </div>
 
         <!-- SIGNATURE -->
         <div class="signature">
-            <p>Authorized Signatory</p>
-            <img src="@($"{Context.Request.Scheme}://{Context.Request.Host}/images/signature.jpg")" />
-            <p><strong>Sunil</strong></p>
+            For @Model.CompanyName<br />
+            <img src="@($"{Context.Request.Scheme}://{Context.Request.Host}/images/signature.jpg")" /><br />
+            Authorized Signatory
         </div>
 
         <!-- FOOTER -->
         <div class="footer">
-            <p>This is a computer-generated invoice.</p>
+            This is a computer-generated invoice.
+        </div>
+
+        <!-- BUTTONS -->
+        <div class="no-print">
+            @if (!Model.IsPdf)
+            {
+                <div class="action-buttons">
+                    <button onclick="window.print()" class="btn print-btn">
+                        🖨 Print
+                    </button>
+
+                    <a href="/Order/DownloadInvoice/@Model.OrderId" class="btn download-btn">
+                        ⬇ Download
+                    </a>
+                </div>
+            }
         </div>
 
     </div>
