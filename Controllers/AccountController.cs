@@ -6,6 +6,9 @@ using VivekMedicalProducts.Data;
 using VivekMedicalProducts.Models;
 using VivekMedicalProducts.ViewModels;
 
+
+
+
 [Route("[controller]")]
 public class AccountController : Controller
 {
@@ -351,7 +354,7 @@ public class AccountController : Controller
         return Json(new
         {
             success = true,
-            message = "Registration completed successfully!",
+            message = "KYC Registration completed successfully!",
             redirectUrl = "/Products"
         });
     }

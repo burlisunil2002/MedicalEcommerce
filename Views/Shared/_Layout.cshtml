@@ -1,5 +1,9 @@
 ﻿@using Microsoft.AspNetCore.Identity
+@using VivekMedicalProducts.Data
 @inject UserManager<ApplicationUser> UserManager
+@inject IUserContextService userContext
+@inject ApplicationDbContext context
+
 
 
 <!DOCTYPE html>
@@ -86,7 +90,51 @@
 @{
         var user = await UserManager.GetUserAsync(User);
         var displayName = user?.CustomerName ?? user?.Email;
+
+        bool showReminder = false;
+
+        if (user != null)
+        {
+                showReminder = !user.IsProfileCompleted;
+        }
 }
+
+@if (showReminder)
+{
+    <div id="profilePopup"
+         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+
+        <div class="bg-white rounded-2xl shadow-xl p-6 w-[90%] max-w-md text-center">
+
+            <h2 class="text-lg font-semibold mb-2 text-gray-800">
+                Complete Your KYC Registration
+            </h2>
+
+            <p class="text-sm text-gray-600 mb-5">
+                Please complete your profile to access all features and place orders smoothly.
+            </p>
+
+            <div class="flex justify-center gap-4">
+
+                <!-- COMPLETE -->
+                <a asp-controller="Account"
+                   asp-action="Register"
+                   class="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+                    Complete KYC
+                </a>
+
+                <!-- SKIP -->
+                <button onclick="closeProfilePopup()"
+                        class="px-5 py-2 bg-gray-300 rounded-lg hover:bg-gray-400 transition">
+                    Skip
+                </button>
+
+            </div>
+
+        </div>
+    </div>
+}
+
 
 <body class="bg-gray-50">
 
@@ -122,6 +170,24 @@
 
                 <!-- RIGHT MENU -->
                 <div class="flex items-center gap-5">
+
+
+                    @if (User.Identity.IsAuthenticated && user != null)
+                    {
+                        if (user.IsProfileCompleted)
+                        {
+                            <span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-medium">
+                                ✔ KYC Verified
+                            </span>
+                        }
+                        else
+                        {
+                            <a asp-controller="Account" asp-action="Register"
+                               class="bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-blue-800">
+                                Complete Full KYC
+                            </a>
+                        }
+                    }
 
                     <a asp-controller="Products" asp-action="Index"
                        class="hidden md:block hover:text-blue-600 font-medium">
@@ -184,13 +250,6 @@
 
                                 <!-- MENU -->
                                 <div class="p-2 space-y-1">
-
-                                    <a asp-controller="Account" asp-action="Register" class="menu-item">
-                                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M12 4v16m8-8H4"></path>
-                                        </svg>
-                                        Customer Registration
-                                    </a>
 
                                     <a asp-controller="Account" asp-action="Profile" class="menu-item">
                                         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -409,6 +468,26 @@
         });
 
                
+    </script>
+
+    <script>
+        // ✅ Prevent popup after skip (session only)
+        document.addEventListener("DOMContentLoaded", function () {
+
+            const popup = document.getElementById("profilePopup");
+
+            if (!popup) return;
+
+            // If already skipped → hide
+            if (sessionStorage.getItem("profilePopupClosed") === "true") {
+                popup.remove();
+            }
+        });
+
+        function closeProfilePopup() {
+            sessionStorage.setItem("profilePopupClosed", "true");
+            document.getElementById("profilePopup")?.remove();
+        }
     </script>
 
            

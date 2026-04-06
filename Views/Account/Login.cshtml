@@ -268,7 +268,7 @@
 
     /* Verify OTP */
 
-         $("#verifyOtpBtn").click(function () {
+            $("#verifyOtpBtn").click(function () {
 
         let email = $("#email").val();
         let otp = "";
@@ -293,40 +293,8 @@
                 return;
             }
 
-            let isCompleted = res.isProfileCompleted === true || res.isProfileCompleted === "true";
-
-            if (!isCompleted) {
-
-                // ✅ USER MUST CHOOSE
-                Swal.fire({
-                    title: "Complete Profile",
-                    text: "Please complete your profile to continue",
-                    icon: "warning",
-                    showCancelButton: true,
-                    confirmButtonText: "Register Now",
-                    cancelButtonText: "Skip",
-                    allowOutsideClick: false,  // 🔥 prevents closing
-                    allowEscapeKey: false,     // 🔥 prevents ESC close
-                    buttonsStyling: false,
-                    customClass: {
-                        confirmButton: "bg-blue-600 text-white px-4 py-2 rounded-lg",
-                        cancelButton: "bg-gray-500 text-white px-4 py-2 rounded-lg ml-2"
-                    }
-                }).then((r) => {
-
-                    if (r.isConfirmed) {
-                        window.location.href = "/Account/Register";
-                    } else {
-                        window.location.href = "/Products";
-                    }
-
-                });
-
-            } else {
-
-                // ✅ Direct redirect if profile completed
-                window.location.href = "/Products";
-            }
+            // ✅ NO POPUP HERE (handled in layout)
+            window.location.href = "/Products";
 
         }).fail(function () {
             hideLoader();

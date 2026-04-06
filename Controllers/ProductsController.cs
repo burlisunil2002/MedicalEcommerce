@@ -37,10 +37,18 @@ namespace VivekMedicalProducts.Controllers
             if (!string.IsNullOrEmpty(category))
                 products = products.Where(p => p.Category == category);
 
+            // 🔥 GET UNIQUE CATEGORIES WITH IMAGE
             ViewBag.Categories = _context.Products
-                                .Select(p => p.Category)
-                                .Distinct()
-                                .ToList();
+                .Where(p => p.Category != null)
+                .GroupBy(p => p.Category)
+                .Select(g => new
+                {
+                    Name = g.Key,
+                    ImageUrl = g.Where(x => x.ImageUrl != null)
+                             .Select(x => x.ImageUrl)
+                             .FirstOrDefault()
+                })
+                .ToList();
 
             var userId = _userContext.GetUserId();
 
