@@ -16,14 +16,14 @@
     <title>Sunil Medical Products | Buy Medical Equipment Online</title>
 
     <meta name="description"
-          content="Buy high quality medical equipment, hospital devices, and healthcare products at best price. Sunil Medical Products - trusted supplier." />
+          content="Sunil Medical products - Buy high quality medical equipment, hospital devices, and healthcare products at best price. Sunil Medical Products - trusted supplier." />
 
     <meta name="keywords"
-          content="medical products, medical equipment, hospital equipment, Sunil medical, healthcare devices" />
+          content="medical products, medical equipment, hospital equipment, Sunil medical, Sunil medical products, healthcare devices" />
 
     <meta name="author" content="Sunil Medical Products" />
 
-    <meta property="og:title" content="Sunil Medical Products" />
+    <meta property="og:title" content="@ViewBag.Category Medical Products" />
     <meta property="og:description" content="Trusted Medical Equipment Store" />
     <meta property="og:image" content="https://sunilmedicalproducts.online/images/sunillogo.png" />
     <meta property="og:url" content="https://sunilmedicalproducts.online" />
@@ -82,6 +82,58 @@
             stroke-width: 2;
             flex-shrink: 0;
         }
+
+        /*-------------Scroll Head Bar ------------*/
+
+        .announcement-bar {
+            width: 100%;
+            background: linear-gradient(90deg, #0f2027, #203a43, #2c5364);
+            color: #fff;
+            overflow: hidden;
+            position: relative;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            z-index: 999;
+        }
+
+        .announcement-track {
+            display: inline-block;
+            white-space: nowrap;
+            animation: scrollText 15s linear infinite;
+        }
+
+            .announcement-track span {
+                padding-left: 100%;
+            }
+
+        @@keyframes scrollText {
+            0%
+
+        {
+            transform: translateX(0%);
+        }
+
+        100% {
+            transform: translateX(-100%);
+        }
+
+        }
+
+        /* Responsive */
+        @@media (max-width: 768px) {
+            .announcement-bar
+
+        {
+            font-size: 12px;
+            height: 35px;
+        }
+
+        }
+
     </style>
 
     @RenderSection("Styles", required: false)
@@ -152,6 +204,14 @@
 
 
 <body class="bg-gray-50">
+
+    <div class="announcement-bar">
+        <div class="announcement-track">
+            <span>
+                🚀 This website is for Testing Purpose | Please Note 🚀 This website is for Testing Purpose | Please Note
+            </span>
+        </div>
+    </div>
 
     <!-- 🔥 HEADER -->
     <header class="bg-white shadow-md sticky top-0 z-50">
@@ -349,7 +409,7 @@
 
                 <div class="mt-4 space-y-1 text-sm">
                     <p>📍 Visakhapatnam, Andhra Pradesh</p>
-                    <p>📞 +91 9876543210</p>
+                    <p>📞 +91 9014060858</p>
                     <p>✉️ support@sunilmedical.com</p>
                 </div>
             </div>
