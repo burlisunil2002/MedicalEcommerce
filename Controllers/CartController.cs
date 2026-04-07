@@ -59,7 +59,9 @@ namespace VivekMedicalProducts.Controllers
 
             foreach (var item in carts)
             {
-                decimal price = item.Product?.Price ?? 0;
+                decimal price = item.Product.IsHotDeal && item.Product.DiscountPercentage > 0
+            ? item.Product.Price - (item.Product.Price * item.Product.DiscountPercentage.Value / 100)
+            : item.Product.Price;
                 decimal gstPercent = item.Product?.GSTPercentage ?? 0;
 
                 subtotal += price * item.Quantity;

@@ -1,5 +1,14 @@
 ﻿@model IEnumerable<VivekMedicalProducts.ViewModels.ProductViewModel>
 
+
+@{
+    var selectedCategory = Context.Request.Query["category"].ToString();
+    bool isCategoryPage = !string.IsNullOrEmpty(selectedCategory);
+}
+@{
+    var hotDeals = Model.Where(p => p.IsHotDeal).ToList();
+}
+
 <!-- ✅ PAYMENT SUCCESS -->
 @if (TempData["PaymentSuccess"] != null)
 {
@@ -18,6 +27,10 @@
         <button onclick="closePaymentBox()" class="text-gray-400 hover:text-red-500">×</button>
     </div>
 }
+
+
+@if (!isCategoryPage)
+{
 
 <!-- ✅ HERO -->
 <div class="swiper mySwiper mb-8">
@@ -43,28 +56,41 @@
     <div class="swiper-pagination"></div>
 </div>
 
-<!-- ✅ CATEGORY -->
+<!-- ✅ CATEGORY (UPGRADED) -->
 <div class="max-w-7xl mx-auto mt-6 px-4">
 
-    <h2 class="text-lg font-semibold mb-4">Shop by Category</h2>
+    <!-- HEADER -->
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold flex items-center gap-2">
+            🏥 Shop by Category
+        </h2>
+        <span class="text-xs text-gray-500">Swipe →</span>
+    </div>
 
-    <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-10 gap-4">
+    <!-- HORIZONTAL SCROLL -->
+    <div class="flex gap-4 overflow-x-auto pb-3 scroll-smooth">
 
         @foreach (var cat in ViewBag.Categories)
         {
             <a asp-controller="Products"
                asp-action="Index"
                asp-route-category="@cat.Name"
-               class="bg-white border rounded-xl p-3 text-center hover:shadow-lg hover:-translate-y-1 transition duration-300">
+               class="min-w-[90px] sm:min-w-[110px] bg-white border border-gray-100
+                          rounded-xl p-3 text-center shadow-sm
+                          hover:shadow-xl hover:-translate-y-1
+                          transition duration-300 relative group">
 
-                <!-- IMAGE FIXED SIZE -->
-                <div class="h-14 flex items-center justify-center mb-2">
+                <!-- ICON BG -->
+                <div class="absolute inset-0 bg-gradient-to-br from-blue-50 to-transparent opacity-0 group-hover:opacity-100 rounded-xl transition"></div>
+
+                <!-- IMAGE -->
+                <div class="h-14 flex items-center justify-center mb-2 relative z-10">
                     <img src="@(string.IsNullOrEmpty(cat.ImageUrl) ? "/images/no-image.png" : cat.ImageUrl)"
-                         class="max-h-12 object-contain" />
+                         class="max-h-12 object-contain transition duration-300 group-hover:scale-110" />
                 </div>
 
                 <!-- NAME -->
-                <p class="text-xs font-medium text-gray-700 truncate">
+                <p class="text-xs font-medium text-gray-700 truncate relative z-10 group-hover:text-blue-600">
                     @cat.Name
                 </p>
 
@@ -72,8 +98,96 @@
         }
 
     </div>
+</div>
+
+<div class="max-w-7xl mx-auto px-4 mt-6">
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+
+        <div class="bg-white p-4 rounded-xl shadow-sm">
+            <p class="text-blue-600 text-lg">✔</p>
+            <p class="text-xs mt-1">100% Genuine</p>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl shadow-sm">
+            <p class="text-blue-600 text-lg">🚚</p>
+            <p class="text-xs mt-1">Fast Delivery</p>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl shadow-sm">
+            <p class="text-blue-600 text-lg">💰</p>
+            <p class="text-xs mt-1">Best Pricing</p>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl shadow-sm">
+            <p class="text-blue-600 text-lg">📞</p>
+            <p class="text-xs mt-1">24/7 Support</p>
+        </div>
+
+    </div>
 
 </div>
+
+
+@if (hotDeals.Any())
+{
+    <div class="max-w-7xl mx-auto mt-10 px-4">
+
+        <h2 class="text-xl font-bold text-red-500 mb-4">🔥 Hot Deals</h2>
+
+        <div class="flex gap-4 overflow-x-auto pb-4">
+
+            @foreach (var product in hotDeals)
+            {
+                var discount = product.DiscountPercentage ?? 0;
+                var finalPrice = product.Price - (product.Price * discount / 100);
+
+                <div class="min-w-[250px] bg-white rounded-xl shadow hover:shadow-xl transition relative">
+
+                    <!-- Discount -->
+                    <span class="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
+                        @discount% OFF
+                    </span>
+
+                    <!-- Timer -->
+                    <span class="absolute top-2 right-2 bg-black text-white text-xs px-2 py-1 rounded">
+                        <span class="countdown" data-date="@product.DealEndDate"></span>
+                    </span>
+
+                    <img src="@product.ImageUrl" class="h-36 w-full object-contain p-2" />
+
+                    <div class="p-3">
+                        <p class="text-sm font-semibold">@product.Name</p>
+
+                        <div class="flex gap-2 mt-1">
+                            <span class="text-green-600 font-bold">₹@finalPrice</span>
+                            <span class="line-through text-gray-400 text-xs">₹@product.Price</span>
+                        </div>
+
+                        <!-- Cart -->
+                        <div class="cart-area mt-2" data-id="@product.Id">
+
+                                <button type="button"
+                                        class="add-cart-btn w-full bg-red-500 text-white py-2 rounded text-sm">
+                                    Grab Deal
+                                </button>
+
+                            <div class="qty-controller hidden flex items-center justify-between mt-2 bg-gray-100 rounded">
+                                <button class="minus px-3 py-1">−</button>
+                                <span class="qty">1</span>
+                                <button class="plus px-3 py-1">+</button>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            }
+
+        </div>
+    </div>
+}
+
+}
 
 <!-- ✅ PRODUCTS -->
 <div class="max-w-7xl mx-auto mt-10 px-4 pb-12">
@@ -82,75 +196,85 @@
 
     <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
 
+
+
         @foreach (var product in Model)
         {
-            <div class="bg-white rounded-2xl border hover:shadow-xl transition duration-300 overflow-hidden flex flex-col">
+            <div class="bg-white rounded-xl border hover:shadow-xl transition duration-300 overflow-hidden flex flex-col relative group">
 
-                <!-- IMAGE -->
+                <!-- Hot Badge -->
+                @if (product.IsHotDeal && product.DiscountPercentage > 0)
+                {
+                    <span class="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
+                        🔥 @product.DiscountPercentage% OFF
+                    </span>
+
+                    <span class="absolute top-2 right-2 bg-black text-white text-xs px-2 py-1 rounded">
+                        <span class="countdown" data-date="@product.DealEndDate?.ToString("yyyy-MM-ddTHH:mm:ss")"></span>
+                    </span>
+                }
+
+                <!-- Image -->
                 <a asp-controller="Products"
                    asp-action="Details"
                    asp-route-id="@product.Id"
                    class="bg-gray-50 h-48 flex items-center justify-center">
 
-                    <img src="@(string.IsNullOrEmpty(product.ImageUrl) ? "/images/no-image.png" : product.ImageUrl)"
-                         class="max-h-40 object-contain transition duration-300 hover:scale-105" />
+                    <img src="@product.ImageUrl"
+                         class="max-h-40 object-contain transition group-hover:scale-105" />
                 </a>
 
-                <!-- CONTENT -->
+                <!-- Content -->
                 <div class="p-4 flex flex-col flex-grow">
 
                     <h4 class="text-sm font-semibold text-gray-800 line-clamp-2 min-h-[40px]">
                         @product.Name
                     </h4>
 
-                    @if (product.PriceType?.ToLower() == "normal")
-                    {
-                        <p class="mt-2 text-blue-600 font-bold text-lg">
-                            ₹ @product.Price.ToString("N0")
-                        </p>
-                    }
-                    else
-                    {
-                        <p class="mt-2 text-orange-500 text-sm font-medium">
-                            Price on Request
-                        </p>
+                    @{
+                        var discount = product.DiscountPercentage ?? 0;
+                        var finalPrice = product.Price - (product.Price * discount / 100);
                     }
 
-                    <!-- ACTION -->
-                    <div class="mt-auto pt-4">
+                    <div class="mt-2">
+                        <span class="text-blue-600 font-bold">₹@finalPrice</span>
 
-                        @if (product.PriceType?.ToLower() == "normal")
+                        @if (discount > 0)
                         {
-                            <div class="cart-area" data-id="@product.Id">
-
-                                <button class="add-cart-btn w-full bg-blue-600 text-white py-2 rounded-lg text-sm hover:bg-blue-700 transition">
-                                    Add to Cart
-                                </button>
-
-                                <div class="qty-controller hidden items-center justify-between mt-2 bg-gray-100 rounded-lg">
-
-                                    <button class="minus px-3 py-2 text-lg">−</button>
-                                    <span class="qty font-medium">1</span>
-                                    <button class="plus px-3 py-2 text-lg">+</button>
-
-                                </div>
-                            </div>
+                            <span class="line-through text-gray-400 text-sm ml-2">₹@product.Price</span>
                         }
-                        else
-                        {
-                            <a asp-controller="Home"
-                               asp-action="Enquiry"
-                               asp-route-productId="@product.Id"
-                               class="block text-center bg-orange-500 text-white py-2 rounded-lg text-sm hover:bg-orange-600 transition">
-                                Request Quote
-                            </a>
-                        }
-
                     </div>
 
-                </div>
+                    <!-- Urgency -->
+                    @if (product.IsHotDeal)
+                    {
+                        <p class="text-xs text-red-500 mt-1">
+                            ⚡ Only few left!
+                        </p>
+                    }
 
+                    <!-- Cart -->
+                    <div class="mt-auto pt-3">
+
+                        <div class="cart-area" data-id="@product.Id">
+
+                            <button type="button"
+                                    class="add-cart-btn w-full bg-blue-600 text-white py-2 rounded text-sm hover:bg-blue-700">
+                                Add to Cart
+                            </button>
+
+                            <div class="qty-controller hidden items-center justify-between mt-2 bg-gray-100 rounded">
+                                <button class="minus px-3 py-1">−</button>
+                                <span class="qty">1</span>
+                                <button class="plus px-3 py-1">+</button>
+                            </div>
+
+                        </div>
+
+                    </div>
+                </div>
             </div>
+            
         }
 
     </div>
@@ -195,16 +319,27 @@
     .animate-fadeIn {
         animation: fadeIn 0.3s ease-in-out;
     }
+
+    ::-webkit-scrollbar {
+        height: 6px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: #cbd5f5;
+        border-radius: 10px;
+    }
 </style>
 
 <!-- ✅ SCRIPTS -->
+
 <script>
+
     $(document).ready(function () {
 
         loadCartCount();
 
-        // ✅ ADD TO CART
-        $(".add-cart-btn").click(function () {
+        // ✅ ADD TO CART / GRAB DEAL
+        $(document).on("click", ".add-cart-btn", function () {
 
             var parent = $(this).closest(".cart-area");
             var productId = parent.data("id");
@@ -212,20 +347,20 @@
 
             button.prop("disabled", true).text("Adding...");
 
-            parent.find(".qty-controller").removeClass("hidden").addClass("flex");
-            button.hide();
-
-            $.post("/Cart/AddToCart", { productId: productId }, function () {
-                loadCartCount();
-
-                setTimeout(() => {
-                    button.text("Add to Cart").prop("disabled", false);
-                }, 300);
-            });
+            $.post("/Cart/AddToCart", { productId: productId })
+                .done(function () {
+                    parent.find(".qty-controller").removeClass("hidden").addClass("flex");
+                    button.hide();
+                    loadCartCount();
+                })
+                .fail(function () {
+                    alert("Failed to add to cart");
+                    button.prop("disabled", false).text("Add to Cart");
+                });
         });
 
         // ✅ PLUS
-        $(".plus").click(function () {
+        $(document).on("click", ".plus", function () {
 
             var parent = $(this).closest(".cart-area");
             var qtySpan = parent.find(".qty");
@@ -241,7 +376,7 @@
         });
 
         // ✅ MINUS
-        $(".minus").click(function () {
+        $(document).on("click", ".minus", function () {
 
             var parent = $(this).closest(".cart-area");
             var qtySpan = parent.find(".qty");
@@ -306,4 +441,39 @@
         autoplay: { delay: 3000 },
         pagination: { el: ".swiper-pagination", clickable: true }
     });
+
+    
+
+                    setInterval(() => {
+        document.querySelectorAll(".countdown").forEach(el => {
+
+            const endDate = el.dataset.date;
+
+            if (!endDate) {
+                el.innerText = "No Deal";
+                return;
+            }
+
+            const end = new Date(endDate);
+
+            if (isNaN(end)) {
+                el.innerText = "Invalid";
+                return;
+            }
+
+            const diff = end - new Date();
+
+            if (diff <= 0) {
+                el.innerText = "Expired";
+                return;
+            }
+
+            const h = Math.floor(diff / 3600000);
+            const m = Math.floor((diff % 3600000) / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
+
+            el.innerText = `${h}h ${m}m ${s}s`;
+        });
+    }, 1000);
+
 </script>

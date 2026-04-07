@@ -17,8 +17,14 @@ namespace VivekMedicalProducts.Models
         public string PriceType { get; set; }
 
         // 🔥 CLOUDINARY URLS (NOT PATHS)
-        public string ImageUrl { get; set; } = string.Empty;
+        public string? ImageUrl { get; set; } = string.Empty;
         public string? QuotationUrl { get; set; }
+
+        public bool IsHotDeal { get; set; } = false;
+
+        public decimal? DiscountPercentage { get; set; }
+
+        public DateTime? DealEndDate { get; set; }
 
         public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
     }

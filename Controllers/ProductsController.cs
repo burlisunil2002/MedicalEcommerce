@@ -4,6 +4,7 @@ using VivekMedicalProducts.Data;
 using VivekMedicalProducts.Models;
 using VivekMedicalProducts.Services;
 using VivekMedicalProducts.Services.Storage;
+using VivekMedicalProducts.ViewModels;
 
 namespace VivekMedicalProducts.Controllers
 {
@@ -32,7 +33,17 @@ namespace VivekMedicalProducts.Controllers
             var products = _context.Products.AsQueryable();
 
             if (!string.IsNullOrEmpty(searchString))
-                products = products.Where(p => p.Name.Contains(searchString));
+            {
+                var normalizedSearch = Normalize(searchString);
+
+                products = products
+                    .AsEnumerable() // 🔥 switch to memory (important)
+                    .Where(p =>
+                        Normalize(p.Name).Contains(normalizedSearch) ||
+                        Normalize(p.Category).Contains(normalizedSearch)
+                    )
+                    .AsQueryable();
+            }
 
             if (!string.IsNullOrEmpty(category))
                 products = products.Where(p => p.Category == category);
@@ -69,6 +80,9 @@ namespace VivekMedicalProducts.Controllers
                     ImageUrl = p.ImageUrl,
                     QuotationUrl = p.QuotationUrl,
                     PriceType = p.PriceType,
+                    IsHotDeal = p.IsHotDeal,
+                    DiscountPercentage = p.DiscountPercentage,
+                    DealEndDate = p.DealEndDate,
 
                     CartQuantity = cartItems
                         .Where(c => c.ProductId == p.Id)
@@ -81,6 +95,42 @@ namespace VivekMedicalProducts.Controllers
                 TempData["InfoMessage"] = "No products available.";
 
             return View(result);
+        }
+
+        [HttpGet]
+        public IActionResult GetSuggestions(string term)
+        {
+            var normalizedSearch = Normalize(term);
+
+            var data = _context.Products
+                .AsEnumerable()
+                .Where(p =>
+                    Normalize(p.Name).Contains(normalizedSearch) ||
+                    Normalize(p.Category).Contains(normalizedSearch)
+                )
+                .Take(8)
+                .Select(p => new
+                {
+                    id = p.Id,
+                    name = p.Name,
+                    category = p.Category
+                })
+                .ToList();
+
+            return Json(data);
+        }
+
+        private string Normalize(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return "";
+
+            // remove special characters and spaces
+            var cleaned = new string(text
+                .Where(c => char.IsLetterOrDigit(c))
+                .ToArray());
+
+            return cleaned.ToLower();
         }
 
         // ================= ADD (GET) =================
@@ -186,65 +236,81 @@ namespace VivekMedicalProducts.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ProductEdit(ProductModel model,
-                                             IFormFile imageFile,
-                                             IFormFile quotationFile)
+        public async Task<IActionResult> ProductEdit(
+  ProductModel model,
+  IFormFile imageFile,
+  IFormFile quotationFile)
         {
-            ModelState.Remove("quotationFile"); // 🔥 prevents required error
+            // 🔥 Fix validation issues
+            ModelState.Remove("imageFile");
+            ModelState.Remove("quotationFile");
+
+            if (!ModelState.IsValid)
+            {
+                return View(model);
+            }
 
             var product = await _context.Products.FindAsync(model.Id);
             if (product == null)
                 return NotFound();
 
-            try
+            // ================= BASIC =================
+            product.Name = model.Name;
+            product.Price = model.Price;
+            product.GSTPercentage = model.GSTPercentage;
+            product.Description = model.Description;
+            product.Category = model.Category;
+            product.PriceType = model.PriceType;
+
+            // ================= HOT DEAL =================
+            product.IsHotDeal = model.IsHotDeal;
+            product.DiscountPercentage = model.DiscountPercentage;
+
+            // 🔥 IMPORTANT: PostgreSQL UTC FIX
+            product.DealEndDate = model.DealEndDate.HasValue
+                ? model.DealEndDate.Value.ToUniversalTime()
+                : null;
+
+            // ================= IMAGE =================
+            if (imageFile != null && imageFile.Length > 0)
             {
-                // ================= BASIC =================
-                product.Name = model.Name;
-                product.Price = model.Price;
-                product.GSTPercentage = model.GSTPercentage;
-                product.Description = model.Description;
-                product.Category = model.Category;
-                product.PriceType = model.PriceType;
-
-                // ================= IMAGE =================
-                if (imageFile != null && imageFile.Length > 0)
-                {
-                    var allowedTypes = new[] { "image/jpeg", "image/png", "image/webp" };
-
-                    if (!allowedTypes.Contains(imageFile.ContentType))
-                    {
-                        TempData["Error"] = "Only JPG, PNG, WEBP allowed";
-                        return RedirectToAction("ProductManagement");
-                    }
-
-                    product.ImageUrl = await _fileStorage.UploadAsync(imageFile, "products");
-                }
-
-                // ================= PDF =================
-                if (quotationFile != null && quotationFile.Length > 0)
-                {
-                    var ext = Path.GetExtension(quotationFile.FileName).ToLower();
-
-                    if (ext != ".pdf")
-                    {
-                        TempData["Error"] = "Only PDF allowed";
-                        return RedirectToAction("ProductManagement");
-                    }
-
-                    product.QuotationUrl = await _fileStorage.UploadAsync(quotationFile, "quotations");
-                }
-
-                await _context.SaveChangesAsync();
-
-                TempData["SuccessMessage"] = "Product updated successfully!";
-                return RedirectToAction("ProductManagement");
+                product.ImageUrl = await _fileStorage.UploadAsync(imageFile, "products");
             }
-            catch (Exception ex)
+
+            // ================= PDF =================
+            if (quotationFile != null && quotationFile.Length > 0)
             {
-                TempData["Error"] = "Update failed: " + ex.Message;
-                return RedirectToAction("ProductManagement");
+                product.QuotationUrl = await _fileStorage.UploadAsync(quotationFile, "quotations");
             }
+
+            var result = await _context.SaveChangesAsync();
+            Console.WriteLine("Rows affected: " + result);
+
+            return RedirectToAction("ProductManagement");
         }
+
+
+     /*   [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ProductEdit(ProductEditViewModel model)
+        {
+            var product = await _context.Products.FindAsync(model.Id);
+
+            if (product == null)
+                return NotFound();
+
+            product.IsHotDeal = model.IsHotDeal;
+            product.DiscountPercentage = model.DiscountPercentage;
+
+            // 🔥 FIX HERE
+            product.DealEndDate = model.DealEndDate.HasValue
+                ? DateTime.SpecifyKind(model.DealEndDate.Value, DateTimeKind.Utc)
+                : null;
+
+            await _context.SaveChangesAsync();
+
+            return RedirectToAction("ProductManagement"); // ✅ REQUIRED
+        } */
 
         // ================= DELETE =================
         [HttpPost]
@@ -287,7 +353,10 @@ namespace VivekMedicalProducts.Controllers
                                       p.Price,
                                       p.Description,
                                       p.ImageUrl,
-                                      p.PriceType
+                                      p.PriceType,
+                                      p.IsHotDeal,
+                                      p.DiscountPercentage,
+                                      p.DealEndDate
                                   })
                                   .FirstOrDefault();
 
