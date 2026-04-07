@@ -21,6 +21,7 @@ namespace VivekMedicalProducts.Controllers
 
         // ADD TO CART
         [HttpPost]
+        [IgnoreAntiforgeryToken]
         public async Task<IActionResult> AddToCart(int productId)
         {
             var userId = _userContext.GetUserId();
