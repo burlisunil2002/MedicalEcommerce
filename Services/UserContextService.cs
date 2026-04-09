@@ -21,18 +21,13 @@ public class UserContextService : IUserContextService
         if (context == null)
             return null;
 
-        // ✅ Logged-in user
+        // ✅ ONLY return userId if logged in
         if (context.User?.Identity?.IsAuthenticated == true)
         {
             return context.User.FindFirstValue(ClaimTypes.NameIdentifier);
         }
 
-        // ✅ Guest user (session)
-        if (string.IsNullOrEmpty(context.Session.Id))
-        {
-            context.Session.SetString("Init", "1"); // ensure session created
-        }
-
-        return context.Session.Id;
+        // 🔥 IMPORTANT: Guest must return NULL
+        return null;
     }
 }

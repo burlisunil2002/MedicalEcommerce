@@ -31,9 +31,19 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.Cookie.HttpOnly = true;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // IMPORTANT for HTTPS
-    options.Cookie.SameSite = SameSiteMode.None;
+
+    // ?? FIX
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+
+    // ?? FIX
+    options.Cookie.SameSite = SameSiteMode.Lax;
+
     options.LoginPath = "/Account/Login";
+});
+
+builder.Services.Configure<CookiePolicyOptions>(options =>
+{
+    options.MinimumSameSitePolicy = SameSiteMode.Lax;
 });
 
 builder.Services.AddAuthorization();
@@ -117,7 +127,9 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
-app.UseSession();              // if using session
+app.UseSession();
+
+app.UseCookiePolicy();
 
 app.UseAuthentication();       // MUST come before Authorization
 app.UseAuthorization();        // Only once!

@@ -1,5 +1,7 @@
 ﻿@model VivekMedicalProducts.Models.ProductModel
 
+@Html.AntiForgeryToken()
+
 <div class="min-h-screen bg-gradient-to-br from-gray-100 via-white to-gray-200 py-10 px-4">
 
     <div class="max-w-6xl mx-auto">
@@ -13,7 +15,7 @@
                 <div class="relative rounded-2xl overflow-hidden bg-white/40 backdrop-blur-lg border border-white/30">
 
                     <img src="@(string.IsNullOrEmpty(Model.ImageUrl) ? "/images/no-image.png" : Model.ImageUrl)"
-                         class="w-full h-[300px] sm:h-[400px] object-cover transition duration-500 hover:scale-110" />
+                         class="w-full h-[300px] sm:h-[400px] object-cover transition-none" />
 
                     <!-- subtle overlay -->
                     <div class="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent"></div>
@@ -131,85 +133,3 @@
     </div>
 </div>
 
-<!-- 🔹 SCRIPT -->
-<script>
-    $(document).ready(function () {
-
-        loadCartCount();
-
-        // ADD TO CART → SWITCH UI
-       $(".add-cart-btn").click(function () {
-
-            var parent = $(this).closest(".cart-area");
-            var productId = parent.data("id");
-            var button = $(this);
-
-            button.prop("disabled", true).text("Adding...");
-
-            parent.find(".qty-controller").removeClass("hidden").addClass("flex");
-            button.hide();
-
-            $.post("/Cart/AddToCart", { productId: productId }, function () {
-                loadCartCount();
-
-                setTimeout(() => {
-                    button.text("Add to Cart").prop("disabled", false);
-                }, 300);
-            });
-        });
-
-        // PLUS
-        $(".plus").click(function () {
-
-            var parent = $(this).closest(".cart-area");
-            var qtySpan = parent.find(".qty");
-
-            var qty = parseInt(qtySpan.text()) + 1;
-            qtySpan.text(qty);
-
-            var productId = parent.data("id");
-
-            $.post("/Cart/AddToCart", { productId: productId }, function () {
-                loadCartCount();
-            });
-        });
-
-        // MINUS
-        $(".minus").click(function () {
-
-            var parent = $(this).closest(".cart-area");
-            var qtySpan = parent.find(".qty");
-
-            var qty = parseInt(qtySpan.text());
-            var productId = parent.data("id");
-
-            if (qty > 1) {
-
-                qty--;
-                qtySpan.text(qty);
-
-                $.post("/Cart/DecreaseQuantity", { productId: productId }, function () {
-                    loadCartCount();
-                });
-
-            } else {
-
-                $.post("/Cart/Remove", { productId: productId }, function () {
-
-                    parent.find(".qty-controller").addClass("hidden").removeClass("flex");
-                    parent.find(".add-cart-btn").show();
-
-                    loadCartCount();
-                });
-            }
-        });
-
-    });
-
-    // CART COUNT
-    function loadCartCount() {
-        $.get("/Cart/GetCartCount", function (data) {
-            $("#cartCount").text(data);
-        });
-    }
-</script>

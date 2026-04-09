@@ -1,4 +1,5 @@
 ﻿@model IEnumerable<VivekMedicalProducts.ViewModels.ProductViewModel>
+@Html.AntiForgeryToken()
 
 
 @{
@@ -8,6 +9,8 @@
 @{
     var hotDeals = Model.Where(p => p.IsHotDeal).ToList();
 }
+
+
 
 <!-- ✅ PAYMENT SUCCESS -->
 @if (TempData["PaymentSuccess"] != null)
@@ -196,85 +199,121 @@
 
     <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
 
-
-
         @foreach (var product in Model)
         {
-            <div class="bg-white rounded-xl border hover:shadow-xl transition duration-300 overflow-hidden flex flex-col relative group">
+            var isNormal = product.PriceType?.ToLower() == "normal";
+            var discount = product.DiscountPercentage ?? 0;
+            var finalPrice = product.Price - (product.Price * discount / 100);
 
-                <!-- Hot Badge -->
-                @if (product.IsHotDeal && product.DiscountPercentage > 0)
+            <div class="bg-white rounded-2xl border hover:shadow-2xl transition duration-300 overflow-hidden flex flex-col relative group">
+
+                <!-- 🔥 HOT DEAL BADGE -->
+                @if (product.IsHotDeal && discount > 0)
                 {
-                    <span class="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
-                        🔥 @product.DiscountPercentage% OFF
+                    <span class="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-1 rounded shadow">
+                        🔥 @discount% OFF
                     </span>
 
-                    <span class="absolute top-2 right-2 bg-black text-white text-xs px-2 py-1 rounded">
+                    <span class="absolute top-2 right-2 bg-black text-white text-xs px-2 py-1 rounded shadow">
                         <span class="countdown" data-date="@product.DealEndDate?.ToString("yyyy-MM-ddTHH:mm:ss")"></span>
                     </span>
                 }
 
-                <!-- Image -->
+                <!-- 🖼 IMAGE -->
                 <a asp-controller="Products"
                    asp-action="Details"
                    asp-route-id="@product.Id"
-                   class="bg-gray-50 h-48 flex items-center justify-center">
+                   class="bg-gray-50 h-48 flex items-center justify-center overflow-hidden">
 
                     <img src="@product.ImageUrl"
-                         class="max-h-40 object-contain transition group-hover:scale-105" />
+                         class="max-h-40 object-contain transition-none" />
                 </a>
 
-                <!-- Content -->
+                <!-- 📦 CONTENT -->
                 <div class="p-4 flex flex-col flex-grow">
 
+                    <!-- PRODUCT NAME -->
                     <h4 class="text-sm font-semibold text-gray-800 line-clamp-2 min-h-[40px]">
                         @product.Name
                     </h4>
 
-                    @{
-                        var discount = product.DiscountPercentage ?? 0;
-                        var finalPrice = product.Price - (product.Price * discount / 100);
-                    }
-
+                    <!-- 💰 PRICE / REQUEST -->
                     <div class="mt-2">
-                        <span class="text-blue-600 font-bold">₹@finalPrice</span>
 
-                        @if (discount > 0)
+                        @if (isNormal)
                         {
-                            <span class="line-through text-gray-400 text-sm ml-2">₹@product.Price</span>
+                            <div>
+                                <span class="text-blue-600 font-bold text-lg">
+                                    ₹@finalPrice.ToString("N0")
+                                </span>
+
+                                @if (discount > 0)
+                                {
+                                    <span class="line-through text-gray-400 text-sm ml-2">
+                                        ₹@product.Price.ToString("N0")
+                                    </span>
+
+                                    <span class="ml-2 text-green-600 text-xs font-semibold">
+                                        @discount% OFF
+                                    </span>
+                                }
+                            </div>
                         }
+                        else
+                        {
+                            <p class="text-orange-500 text-sm font-medium flex items-center gap-1">
+                                📩 Price on Request
+                            </p>
+                        }
+
                     </div>
 
-                    <!-- Urgency -->
+                    <!-- ⚡ URGENCY -->
                     @if (product.IsHotDeal)
                     {
                         <p class="text-xs text-red-500 mt-1">
-                            ⚡ Only few left!
+                            ⚡ Limited time deal!
                         </p>
                     }
 
-                    <!-- Cart -->
-                    <div class="mt-auto pt-3">
+                    <!-- 🛒 ACTION -->
+                    <div class="mt-auto pt-4">
 
-                        <div class="cart-area" data-id="@product.Id">
+                        @if (isNormal)
+                        {
+                            <div class="cart-area" data-id="@product.Id">
 
-                            <button type="button"
-                                    class="add-cart-btn w-full bg-blue-600 text-white py-2 rounded text-sm hover:bg-blue-700">
-                                Add to Cart
-                            </button>
+                                <!-- ADD BUTTON -->
+                                <button type="button"
+                                        class="add-cart-btn w-full bg-blue-600 text-white py-2 rounded-lg text-sm hover:bg-blue-700 transition flex items-center justify-center gap-2">
+                                    🛒 Add to Cart
+                                </button>
 
-                            <div class="qty-controller hidden items-center justify-between mt-2 bg-gray-100 rounded">
-                                <button class="minus px-3 py-1">−</button>
-                                <span class="qty">1</span>
-                                <button class="plus px-3 py-1">+</button>
+                                <!-- QTY -->
+                                <div class="qty-controller hidden items-center justify-between mt-2 bg-gray-100 rounded-lg">
+
+                                    <button class="minus px-3 py-2 text-lg hover:bg-gray-200 rounded-l">−</button>
+                                    <span class="qty font-medium">1</span>
+                                    <button class="plus px-3 py-2 text-lg hover:bg-gray-200 rounded-r">+</button>
+
+                                </div>
+
                             </div>
-
-                        </div>
+                        }
+                        else
+                        {
+                            <a asp-controller="Home"
+                               asp-action="Enquiry"
+                               asp-route-productId="@product.Id"
+                               class="block text-center bg-orange-500 text-white py-2 rounded-lg text-sm hover:bg-orange-600 transition flex items-center justify-center gap-2">
+                                📞 Request Quote
+                            </a>
+                        }
 
                     </div>
+
                 </div>
             </div>
-            
         }
 
     </div>
@@ -334,87 +373,8 @@
 
 <script>
 
-    $(document).ready(function () {
 
-        loadCartCount();
-
-        // ✅ ADD TO CART / GRAB DEAL
-        $(document).on("click", ".add-cart-btn", function () {
-
-            var parent = $(this).closest(".cart-area");
-            var productId = parent.data("id");
-            var button = $(this);
-
-            button.prop("disabled", true).text("Adding...");
-
-            $.post("/Cart/AddToCart", { productId: productId })
-                .done(function () {
-                    parent.find(".qty-controller").removeClass("hidden").addClass("flex");
-                    button.hide();
-                    loadCartCount();
-                })
-                .fail(function () {
-                    alert("Failed to add to cart");
-                    button.prop("disabled", false).text("Add to Cart");
-                });
-        });
-
-        // ✅ PLUS
-        $(document).on("click", ".plus", function () {
-
-            var parent = $(this).closest(".cart-area");
-            var qtySpan = parent.find(".qty");
-
-            var qty = parseInt(qtySpan.text()) + 1;
-            qtySpan.text(qty);
-
-            var productId = parent.data("id");
-
-            $.post("/Cart/AddToCart", { productId: productId }, function () {
-                loadCartCount();
-            });
-        });
-
-        // ✅ MINUS
-        $(document).on("click", ".minus", function () {
-
-            var parent = $(this).closest(".cart-area");
-            var qtySpan = parent.find(".qty");
-
-            var qty = parseInt(qtySpan.text());
-            var productId = parent.data("id");
-
-            if (qty > 1) {
-
-                qty--;
-                qtySpan.text(qty);
-
-                $.post("/Cart/DecreaseQuantity", { productId: productId }, function () {
-                    loadCartCount();
-                });
-
-            } else {
-
-                $.post("/Cart/Remove", { productId: productId }, function () {
-
-                    parent.find(".qty-controller").addClass("hidden").removeClass("flex");
-                    parent.find(".add-cart-btn").show();
-
-                    loadCartCount();
-                });
-            }
-        });
-
-    });
-
-    // ✅ CART COUNT
-    function loadCartCount() {
-        $.get("/Cart/GetCartCount", function (data) {
-            $("#cartCount").text(data);
-        });
-    }
-
-    // ✅ FILTER
+    // ================= FILTER =================
     $(document).on("click", ".filter-pill", function () {
 
         $(".filter-pill").removeClass("active-pill");
@@ -430,21 +390,23 @@
         }
     });
 
-    // ✅ CLOSE ALERT
+
+    // ================= CLOSE ALERT =================
     function closePaymentBox(){
         $("#paymentSuccessBox").fadeOut();
     }
 
-    // ✅ SWIPER
+
+    // ================= SWIPER =================
     var swiper = new Swiper(".mySwiper", {
         loop: true,
         autoplay: { delay: 3000 },
         pagination: { el: ".swiper-pagination", clickable: true }
     });
 
-    
 
-                    setInterval(() => {
+    // ================= COUNTDOWN =================
+    setInterval(() => {
         document.querySelectorAll(".countdown").forEach(el => {
 
             const endDate = el.dataset.date;
@@ -475,5 +437,6 @@
             el.innerText = `${h}h ${m}m ${s}s`;
         });
     }, 1000);
+
 
 </script>

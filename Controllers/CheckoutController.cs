@@ -25,7 +25,13 @@ public class CheckoutController : Controller
 
     public async Task<IActionResult> Index()
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userId = _userContext.GetUserId();
+
+        if (string.IsNullOrEmpty(userId))
+        {
+            return RedirectToAction("LoginWithOtp", "Account", new { returnUrl = "/Checkout" });
+        }
+
         var cartItems = await _context.Carts
             .Include(c => c.Product)
             .Where(c => c.UserId == userId)
@@ -121,7 +127,10 @@ public class CheckoutController : Controller
                 OrderId = order.OrderId,
                 ProductId = item.ProductId,
                 Quantity = item.Quantity,
-                Price = item.Product.Price
+                Price = item.Product.IsHotDeal && item.Product.DiscountPercentage > 0
+    ? item.Product.Price - (item.Product.Price * item.Product.DiscountPercentage.Value / 100)
+    : item.Product.Price
+
             };
 
             _context.OrderItems.Add(orderItem);

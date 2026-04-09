@@ -11,6 +11,8 @@ namespace VivekMedicalProducts.Models
 
         public int Quantity { get; set; }
 
+        public string? GuestId { get; set; }
+
         public string? UserId { get; set; }   // Logged in user
 
         public string? SessionId { get; set; }  // Guest user

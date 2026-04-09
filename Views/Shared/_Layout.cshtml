@@ -48,11 +48,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
 
     <!-- ICON LIBRARY -->
     <script src="https://unpkg.com/lucide@latest"></script>
+
 
     <partial name="_ValidationScriptsPartial" />
 
@@ -501,32 +501,7 @@
 
     <!-- 🔥 SCRIPTS -->
 
-    <script>
-
-                       function loadCartCount() {
-            $.get("/Cart/GetCartCount", function (data) {
-
-                const el = $("#cartCount");
-
-                // ✅ Only update if value actually changed
-                if (el.text() != data) {
-                    el.text(data);
-                }
-            });
-        }
-        // Load initially
-        $(document).ready(function () {
-            loadCartCount();
-        });
-
-        // 🔥 AUTO UPDATE AFTER ANY AJAX CALL
-        $(document).ajaxComplete(function (event, xhr, settings) {
-
-            // Only trigger for cart-related APIs (optimization)
-            if (settings.url.includes("/Cart/")) {
-                loadCartCount();
-            }
-        });
+    <script>    
 
         $(document).ready(function () {
 
@@ -548,10 +523,7 @@
 
         });
 
-               
-    </script>
-
-    <script>
+              
         // ✅ Prevent popup after skip (session only)
         document.addEventListener("DOMContentLoaded", function () {
 
@@ -569,6 +541,7 @@
             sessionStorage.setItem("profilePopupClosed", "true");
             document.getElementById("profilePopup")?.remove();
         }
+
     </script>
 
     <script type="application/ld+json">
@@ -645,6 +618,9 @@
            
 
     @await RenderSectionAsync("Scripts", required: false)
+
+    <script src="~/js/cart.js"></script>
+
 
 </body>
 </html>

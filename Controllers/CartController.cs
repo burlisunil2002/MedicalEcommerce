@@ -7,7 +7,6 @@ using VivekMedicalProducts.ViewModels;
 
 namespace VivekMedicalProducts.Controllers
 {
-    [Authorize]
     public class CartController : Controller
     {
         private readonly ApplicationDbContext _context;
@@ -19,41 +18,95 @@ namespace VivekMedicalProducts.Controllers
             _userContext = userContext;
         }
 
-        // ADD TO CART
-        [HttpPost]
-        [IgnoreAntiforgeryToken]
-        public async Task<IActionResult> AddToCart(int productId)
+        // ================= COOKIE =================
+        private string GetOrCreateGuestId()
         {
-            var userId = _userContext.GetUserId();
+            var guestId = Request.Cookies["guest_id"];
 
-            var cartItem = await _context.Carts
-                .FirstOrDefaultAsync(c => c.ProductId == productId && c.UserId == userId);
-
-            if (cartItem != null)
-                cartItem.Quantity++;
-            else
+            if (string.IsNullOrEmpty(guestId))
             {
-                _context.Carts.Add(new CartModel
+                guestId = Guid.NewGuid().ToString();
+
+                var isHttps = HttpContext.Request.IsHttps;
+
+                Response.Cookies.Append("guest_id", guestId, new CookieOptions
                 {
-                    ProductId = productId,
-                    UserId = userId,
-                    Quantity = 1
+                    HttpOnly = true,
+                    Secure = isHttps,
+                    SameSite = SameSiteMode.Lax,
+                    Path = "/",
+                    IsEssential = true,
+                    Expires = DateTime.UtcNow.AddDays(7)
                 });
             }
 
-            await _context.SaveChangesAsync();
-
-            return Ok(); // ✅ IMPORTANT for AJAX
+            return guestId;
         }
 
-        // CART PAGE
+        private string GetGuestId()
+        {
+            return Request.Cookies["guest_id"];
+        }
+
+        // ================= ADD TO CART =================
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddToCart(int productId)
+        {
+            try
+            {
+                var userId = _userContext.GetUserId();
+                string guestId = null;
+
+                if (string.IsNullOrEmpty(userId))
+                {
+                    guestId = GetOrCreateGuestId();
+                }
+
+                var cartItem = await _context.Carts.FirstOrDefaultAsync(c =>
+                    c.ProductId == productId &&
+                    (
+                        (!string.IsNullOrEmpty(userId) && c.UserId == userId) ||
+                        (string.IsNullOrEmpty(userId) && c.GuestId == guestId)
+                    )
+                );
+
+                if (cartItem != null)
+                {
+                    cartItem.Quantity++;
+                }
+                else
+                {
+                    _context.Carts.Add(new CartModel
+                    {
+                        ProductId = productId,
+                        UserId = string.IsNullOrEmpty(userId) ? null : userId,
+                        GuestId = string.IsNullOrEmpty(userId) ? guestId : null,
+                        Quantity = 1
+                    });
+                }
+
+                await _context.SaveChangesAsync();
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("ERROR: " + ex.Message);
+                return BadRequest(ex.Message);
+            }
+        }
+
+        // ================= CART PAGE =================
         public async Task<IActionResult> Index()
         {
             var userId = _userContext.GetUserId();
+            var guestId = GetGuestId();
 
             var carts = await _context.Carts
                 .Include(c => c.Product)
-                .Where(c => c.UserId == userId)
+                .Where(c =>
+                    (!string.IsNullOrEmpty(userId) && c.UserId == userId) ||
+                    (string.IsNullOrEmpty(userId) && c.GuestId == guestId))
                 .ToListAsync();
 
             decimal subtotal = 0, gst = 0;
@@ -61,8 +114,9 @@ namespace VivekMedicalProducts.Controllers
             foreach (var item in carts)
             {
                 decimal price = item.Product.IsHotDeal && item.Product.DiscountPercentage > 0
-            ? item.Product.Price - (item.Product.Price * item.Product.DiscountPercentage.Value / 100)
-            : item.Product.Price;
+                    ? item.Product.Price - (item.Product.Price * item.Product.DiscountPercentage.Value / 100)
+                    : item.Product.Price;
+
                 decimal gstPercent = item.Product?.GSTPercentage ?? 0;
 
                 subtotal += price * item.Quantity;
@@ -78,117 +132,133 @@ namespace VivekMedicalProducts.Controllers
             });
         }
 
-        // UPDATE QUANTITY
+        // ================= UPDATE QUANTITY =================
         [HttpPost]
         public async Task<IActionResult> UpdateQuantity(int cartId, int quantity)
         {
-            var userId = _userContext.GetUserId();
-
-            var cartItem = await _context.CartItems
-                .FirstOrDefaultAsync(x => x.Id == cartId && x.UserId == userId);
+            var cartItem = await _context.Carts.FirstOrDefaultAsync(x => x.Id == cartId);
 
             if (cartItem == null)
                 return Json(new { success = false });
 
             if (quantity <= 0)
-            {
-                _context.CartItems.Remove(cartItem);
-            }
+                _context.Carts.Remove(cartItem);
             else
-            {
-                cartItem.Quantity = quantity; // ✅ exact sync
-            }
+                cartItem.Quantity = quantity;
 
             await _context.SaveChangesAsync();
 
-            var totalCount = await _context.CartItems
-                .Where(x => x.UserId == userId)
+            var userId = _userContext.GetUserId();
+            var guestId = GetGuestId();
+
+            var totalCount = await _context.Carts
+                .Where(x =>
+                    (!string.IsNullOrEmpty(userId) && x.UserId == userId) ||
+                    (string.IsNullOrEmpty(userId) && x.GuestId == guestId))
                 .SumAsync(x => (int?)x.Quantity) ?? 0;
 
-            return Json(new
-            {
-                success = true,
-                quantity = quantity,
-                cartCount = totalCount
-            });
+            return Json(new { success = true, quantity, cartCount = totalCount });
         }
 
+        // ================= DECREASE =================
         [HttpPost]
         public async Task<IActionResult> DecreaseQuantity(int productId)
         {
             var userId = _userContext.GetUserId();
+            var guestId = GetGuestId();
 
-            if (string.IsNullOrEmpty(userId))
-                return Unauthorized();
-
-            var cartItem = await _context.CartItems
-                .FirstOrDefaultAsync(x => x.ProductId == productId && x.UserId == userId);
+            var cartItem = await _context.Carts.FirstOrDefaultAsync(x =>
+                x.ProductId == productId &&
+                (
+                    (!string.IsNullOrEmpty(userId) && x.UserId == userId) ||
+                    (string.IsNullOrEmpty(userId) && x.GuestId == guestId)
+                ));
 
             if (cartItem == null)
                 return Json(new { success = false });
 
             if (cartItem.Quantity > 1)
-            {
-                cartItem.Quantity -= 1;
-            }
+                cartItem.Quantity--;
             else
-            {
-                // Remove item completely if quantity = 1
-                _context.CartItems.Remove(cartItem);
-            }
+                _context.Carts.Remove(cartItem);
 
             await _context.SaveChangesAsync();
 
             return Json(new { success = true });
         }
 
-        // REMOVE ITEM
+        // ================= REMOVE =================
         [HttpPost]
-        public async Task<IActionResult> Remove(int id)
+        public async Task<IActionResult> Remove(int productId)
         {
-            try
-            {
-                var item = await _context.Carts.FindAsync(id);
-                if (item != null)
-                {
-                    _context.Carts.Remove(item);
-                    await _context.SaveChangesAsync();
-                }
+            var userId = _userContext.GetUserId();
+            var guestId = GetGuestId();
 
-                return Json(new { success = true });
-            }
-            catch (Exception ex)
+            var item = await _context.Carts.FirstOrDefaultAsync(c =>
+                c.ProductId == productId &&
+                (
+                    (!string.IsNullOrEmpty(userId) && c.UserId == userId) ||
+                    (string.IsNullOrEmpty(userId) && c.GuestId == guestId)
+                ));
+
+            if (item != null)
             {
-                return Json(new { success = false, message = ex.Message });
+                _context.Carts.Remove(item);
+                await _context.SaveChangesAsync();
             }
+
+            return Json(new { success = true });
         }
 
-        // CART COUNT
+        // ================= COUNT =================
+        [AllowAnonymous]
         [HttpGet]
         public IActionResult GetCartCount()
         {
             var userId = _userContext.GetUserId();
+            var guestId = GetGuestId();
 
-            var count = _context.CartItems
-                .Where(x => x.UserId == userId)
+            var count = _context.Carts
+                .Where(x =>
+                    (!string.IsNullOrEmpty(userId) && x.UserId == userId) ||
+                    (string.IsNullOrEmpty(userId) && x.GuestId == guestId))
                 .Sum(x => (int?)x.Quantity) ?? 0;
 
             return Json(count);
         }
 
-        // MERGE CART AFTER LOGIN
-        public void MergeCartAfterLogin(string userId)
+        // ================= GET ITEMS =================
+        [HttpGet]
+        public IActionResult GetCartItems()
         {
-            var sessionId = HttpContext.Session.Id;
+            var userId = _userContext.GetUserId();
+            var guestId = GetGuestId();
 
-            var guestCart = _context.Carts
-                .Where(c => c.SessionId == sessionId)
+            var items = _context.Carts
+                .Where(x =>
+                    (!string.IsNullOrEmpty(userId) && x.UserId == userId) ||
+                    (string.IsNullOrEmpty(userId) && x.GuestId == guestId))
+                .Select(x => new { x.ProductId, x.Quantity })
                 .ToList();
+
+            return Json(items);
+        }
+
+        // MERGE CART AFTER LOGIN
+        public async Task MergeCartAfterLogin(string userId)
+        {
+            var guestId = GetGuestId(); // ✅ replace
+
+            if (string.IsNullOrEmpty(guestId)) return;
+
+            var guestCart = await _context.Carts
+                .Where(c => c.GuestId == guestId)
+                .ToListAsync();
 
             foreach (var item in guestCart)
             {
-                var existing = _context.Carts
-                    .FirstOrDefault(c => c.UserId == userId && c.ProductId == item.ProductId);
+                var existing = await _context.Carts.FirstOrDefaultAsync(c =>
+                    c.UserId == userId && c.ProductId == item.ProductId);
 
                 if (existing != null)
                 {
@@ -198,11 +268,11 @@ namespace VivekMedicalProducts.Controllers
                 else
                 {
                     item.UserId = userId;
-                    item.SessionId = null;
+                    item.GuestId = null;
                 }
             }
 
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
         }
     }
 }
