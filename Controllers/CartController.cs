@@ -34,8 +34,8 @@ namespace VivekMedicalProducts.Controllers
                 Response.Cookies.Append("guest_id", guestId, new CookieOptions
                 {
                     HttpOnly = true,
-                    Secure = true, // 🔥 important for production
-                    SameSite = SameSiteMode.Lax,
+                    Secure = true, // keep this
+                    SameSite = SameSiteMode.None, // 🔥 CHANGE THIS
                     Path = "/",
                     IsEssential = true,
                     Expires = DateTime.UtcNow.AddDays(7)
@@ -49,6 +49,7 @@ namespace VivekMedicalProducts.Controllers
         // ================= APPLY COUPON =================
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Route("Cart/ApplyCoupon")]
         public IActionResult ApplyCoupon(string code)
         {
             if (string.IsNullOrEmpty(code))
@@ -62,6 +63,7 @@ namespace VivekMedicalProducts.Controllers
         // ================= ADD TO CART =================
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Route("Cart/AddToCart")]
         public async Task<IActionResult> AddToCart(int productId)
         {
             try
@@ -166,6 +168,7 @@ namespace VivekMedicalProducts.Controllers
 
         // ================= REMOVE =================
         [HttpPost]
+        [Route("Cart/Remove")]
         public async Task<IActionResult> Remove(int productId)
         {
             var userId = _userContext.GetUserId();

@@ -1,5 +1,5 @@
 ﻿// ================= BASE URL =================
-const BASE = typeof BASE_URL !== "undefined" ? BASE_URL : "/";
+const BASE = window.location.origin + "/";
 
 // ================= TOKEN =================
 function getToken() {
@@ -9,7 +9,7 @@ function getToken() {
 // ================= COMMON AJAX =================
 function postAjax(url, data) {
     return $.ajax({
-        url: BASE + url,
+        url: url, // ✅ already full URL
         type: "POST",
         data: {
             ...data,
@@ -42,7 +42,7 @@ $(document).ready(function () {
 
         btn.prop("disabled", true).text("Adding...");
 
-        postAjax("Cart/AddToCart", { productId })
+        postAjax(BASE + "Cart/AddToCart", { productId })
             .done(function (res) {
 
                 if (!res.success) {
@@ -73,7 +73,7 @@ $(document).ready(function () {
         const qtySpan = parent.find(".qty");
         const productId = parent.data("id");
 
-        postAjax("Cart/UpdateQuantity", { productId, change: 1 })
+        postAjax(BASE + "Cart/UpdateQuantity", { productId, change: 1 })
             .done(function (res) {
 
                 if (!res.success) {
@@ -85,7 +85,7 @@ $(document).ready(function () {
                 loadCartCount();
                 refreshCartSummary();
             })
-            .always(() => btn.data("loading", false));
+            .always(() => btn.data("loading", false)); // ✅ MUST
     });
 
     // ================= MINUS =================
@@ -99,48 +99,29 @@ $(document).ready(function () {
         const qtySpan = parent.find(".qty");
         const productId = parent.data("id");
 
-        let qty = parseInt(qtySpan.text()) || 1;
+        postAjax(BASE + "Cart/UpdateQuantity", { productId, change: -1 })
+            .done(function (res) {
 
-        if (qty > 1) {
+                if (!res.success) {
+                    alert(res.message);
+                    return;
+                }
 
-            postAjax("Cart/UpdateQuantity", { productId, change: -1 })
-                .done(function (res) {
-
-                    if (!res.success) {
-                        alert(res.message);
-                        return;
-                    }
-
-                    if (res.quantity <= 0) {
-                        parent.remove();
-                    } else {
-                        qtySpan.text(res.quantity);
-                    }
-
-                    loadCartCount();
-                    refreshCartSummary();
-                })
-                .always(() => btn.data("loading", false));
-
-        } else {
-
-            postAjax("Cart/Remove", { productId })
-                .done(function (res) {
-
-                    if (!res.success) {
-                        alert("Remove failed");
-                        return;
-                    }
-
+                if (res.quantity <= 0) {
                     parent.remove();
-                    loadCartCount();
-                    refreshCartSummary();
-                })
-                .always(() => btn.data("loading", false));
-        }
+                } else {
+                    qtySpan.text(res.quantity);
+                }
+
+                loadCartCount();
+
+                // ✅ NO TIMEOUT
+                refreshCartSummary();
+            })
+            .always(() => btn.data("loading", false));
     });
 
-    // ================= DELETE =================
+
     $(document).on("click", ".delete-btn", function () {
 
         const parent = $(this).closest(".cart-area");
@@ -148,7 +129,7 @@ $(document).ready(function () {
 
         if (!confirm("Remove item?")) return;
 
-        postAjax("Cart/Remove", { productId })
+        postAjax(BASE + "Cart/Remove", { productId })
             .done(function (res) {
 
                 if (!res.success) {
@@ -156,11 +137,9 @@ $(document).ready(function () {
                     return;
                 }
 
-                parent.fadeOut(200, function () {
-                    $(this).remove();
-                    loadCartCount();
-                    refreshCartSummary();
-                });
+                parent.remove();
+                loadCartCount();
+                refreshCartSummary();
             });
     });
 
@@ -174,7 +153,7 @@ $(document).ready(function () {
             return;
         }
 
-        postAjax("Cart/ApplyCoupon", { code })
+        postAjax(BASE + "Cart/ApplyCoupon", { code })
             .done(function (res) {
 
                 if (!res.success) {
@@ -183,6 +162,8 @@ $(document).ready(function () {
                 }
 
                 $("#couponMsg").text("Coupon applied 🎉").css("color", "green");
+
+                // 🔥 FIX
                 refreshCartSummary();
             });
     });
@@ -191,17 +172,22 @@ $(document).ready(function () {
 
 // ================= SUMMARY =================
 function refreshCartSummary() {
-    $.get(BASE + "Cart/GetCartSummary")
-        .done(function (d) {
 
-            $("#subtotal").text("₹ " + d.subtotal.toFixed(2));
-            $("#gsttotal").text("₹ " + d.gst.toFixed(2));
-            $("#saved").text("₹ " + d.discount.toFixed(2));
-            $("#couponAmount").text("- ₹ " + d.coupon.toFixed(2));
-            $("#delivery").text(d.delivery === 0 ? "FREE" : "₹ " + d.delivery);
-            $("#grandtotal").text("₹ " + d.total.toFixed(2));
+    return $.get(BASE + "Cart/GetCartSummary")
+        .done(function (data) {
+
+            if (!data) return;
+
+            $("#subtotal").text("₹ " + data.subtotal.toFixed(2));
+            $("#gsttotal").text("₹ " + data.gst.toFixed(2));
+            $("#saved").text("₹ " + data.discount.toFixed(2));
+            $("#couponAmount").text("- ₹ " + data.coupon.toFixed(2));
+
+            $("#delivery").text(data.delivery === 0 ? "FREE" : "₹ " + data.delivery);
+            $("#grandtotal").text("₹ " + data.total.toFixed(2));
         });
 }
+
 
 // ================= COUNT =================
 function loadCartCount() {
