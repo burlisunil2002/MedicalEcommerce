@@ -128,8 +128,16 @@
 
             @foreach (var product in hotDeals)
             {
-                var discount = product.DiscountPercentage ?? 0;
-                var finalPrice = product.Price - (product.Price * discount / 100);
+                    var discount = product.DiscountPercentage ?? 0;
+
+                    var isDealActive = product.IsHotDeal
+                    && product.DealEndDate.HasValue
+                    && product.DealEndDate > DateTime.UtcNow
+                    && discount > 0;
+
+                    var finalPrice = isDealActive
+                    ? product.Price - (product.Price * discount / 100)
+                    : product.Price;
 
                 <div class="min-w-[250px] bg-white rounded-xl shadow hover:shadow-xl transition relative">
 
@@ -149,8 +157,15 @@
                         <p class="text-sm font-semibold">@product.Name</p>
 
                         <div class="flex gap-2 mt-1">
-                            <span class="text-green-600 font-bold">₹@finalPrice</span>
-                            <span class="line-through text-gray-400 text-xs">₹@product.Price</span>
+                                @if (isDealActive)
+                                {
+                                    <span class="text-green-600 font-bold">₹@finalPrice</span>
+                                    <span class="line-through text-gray-400 text-xs">₹@product.Price</span>
+                                }
+                                else
+                                {
+                                    <span class="text-blue-600 font-bold">₹@product.Price</span>
+                                }
                         </div>
 
                         <!-- Cart -->
@@ -189,7 +204,15 @@
         {
             var isNormal = product.PriceType?.ToLower() == "normal";
             var discount = product.DiscountPercentage ?? 0;
-            var finalPrice = product.Price - (product.Price * discount / 100);
+
+            var isDealActive = product.IsHotDeal
+            && product.DealEndDate.HasValue
+            && product.DealEndDate > DateTime.UtcNow
+            && discount > 0;
+
+            var finalPrice = isDealActive
+            ? product.Price - (product.Price * discount / 100)
+            : product.Price;
 
             <div class="bg-white rounded-2xl border hover:shadow-2xl transition duration-300 overflow-hidden flex flex-col relative group">
 
@@ -236,7 +259,7 @@
                                     ₹@finalPrice.ToString("N0")
                                 </span>
 
-                                @if (discount > 0)
+                                @if (isDealActive)   // ✅ FIXED
                                 {
                                     <span class="line-through text-gray-400 text-sm ml-2">
                                         ₹@product.Price.ToString("N0")
@@ -395,13 +418,13 @@
 
 
     // ================= COUNTDOWN =================
-       setInterval(() => {
+          setInterval(() => {
         document.querySelectorAll(".countdown").forEach(el => {
 
             const endDate = el.dataset.date;
 
             if (!endDate) {
-                el.innerText = "No Deal";
+                el.innerText = "";
                 return;
             }
 
@@ -409,36 +432,59 @@
             const now = new Date();
 
             if (isNaN(end)) {
-                el.innerText = "Invalid";
+                el.innerText = "";
                 return;
             }
 
             const diff = end - now;
 
-            // 🔥 EXPIRED FIX
+            const card = el.closest(".bg-white");
+
+            // ✅ EXPIRED
             if (diff <= 0) {
+
                 el.innerText = "Expired";
 
-                // ❌ disable button
-                const card = el.closest(".min-w-[250px], .bg-white");
                 if (card) {
+
+                    // 🔥 REMOVE HOT DEAL BADGE
+                    const badge = card.querySelector(".bg-red-500");
+                    if (badge) badge.remove();
+
+                    // 🔥 RESET PRICE UI
+                    const priceContainer = card.querySelector(".flex.gap-2, .mt-2");
+                    if (priceContainer) {
+                        const original = priceContainer.querySelector(".line-through");
+                        if (original) {
+                            const realPrice = original.innerText;
+                            priceContainer.innerHTML =
+                                `<span class="text-blue-600 font-bold">${realPrice}</span>`;
+                        }
+                    }
+
+                    // 🔥 BUTTON CHANGE
                     const btn = card.querySelector(".add-cart-btn");
                     if (btn) {
-                        btn.innerText = "Deal Ended";
-                        btn.disabled = true;
+                        btn.innerText = "View Product";
                         btn.classList.remove("bg-red-500");
-                        btn.classList.add("bg-gray-400");
+                        btn.classList.add("bg-blue-600");
                     }
                 }
 
                 return;
             }
 
-            const h = Math.floor(diff / 3600000);
-            const m = Math.floor((diff % 3600000) / 60000);
-            const s = Math.floor((diff % 60000) / 1000);
+            // ✅ TIME CALCULATION (DAYS + HOURS)
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
 
-            el.innerText = `${h}h ${m}m ${s}s`;
+            if (days > 0) {
+                el.innerText = `${days}d ${hours}h`;
+            } else {
+                const minutes = Math.floor((diff / (1000 * 60)) % 60);
+                el.innerText = `${hours}h ${minutes}m`;
+            }
+
         });
     }, 1000);
 

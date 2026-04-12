@@ -1,5 +1,4 @@
-﻿// ================= BASE URL =================
-const BASE = "/";
+﻿let isProcessing = false;
 
 // ================= TOKEN =================
 function getToken() {
@@ -9,188 +8,262 @@ function getToken() {
 // ================= COMMON AJAX =================
 function postAjax(url, data) {
     return $.ajax({
-        url: url, // ✅ already full URL
+        url: url,
         type: "POST",
         data: {
             ...data,
-            __RequestVerificationToken: getToken()
+            __RequestVerificationToken: getToken() // ✅ send in body
         }
     });
 }
-
-// ================= GLOBAL AUTH =================
-$(document).ajaxError(function (event, xhr) {
-    if (xhr.responseText && xhr.responseText.includes("<!DOCTYPE html>")) {
-        window.location.href = BASE + "Account/Login";
-    }
-});
 
 $(document).ready(function () {
 
     loadCartCount();
     refreshCartSummary();
 
-    // ================= ADD =================
+    // ================= ADD TO CART =================
     $(document).on("click", ".add-cart-btn", function () {
 
-        const btn = $(this);
-        if (btn.data("loading")) return;
-        btn.data("loading", true);
+        if (isProcessing) return;
+        isProcessing = true;
 
-        const parent = btn.closest(".cart-area");
+        const parent = $(this).closest(".cart-area");
         const productId = parent.data("id");
+        const button = $(this);
 
-        btn.prop("disabled", true).text("Adding...");
+        if (!productId) {
+            console.error("ProductId missing");
+            isProcessing = false;
+            return;
+        }
 
-        postAjax("/Cart/AddToCart", { productId })
-            .done(function (res) {
+        button.prop("disabled", true).text("Adding...");
 
-                if (!res.success) {
-                    alert("Add failed");
-                    return;
-                }
+        postAjax("/Cart/AddToCart", { productId: productId })
+            .done(function () {
 
-                parent.find(".qty-controller").removeClass("hidden").addClass("flex");
+                // ✅ UI update AFTER success (no blinking)
+                parent.find(".qty-controller")
+                    .removeClass("hidden")
+                    .addClass("flex");
+
                 parent.find(".qty").text(1);
-                btn.hide();
+                button.hide();
 
                 loadCartCount();
             })
-            .always(() => {
-                btn.data("loading", false);
-                btn.prop("disabled", false).text("Add to Cart");
+            .fail(function (err) {
+                console.error("AddToCart error:", err.responseText);
+                alert("Failed to add item");
+            })
+            .always(function () {
+                isProcessing = false;
+                button.prop("disabled", false).text("Add to Cart");
             });
     });
+
 
     // ================= PLUS =================
     $(document).on("click", ".plus", function () {
 
-        const btn = $(this);
-        if (btn.data("loading")) return;
-        btn.data("loading", true);
+        if (isProcessing) return;
+        isProcessing = true;
 
-        const parent = btn.closest(".cart-area");
+        const parent = $(this).closest(".cart-area");
         const qtySpan = parent.find(".qty");
         const productId = parent.data("id");
 
-        postAjax("/Cart/UpdateQuantity", { productId, change: 1 })
-            .done(function (res) {
+        postAjax("/Cart/UpdateQuantity", {
+            productId: productId,
+            change: 1
+        })
+            .done(function () {
 
-                if (!res.success) {
-                    alert(res.message);
-                    return;
-                }
+                let qty = parseInt(qtySpan.text()) || 0;
+                qtySpan.text(qty + 1);
 
-                qtySpan.text(res.quantity);
                 loadCartCount();
-                refreshCartSummary();
+
+                if (window.location.pathname.includes("Cart")) {
+                    refreshCartSummary();
+                }
             })
-            .always(() => btn.data("loading", false)); // ✅ MUST
+            .fail(function (err) {
+                console.error("Plus error:", err.responseText);
+            })
+            .always(function () {
+                isProcessing = false;
+            });
     });
+
 
     // ================= MINUS =================
     $(document).on("click", ".minus", function () {
 
-        const btn = $(this);
-        if (btn.data("loading")) return;
-        btn.data("loading", true);
+        if (isProcessing) return;
+        isProcessing = true;
 
-        const parent = btn.closest(".cart-area");
+        const parent = $(this).closest(".cart-area");
         const qtySpan = parent.find(".qty");
         const productId = parent.data("id");
 
-        postAjax("/Cart/UpdateQuantity", { productId, change: -1 })
-            .done(function (res) {
+        let qty = parseInt(qtySpan.text()) || 1;
 
-                if (!res.success) {
-                    alert(res.message);
-                    return;
-                }
+        if (qty > 1) {
 
-                if (res.quantity <= 0) {
-                    parent.remove();
-                } else {
-                    qtySpan.text(res.quantity);
-                }
-
-                loadCartCount();
-
-                // ✅ NO TIMEOUT
-                refreshCartSummary();
+            postAjax("/Cart/UpdateQuantity", {
+                productId: productId,
+                change: -1
             })
-            .always(() => btn.data("loading", false));
+                .done(function () {
+
+                    qtySpan.text(qty - 1);
+                    loadCartCount();
+
+                    if (window.location.pathname.includes("Cart")) {
+                        refreshCartSummary();
+                    }
+                })
+                .fail(function (err) {
+                    console.error("Minus error:", err.responseText);
+                })
+                .always(function () {
+                    isProcessing = false;
+                });
+
+        } else {
+
+            // REMOVE when qty = 1
+            postAjax("/Cart/Remove", { productId: productId })
+                .done(function () {
+
+                    parent.find(".qty-controller")
+                        .addClass("hidden")
+                        .removeClass("flex");
+
+                    parent.find(".add-cart-btn").show();
+
+                    loadCartCount();
+
+                    if (window.location.pathname.includes("Cart")) {
+                        refreshCartSummary();
+                    }
+                })
+                .fail(function (err) {
+                    console.error("Remove error:", err.responseText);
+                })
+                .always(function () {
+                    isProcessing = false;
+                });
+        }
     });
 
 
+    // ================= DELETE =================
     $(document).on("click", ".delete-btn", function () {
 
         const parent = $(this).closest(".cart-area");
         const productId = parent.data("id");
 
-        if (!confirm("Remove item?")) return;
+        if (!confirm("Remove this item from cart?")) return;
 
-        postAjax("/Cart/Remove", { productId })
-            .done(function (res) {
+        postAjax("/Cart/Remove", { productId: productId })
+            .done(function () {
 
-                if (!res.success) {
-                    alert("Delete failed");
-                    return;
-                }
+                parent.css({
+                    transform: "scale(0.9)",
+                    opacity: "0",
+                    transition: "0.3s"
+                });
 
-                parent.remove();
-                loadCartCount();
-                refreshCartSummary();
-            });
-    });
+                setTimeout(() => {
+                    parent.remove();
+                    loadCartCount();
+                    refreshCartSummary();
 
-    // ================= COUPON =================
-    $(document).on("click", "#applyCoupon", function () {
-
-        const code = $("#couponSelect").val();
-
-        if (!code) {
-            $("#couponMsg").text("Select offer").css("color", "orange");
-            return;
-        }
-
-        postAjax("/Cart/ApplyCoupon", { code })
-            .done(function (res) {
-
-                if (!res.success) {
-                    $("#couponMsg").text(res.message).css("color", "red");
-                    return;
-                }
-
-                $("#couponMsg").text("Coupon applied 🎉").css("color", "green");
-
-                // 🔥 FIX
-                refreshCartSummary();
+                    if (window.location.pathname.includes("Cart")) {
+                        refreshCartSummary();
+                    }
+                }, 300);
+            })
+            .fail(function () {
+                alert("Failed to remove item");
             });
     });
 
 });
 
-// ================= SUMMARY =================
+// ================= LIVE SUMMARY =================
 function refreshCartSummary() {
 
-    return $.get("/Cart/GetCartSummary")
+    $.get("/Cart/GetCartSummary")
         .done(function (data) {
-
-            if (!data) return;
 
             $("#subtotal").text("₹ " + data.subtotal.toFixed(2));
             $("#gsttotal").text("₹ " + data.gst.toFixed(2));
             $("#saved").text("₹ " + data.discount.toFixed(2));
-            $("#couponAmount").text("- ₹ " + data.coupon.toFixed(2));
 
-            $("#delivery").text(data.delivery === 0 ? "FREE" : "₹ " + data.delivery);
+            $("#couponAmount").text("- ₹ " + data.coupon.toFixed(2)); // 🔥 NEW
+
+            $("#delivery").text(data.delivery === 0 ? "FREE" : "₹ 5");
             $("#grandtotal").text("₹ " + data.total.toFixed(2));
+
+            // delivery animation
+            let remaining = 20 - data.subtotal;
+
+            if (remaining > 0) {
+                $("#deliveryMsg").text(`Add ₹ ${remaining.toFixed(2)} more for FREE delivery`);
+            } else {
+                $("#deliveryMsg").text("🎉 Free delivery unlocked!");
+            }
+
+            let percent = Math.min((data.subtotal / 20) * 100, 100);
+            $("#deliveryBar").css("width", percent + "%");
         });
 }
 
-
-// ================= COUNT =================
+// ================= CART COUNT =================
 function loadCartCount() {
     $.get("/Cart/GetCartCount")
-        .done(c => $("#cartCount").text(c));
+        .done(function (data) {
+            $("#cartCount").text(data);
+        })
+        .fail(function (err) {
+            console.error("Count error:", err.responseText);
+        });
 }
+
+// ================= APPLY COUPON =================
+$(document).on("click", "#applyCoupon", function () {
+
+    const code = $("#couponSelect").val();
+
+    if (!code) {
+        $("#couponMsg").text("Please select an offer").css("color", "orange");
+        return;
+    }
+
+    $.post("/Cart/ApplyCoupon", {
+        code: code,
+        __RequestVerificationToken: getToken()
+    })
+        .done(function (res) {
+
+            if (res.success) {
+
+                $("#couponMsg")
+                    .text("🎉 Coupon applied successfully!")
+                    .removeClass("text-red-500")
+                    .addClass("text-green-600");
+
+                // 🔥 BUTTON COLOR CHANGE
+                $("#applyCoupon")
+                    .removeClass("from-blue-500 to-indigo-600")
+                    .addClass("from-green-500 to-emerald-600");
+
+                // 🔥 REFRESH TOTALS
+                refreshCartSummary();
+            }
+        });
+});

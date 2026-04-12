@@ -182,3 +182,73 @@
         </div>
     }
 </div>
+
+<script>
+
+        document.addEventListener("DOMContentLoaded", function () {
+        updateDeliveryProgress();
+    });
+                   // ================= DELIVERY PROGRESS =================
+function updateDeliveryProgress() {
+
+    let subtotalText = document.getElementById("subtotal")?.innerText || "0";
+    let subtotal = parseFloat(subtotalText.replace(/[₹, ]/g, "")) || 0;
+
+    const freeDeliveryTarget = 20;
+
+    const bar = document.getElementById("deliveryBar");
+    const msg = document.getElementById("deliveryMsg");
+
+    if (!bar || !msg) return;
+
+    let percent = Math.min((subtotal / freeDeliveryTarget) * 100, 100);
+
+    // ✅ Smooth animation
+    bar.style.width = percent + "%";
+
+    // ✅ Dynamic gradient effect
+    if (percent < 50) {
+        bar.className = "bg-red-400 h-2 rounded-full transition-all duration-500";
+    } else if (percent < 90) {
+        bar.className = "bg-yellow-400 h-2 rounded-full transition-all duration-500";
+    } else {
+        bar.className = "bg-green-500 h-2 rounded-full transition-all duration-500";
+    }
+
+    // ✅ Message
+    if (subtotal >= freeDeliveryTarget) {
+        msg.innerText = "🎉 You unlocked FREE delivery!";
+        msg.classList.remove("text-orange-500");
+        msg.classList.add("text-green-600", "font-semibold");
+    } else {
+        let remaining = freeDeliveryTarget - subtotal;
+        msg.innerText = `⚡ Only ₹${remaining} away from FREE delivery`;
+        msg.classList.remove("text-green-600");
+        msg.classList.add("text-orange-500");
+    }
+}
+</script>
+
+<css>
+
+    #deliveryBar {
+    transition: width 0.6s ease-in-out;
+    }
+
+    #deliveryBar::after {
+    content: "";
+    display: block;
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    animation: shine 1.5s infinite;
+    }
+
+    @@keyframes shine {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+    }
+
+</css>
+
+   
