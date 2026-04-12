@@ -48,6 +48,7 @@ namespace VivekMedicalProducts.Controllers
 
         // ================= APPLY COUPON =================
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public IActionResult ApplyCoupon(string code)
         {
             if (string.IsNullOrEmpty(code))
@@ -92,7 +93,7 @@ namespace VivekMedicalProducts.Controllers
 
                 await _context.SaveChangesAsync();
 
-                return Ok("SUCCESS");
+                return Json(new { success = true });
             }
             catch (Exception ex)
             {
@@ -131,6 +132,7 @@ namespace VivekMedicalProducts.Controllers
 
         // ================= UPDATE QTY =================
         [HttpPost]
+        [Route("Cart/UpdateQuantity")]
         public async Task<IActionResult> UpdateQuantity(int productId, int change)
         {
             var userId = _userContext.GetUserId();
