@@ -1,146 +1,176 @@
 ﻿@model VivekMedicalProducts.ViewModels.CheckoutViewModel
 
-<div class="min-h-screen bg-gray-100 py-10 px-4">
+<div class="min-h-screen bg-gradient-to-br from-gray-100 to-gray-200 py-10 px-4">
 
     <div class="max-w-7xl mx-auto">
 
-        <!-- HEADER -->
-        <h1 class="text-3xl font-bold text-gray-800 mb-8 text-center">
-            🧾 Checkout
+        <h1 class="text-3xl font-bold text-center mb-6">
+            🧾 Secure Checkout
         </h1>
+
+        <!-- 🔥 BACK BUTTON -->
+        <a asp-controller="Cart"
+           asp-action="Index"
+           class="inline-flex items-center gap-2 bg-white px-4 py-2 rounded-lg shadow hover:bg-gray-50 transition mb-6">
+            ← Back to Cart
+        </a>
 
         <div class="grid lg:grid-cols-3 gap-8">
 
-            <!-- LEFT: ADDRESS -->
-            <div class="lg:col-span-2 bg-white rounded-2xl shadow-md p-8">
+            <!-- LEFT FORM -->
+            <div class="lg:col-span-2 bg-white rounded-2xl shadow p-8">
 
-                <h2 class="text-xl font-semibold text-gray-700 mb-6 border-b pb-3">
+                <h2 class="text-xl font-semibold mb-6 border-b pb-3">
                     Shipping Details
                 </h2>
 
-                <form method="post" action="/Order/Review" class="space-y-5">
+                <form asp-controller="Review"
+                      asp-action="Review"
+                      method="post"
+                      class="space-y-4">
 
-                    <!-- NAME -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-600 mb-1">
-                            Full Name
-                        </label>
-                        <input asp-for="FullName"
-                               class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
-                               placeholder="Enter your name" required />
-                    </div>
+                    @Html.AntiForgeryToken()
 
-                    <!-- PHONE -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-600 mb-1">
-                            Phone Number
-                        </label>
-                        <input asp-for="PhoneNumber"
-                               class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
-                               placeholder="Enter phone number" required />
-                    </div>
+                    <input asp-for="FullName" placeholder="Full Name"
+                           class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500" />
 
-                    <!-- ADDRESS -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-600 mb-1">
-                            Address
-                        </label>
-                        <textarea asp-for="Address"
-                                  rows="3"
-                                  class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
-                                  placeholder="Enter full address" required></textarea>
-                    </div>
+                    <input asp-for="PhoneNumber" placeholder="Phone Number"
+                           class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500" />
 
-                    <!-- CITY + PIN -->
+                    <textarea asp-for="Address" placeholder="Address"
+                              class="w-full px-4 py-2 border rounded-lg"></textarea>
+
                     <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm text-gray-600 mb-1">City</label>
-                            <input asp-for="City"
-                                   class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
-                                   required />
-                        </div>
+                        <input asp-for="City" placeholder="City"
+                               class="px-4 py-2 border rounded-lg" />
 
-                        <div>
-                            <label class="block text-sm text-gray-600 mb-1">Pincode</label>
-                            <input asp-for="Pincode"
-                                   class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
-                                   required />
-                        </div>
+                        <input asp-for="Pincode" placeholder="Pincode"
+                               class="px-4 py-2 border rounded-lg" />
                     </div>
 
-                    <!-- BUTTON -->
                     <button type="submit"
-                            class="w-full mt-4 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl transition shadow">
+                            class="w-full bg-green-600 text-white py-3 rounded-xl font-semibold hover:scale-105 transition">
                         Continue to Review →
                     </button>
 
                 </form>
+
             </div>
 
-            <!-- RIGHT: SUMMARY -->
-            <div class="bg-white rounded-2xl shadow-md p-6 h-fit sticky top-24">
+            <!-- RIGHT SUMMARY -->
+            <div class="bg-white rounded-3xl shadow-xl p-6 sticky top-20 transition hover:shadow-2xl">
 
-                <h2 class="text-lg font-semibold text-gray-700 mb-5 border-b pb-3">
+                <h2 class="text-xl font-semibold mb-4 border-b pb-3">
                     Order Summary
                 </h2>
 
                 <!-- ITEMS -->
-                <div class="space-y-4 max-h-72 overflow-y-auto pr-2">
+                <div class="space-y-3 max-h-60 overflow-y-auto pr-1">
 
                     @foreach (var item in Model.CartItems)
                     {
-                        <div class="flex justify-between items-center border-b pb-3">
+                        decimal final = item.Product.IsHotDeal && item.Product.DiscountPercentage > 0
+                        ? item.Product.Price - (item.Product.Price * item.Product.DiscountPercentage.Value / 100)
+                        : item.Product.Price;
 
-                            <div>
-                                <p class="font-medium text-gray-800 text-sm">
-                                    @item.Product.Name
-                                </p>
-
-                                <p class="text-xs text-gray-500">
-                                    Qty: @item.Quantity
-                                </p>
-                            </div>
-
-                            <p class="text-green-600 font-semibold text-sm">
-                                ₹ @(item.Product.Price* item.Quantity)
-                            </p>
-
+                        <div class="flex justify-between text-sm bg-gray-50 p-2 rounded-lg">
+                            <span class="truncate">@item.Product.Name (x@(item.Quantity))</span>
+                            <span class="font-semibold">₹ @(final* item.Quantity)</span>
                         </div>
                     }
-
                 </div>
 
-                <!-- PRICE DETAILS -->
-                <div class="mt-6 space-y-3 text-sm">
+                <!-- TOTALS -->
+                <div class="space-y-3 mt-5 text-sm">
 
-                    <div class="flex justify-between text-gray-600">
+                    <div class="flex justify-between">
                         <span>Subtotal</span>
-                        <span>₹ @Model.SubTotal.ToString("0.00")</span>
+                        <span id="subtotal">₹ 0</span>
                     </div>
 
-                    <div class="flex justify-between text-gray-600">
+                    <div class="flex justify-between">
                         <span>GST</span>
-                        <span>₹ @Model.GST.ToString("0.00")</span>
+                        <span id="gst">₹ 0</span>
+                    </div>
+
+                    <div class="flex justify-between text-green-600 font-medium">
+                        <span>You Saved</span>
+                        <span id="saved">₹ 0</span>
+                    </div>
+
+                    <div class="flex justify-between text-red-500">
+                        <span>Coupon</span>
+                        <span id="couponAmount">₹ 0</span>
+                    </div>
+
+                    <div class="flex justify-between">
+                        <span>Delivery</span>
+                        <span id="delivery">₹ 0</span>
+                    </div>
+
+                    <!-- 🚚 DELIVERY BAR -->
+                    <div>
+                        <p id="deliveryMsg" class="text-xs text-orange-500 mb-1"></p>
+
+                        <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                            <div id="deliveryBar"
+                                 class="bg-gradient-to-r from-green-400 to-green-600 h-2 rounded-full transition-all duration-700 ease-out">
+                            </div>
+                        </div>
                     </div>
 
                     <hr>
 
-                    <div class="flex justify-between text-lg font-bold text-green-600">
+                    <div class="flex justify-between text-xl font-bold text-green-600">
                         <span>Total</span>
-                        <span>₹ @Model.GrandTotal.ToString("0.00")</span>
+                        <span id="total">₹ 0</span>
                     </div>
 
                 </div>
-
-                <!-- SECURITY NOTE -->
-                <p class="text-xs text-gray-400 mt-4 text-center">
-                    🔒 Secure checkout powered by Razorpay
-                </p>
 
             </div>
 
         </div>
 
     </div>
-
 </div>
+
+<script>
+    function refreshCheckout() {
+
+        fetch('/Cart/GetCartSummary')
+            .then(res => res.json())
+            .then(data => {
+
+                document.getElementById("subtotal").innerText = "₹ " + data.subtotal.toFixed(2);
+                document.getElementById("gst").innerText = "₹ " + data.gst.toFixed(2);
+                document.getElementById("saved").innerText = "₹ " + data.discount.toFixed(2);
+
+                document.getElementById("couponAmount").innerText =
+                    "- ₹ " + data.coupon.toFixed(2); // 🔥 FIX
+
+                document.getElementById("delivery").innerText =
+                    data.delivery === 0 ? "FREE" : "₹ 5";
+
+                document.getElementById("total").innerText =
+                    "₹ " + data.total.toFixed(2);
+
+                // 🎯 DELIVERY BAR
+                let remaining = 20 - data.subtotal;
+
+                if (remaining > 0) {
+                    document.getElementById("deliveryMsg").innerText =
+                        `Add ₹ ${remaining.toFixed(2)} more for FREE delivery`;
+                } else {
+                    document.getElementById("deliveryMsg").innerText =
+                        "🎉 Free delivery unlocked!";
+                }
+
+                let percent = Math.min((data.subtotal / 20) * 100, 100);
+                document.getElementById("deliveryBar").style.width = percent + "%";
+            });
+    }
+
+    // 🔥 AUTO SYNC
+    setInterval(refreshCheckout, 1500);
+</script>

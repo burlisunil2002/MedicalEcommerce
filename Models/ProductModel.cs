@@ -15,8 +15,6 @@ namespace VivekMedicalProducts.Models
 
         [Required(ErrorMessage = "Please select price type")]
         public string PriceType { get; set; }
-
-        // 🔥 CLOUDINARY URLS (NOT PATHS)
         public string? ImageUrl { get; set; } = string.Empty;
         public string? QuotationUrl { get; set; }
 

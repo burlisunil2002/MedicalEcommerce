@@ -11,7 +11,8 @@ namespace VivekMedicalProducts.Models
         [Key]
         public int OrderId { get; set; }
 
-        [Required]
+        public string? GuestId { get; set; }
+
         public string UserId { get; set; } = string.Empty;
 
         // 🔢 Order Identity

@@ -1,0 +1,304 @@
+﻿@{
+    var carts = ViewBag.Carts;
+    var address = ViewBag.Address;
+}
+
+<div class="max-w-5xl mx-auto py-10 px-4">
+
+    <h1 class="text-3xl font-bold mb-6">Checkout</h1>
+
+    <!-- 📦 ADDRESS -->
+    <div class="border rounded-xl p-5 mb-6 bg-white shadow-sm">
+        <h2 class="font-semibold mb-2">Delivery Address</h2>
+
+        <p class="font-medium">@address.FullName</p>
+        <p>@address.PhoneNumber</p>
+        <p>@address.Address</p>
+        <p>@address.City - @address.Pincode</p>
+    </div>
+
+    <!-- 🧾 ORDER SUMMARY -->
+    <div class="border rounded-xl p-5 mb-6 bg-white shadow-sm">
+
+        <h2 class="font-semibold mb-4">Order Summary</h2>
+
+        @foreach (var item in carts)
+        {
+            var discount = item.Product.DiscountPercentage ?? 0;
+
+            decimal final = item.Product.IsHotDeal && discount > 0
+            ? item.Product.Price - (item.Product.Price * discount / 100)
+            : item.Product.Price;
+
+            <div class="flex justify-between mb-2">
+                <span>@item.Product.Name (x@(item.Quantity))</span>
+                <span>₹ @(final* item.Quantity)</span>
+            </div>
+        }
+
+        <hr class="my-3" />
+
+        <div class="flex justify-between">
+            <span>Subtotal</span>
+            <span>₹ @ViewBag.Subtotal</span>
+        </div>
+
+        <div class="flex justify-between">
+            <span>GST</span>
+            <span>₹ @ViewBag.GST</span>
+        </div>
+
+        <div class="flex justify-between text-green-600">
+            <span>You Saved</span>
+            <span>₹ @ViewBag.Discount</span>
+        </div>
+
+        <!-- 🎟️ COUPON -->
+        <div class="flex justify-between text-red-500">
+            <span>Coupon</span>
+            <span>- ₹ @(ViewBag.CouponDiscount ?? 0)</span>
+        </div>
+
+        <div class="flex justify-between">
+            <span>Delivery Charges</span>
+            <span>@(ViewBag.Delivery == 0 ? "FREE" : "₹ 5")</span>
+        </div>
+
+        <hr class="my-3" />
+
+        <div class="flex justify-between text-xl font-bold">
+            <span>Total Amount</span>
+            <span>₹ @ViewBag.Total</span>
+        </div>
+
+    </div>
+
+    <!-- 💳 PAYMENT METHOD -->
+    <div class="border rounded-xl p-5 mb-6 bg-white shadow-sm">
+
+        <h2 class="font-semibold mb-4">Select Payment Method</h2>
+
+        <div class="space-y-4">
+
+            <!-- COD -->
+            <label class="flex items-start gap-3 border p-3 rounded-lg cursor-pointer hover:bg-gray-50">
+                <input type="radio" name="paymentMethod" value="COD" />
+                <div>
+                    <p class="font-medium">Cash on Delivery (COD)</p>
+                    <p class="text-sm text-gray-500">Pay when your order arrives</p>
+                </div>
+            </label>
+
+            <!-- ONLINE -->
+            <label class="flex items-start gap-3 border p-3 rounded-lg cursor-pointer hover:bg-gray-50">
+                <input type="radio" name="paymentMethod" value="ONLINE" checked />
+                <div>
+                    <p class="font-medium">Online Payment</p>
+
+                    <div class="flex gap-3 mt-2 text-sm text-gray-600">
+                        <span class="bg-gray-100 px-3 py-1 rounded">UPI</span>
+                        <span class="bg-gray-100 px-3 py-1 rounded">Card</span>
+                        <span class="bg-gray-100 px-3 py-1 rounded">Net Banking</span>
+                    </div>
+                </div>
+            </label>
+
+        </div>
+
+    </div>
+
+    <div id="loader" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+        <div class="bg-white px-6 py-4 rounded-lg shadow">
+            Processing...
+        </div>
+    </div>
+
+    <!-- 🚀 PLACE ORDER -->
+    <button id="placeOrderBtn"
+            class="w-full bg-blue-600 text-white py-3 rounded-lg text-lg font-semibold hover:bg-blue-700 transition">
+        Place Order
+    </button>
+
+</div>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+    document.getElementById("placeOrderBtn").onclick = async function () {
+
+        const isLoggedIn = '@User.Identity.IsAuthenticated'.toLowerCase() === 'true';
+
+        if (!isLoggedIn) {
+            await Swal.fire("Login Required", "Please login to place order", "warning");
+            window.location.href = "/Account/Login?returnUrl=/Review";
+            return;
+        }
+
+        const method = document.querySelector('input[name="paymentMethod"]:checked').value;
+        const loader = document.getElementById('loader');
+
+        try {
+            loader.classList.remove('hidden');
+
+            // ================= COD =================
+            if (method === "COD") {
+
+                const res = await fetch('/Order/PlaceCOD', {
+                    method: 'POST'
+                });
+
+                const result = await res.json();
+                loader.classList.add('hidden');
+
+                if (result.success) {
+
+                    await Swal.fire({
+                        title: "Order Placed 🎉",
+                        text: "Your order has been placed successfully!",
+                        icon: "success",
+                        confirmButtonText: "View Orders"
+                    });
+
+                    window.location.href = result.redirect;
+                } else {
+
+                    Swal.fire("Failed", "COD order failed. Try again.", "error");
+                }
+
+                return;
+            }
+
+            // ================= ONLINE =================
+
+            const orderData = {
+                FullName: "@address?.FullName",
+                PhoneNumber: "@address?.PhoneNumber",
+                Address: "@address?.Address",
+                City: "@address?.City",
+                Pincode: "@address?.Pincode"
+            };
+
+            const createRes = await fetch('/Order/CreateOrder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(orderData)
+            });
+
+            const data = await createRes.json();
+
+            if (!data.success) {
+                loader.classList.add('hidden');
+                Swal.fire("Error", data.message, "error");
+                return;
+            }
+
+            loader.classList.add('hidden');
+
+            const options = {
+                key: "@ViewBag.RazorpayKey",
+                amount: data.amount,
+                currency: "INR",
+                name: "Vivek Medical Products",
+                order_id: data.razorpayOrderId,
+
+                handler: async function (response) {
+
+                    loader.classList.remove('hidden');
+
+                    const verifyRes = await fetch('/Order/VerifyPayment', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            orderId: data.orderId,
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature
+                        })
+                    });
+
+                    const result = await verifyRes.json();
+                    loader.classList.add('hidden');
+
+                    if (result.success) {
+
+                        await Swal.fire({
+                            title: "Payment Successful 🎉",
+                            text: "Your order has been placed successfully!",
+                            icon: "success",
+                            confirmButtonText: "View Orders"
+                        });
+
+                        window.location.href = result.redirect;
+                        return;
+                    }
+
+                    // 🔁 FALLBACK POLLING
+                    startPolling(data.orderId);
+                }
+            };
+
+            const rzp = new Razorpay(options);
+
+            // ❌ PAYMENT FAILED
+            rzp.on('payment.failed', async function () {
+
+                loader.classList.add('hidden');
+
+                await fetch('/Order/PaymentFailed', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data.orderId)
+                });
+
+                Swal.fire("Payment Failed ❌", "Please try again", "error");
+            });
+
+            rzp.open();
+
+            // 🔁 POLLING
+            function startPolling(orderId) {
+
+                let attempts = 0;
+
+                const interval = setInterval(async () => {
+
+                    attempts++;
+
+                    const res = await fetch('/Order/CheckPaymentStatus?orderId=' + orderId);
+                    const result = await res.json();
+
+                    if (result.success) {
+
+                        clearInterval(interval);
+
+                        Swal.fire({
+                            title: "Payment Confirmed 🎉",
+                            text: "Redirecting to your orders...",
+                            icon: "success",
+                            timer: 1500,
+                            showConfirmButton: false
+                        });
+
+                        window.location.href = "/Order/MyOrders";
+                        return;
+                    }
+
+                    if (attempts >= 10) {
+
+                        clearInterval(interval);
+
+                        Swal.fire("Delayed", "Check your orders page", "info");
+                        window.location.href = "/Order/MyOrders";
+                    }
+
+                }, 3000);
+            }
+
+        } catch (error) {
+
+            loader.classList.add('hidden');
+            Swal.fire("Error", error.message, "error");
+        }
+    };
+</script>

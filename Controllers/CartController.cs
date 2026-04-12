@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VivekMedicalProducts.Data;
 using VivekMedicalProducts.Models;
+using VivekMedicalProducts.Services;
 using VivekMedicalProducts.ViewModels;
 
 namespace VivekMedicalProducts.Controllers
@@ -11,11 +12,15 @@ namespace VivekMedicalProducts.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly IUserContextService _userContext;
+        private readonly ICartCalculationService _calc;
 
-        public CartController(ApplicationDbContext context, IUserContextService userContext)
+        public CartController(ApplicationDbContext context,
+                              IUserContextService userContext,
+                              ICartCalculationService calc)
         {
             _context = context;
             _userContext = userContext;
+            _calc = calc;
         }
 
         // ================= COOKIE =================
@@ -27,12 +32,10 @@ namespace VivekMedicalProducts.Controllers
             {
                 guestId = Guid.NewGuid().ToString();
 
-                var isHttps = HttpContext.Request.IsHttps;
-
                 Response.Cookies.Append("guest_id", guestId, new CookieOptions
                 {
                     HttpOnly = true,
-                    Secure = isHttps,
+                    Secure = Request.IsHttps,
                     SameSite = SameSiteMode.Lax,
                     Path = "/",
                     IsEssential = true,
@@ -48,6 +51,18 @@ namespace VivekMedicalProducts.Controllers
             return Request.Cookies["guest_id"];
         }
 
+        // ================= APPLY COUPON =================
+        [HttpPost]
+        public IActionResult ApplyCoupon(string code)
+        {
+            if (string.IsNullOrEmpty(code))
+                return Json(new { success = false, message = "Select a coupon" });
+
+            HttpContext.Session.SetString("CouponCode", code);
+
+            return Json(new { success = true, message = "Coupon applied!" });
+        }
+
         // ================= ADD TO CART =================
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -55,21 +70,15 @@ namespace VivekMedicalProducts.Controllers
         {
             try
             {
-                var userId = _userContext.GetUserId();
-                string guestId = null;
+                Console.WriteLine("ProductId: " + productId);
 
-                if (string.IsNullOrEmpty(userId))
-                {
-                    guestId = GetOrCreateGuestId();
-                }
+                var userId = _userContext.GetUserId();
+                var guestId = string.IsNullOrEmpty(userId) ? GetOrCreateGuestId() : null;
 
                 var cartItem = await _context.Carts.FirstOrDefaultAsync(c =>
                     c.ProductId == productId &&
-                    (
-                        (!string.IsNullOrEmpty(userId) && c.UserId == userId) ||
-                        (string.IsNullOrEmpty(userId) && c.GuestId == guestId)
-                    )
-                );
+                    ((userId != null && c.UserId == userId) ||
+                     (userId == null && c.GuestId == guestId)));
 
                 if (cartItem != null)
                 {
@@ -80,19 +89,20 @@ namespace VivekMedicalProducts.Controllers
                     _context.Carts.Add(new CartModel
                     {
                         ProductId = productId,
-                        UserId = string.IsNullOrEmpty(userId) ? null : userId,
-                        GuestId = string.IsNullOrEmpty(userId) ? guestId : null,
+                        UserId = userId,
+                        GuestId = guestId,
                         Quantity = 1
                     });
                 }
 
                 await _context.SaveChangesAsync();
-                return Ok();
+
+                return Ok("SUCCESS");
             }
             catch (Exception ex)
             {
                 Console.WriteLine("ERROR: " + ex.Message);
-                return BadRequest(ex.Message);
+                return BadRequest(ex.Message); // 👈 YOU WILL SEE ERROR
             }
         }
 
@@ -100,86 +110,48 @@ namespace VivekMedicalProducts.Controllers
         public async Task<IActionResult> Index()
         {
             var userId = _userContext.GetUserId();
-            var guestId = GetGuestId();
+            var guestId = string.IsNullOrEmpty(userId) ? GetOrCreateGuestId() : null;
+            var coupon = HttpContext.Session.GetString("CouponCode");
 
             var carts = await _context.Carts
                 .Include(c => c.Product)
                 .Where(c =>
-                    (!string.IsNullOrEmpty(userId) && c.UserId == userId) ||
-                    (string.IsNullOrEmpty(userId) && c.GuestId == guestId))
+                    (userId != null && c.UserId == userId) ||
+                    (userId == null && c.GuestId == guestId))
                 .ToListAsync();
 
-            decimal subtotal = 0, gst = 0;
-
-            foreach (var item in carts)
-            {
-                decimal price = item.Product.IsHotDeal && item.Product.DiscountPercentage > 0
-                    ? item.Product.Price - (item.Product.Price * item.Product.DiscountPercentage.Value / 100)
-                    : item.Product.Price;
-
-                decimal gstPercent = item.Product?.GSTPercentage ?? 0;
-
-                subtotal += price * item.Quantity;
-                gst += (price * item.Quantity) * (gstPercent / 100);
-            }
+            // 🔥 CENTRAL CALCULATION
+            var totals = await _calc.CalculateAsync(userId, guestId, coupon);
 
             return View(new CartItemViewModel
             {
                 CartItems = carts,
-                SubTotal = subtotal,
-                GSTTotal = gst,
-                GrandTotal = subtotal + gst
+                SubTotal = totals.Subtotal,
+                GSTTotal = totals.GST,
+                Discount = totals.Discount,
+                Delivery = totals.Delivery,
+                GrandTotal = totals.GrandTotal
             });
         }
 
-        // ================= UPDATE QUANTITY =================
+        // ================= UPDATE QTY =================
         [HttpPost]
-        public async Task<IActionResult> UpdateQuantity(int cartId, int quantity)
+        public async Task<IActionResult> UpdateQuantity(int productId, int change)
         {
-            var cartItem = await _context.Carts.FirstOrDefaultAsync(x => x.Id == cartId);
+            var userId = _userContext.GetUserId();
+            var guestId = string.IsNullOrEmpty(userId) ? GetOrCreateGuestId() : null;
+
+            var cartItem = await _context.Carts.FirstOrDefaultAsync(c =>
+                c.ProductId == productId &&
+                ((userId != null && c.UserId == userId) ||
+                 (userId == null && c.GuestId == guestId)));
 
             if (cartItem == null)
                 return Json(new { success = false });
 
-            if (quantity <= 0)
-                _context.Carts.Remove(cartItem);
-            else
-                cartItem.Quantity = quantity;
+            cartItem.Quantity += change;
 
-            await _context.SaveChangesAsync();
-
-            var userId = _userContext.GetUserId();
-            var guestId = GetGuestId();
-
-            var totalCount = await _context.Carts
-                .Where(x =>
-                    (!string.IsNullOrEmpty(userId) && x.UserId == userId) ||
-                    (string.IsNullOrEmpty(userId) && x.GuestId == guestId))
-                .SumAsync(x => (int?)x.Quantity) ?? 0;
-
-            return Json(new { success = true, quantity, cartCount = totalCount });
-        }
-
-        // ================= DECREASE =================
-        [HttpPost]
-        public async Task<IActionResult> DecreaseQuantity(int productId)
-        {
-            var userId = _userContext.GetUserId();
-            var guestId = GetGuestId();
-
-            var cartItem = await _context.Carts.FirstOrDefaultAsync(x =>
-                x.ProductId == productId &&
-                (
-                    (!string.IsNullOrEmpty(userId) && x.UserId == userId) ||
-                    (string.IsNullOrEmpty(userId) && x.GuestId == guestId)
-                ));
-
-            if (cartItem == null)
-                return Json(new { success = false });
-
-            if (cartItem.Quantity > 1)
-                cartItem.Quantity--;
-            else
+            if (cartItem.Quantity <= 0)
                 _context.Carts.Remove(cartItem);
 
             await _context.SaveChangesAsync();
@@ -192,14 +164,12 @@ namespace VivekMedicalProducts.Controllers
         public async Task<IActionResult> Remove(int productId)
         {
             var userId = _userContext.GetUserId();
-            var guestId = GetGuestId();
+            var guestId = string.IsNullOrEmpty(userId) ? GetOrCreateGuestId() : null;
 
             var item = await _context.Carts.FirstOrDefaultAsync(c =>
                 c.ProductId == productId &&
-                (
-                    (!string.IsNullOrEmpty(userId) && c.UserId == userId) ||
-                    (string.IsNullOrEmpty(userId) && c.GuestId == guestId)
-                ));
+                ((userId != null && c.UserId == userId) ||
+                 (userId == null && c.GuestId == guestId)));
 
             if (item != null)
             {
@@ -212,44 +182,59 @@ namespace VivekMedicalProducts.Controllers
 
         // ================= COUNT =================
         [AllowAnonymous]
-        [HttpGet]
         public IActionResult GetCartCount()
         {
             var userId = _userContext.GetUserId();
             var guestId = GetGuestId();
 
             var count = _context.Carts
-                .Where(x =>
-                    (!string.IsNullOrEmpty(userId) && x.UserId == userId) ||
-                    (string.IsNullOrEmpty(userId) && x.GuestId == guestId))
-                .Sum(x => (int?)x.Quantity) ?? 0;
+                .Where(c =>
+                    (userId != null && c.UserId == userId) ||
+                    (userId == null && c.GuestId == guestId))
+                .Sum(c => (int?)c.Quantity) ?? 0;
 
             return Json(count);
         }
 
-        // ================= GET ITEMS =================
         [HttpGet]
-        public IActionResult GetCartItems()
+        public async Task<IActionResult> GetCartSummary()
         {
             var userId = _userContext.GetUserId();
-            var guestId = GetGuestId();
+            var guestId = string.IsNullOrEmpty(userId) ? Request.Cookies["guest_id"] : null;
+            var coupon = HttpContext.Session.GetString("CouponCode");
 
-            var items = _context.Carts
-                .Where(x =>
-                    (!string.IsNullOrEmpty(userId) && x.UserId == userId) ||
-                    (string.IsNullOrEmpty(userId) && x.GuestId == guestId))
-                .Select(x => new { x.ProductId, x.Quantity })
-                .ToList();
+            var totals = await _calc.CalculateAsync(userId, guestId, coupon);
 
-            return Json(items);
+            decimal couponDiscount = 0;
+
+            if (!string.IsNullOrEmpty(coupon))
+            {
+                if (coupon == "SAVE10")
+                    couponDiscount = totals.Subtotal * 0.10m;
+                else if (coupon == "SAVE20")
+                    couponDiscount = totals.Subtotal * 0.20m;
+                else if (coupon == "FLAT100")
+                    couponDiscount = 100;
+            }
+
+            return Json(new
+            {
+                subtotal = totals.Subtotal,
+                gst = totals.GST,
+                discount = totals.Discount,
+                coupon = couponDiscount, // 🔥 NEW
+                delivery = totals.Delivery,
+                total = totals.GrandTotal
+            });
         }
 
-        // MERGE CART AFTER LOGIN
+        // ================= MERGE AFTER LOGIN =================
         public async Task MergeCartAfterLogin(string userId)
         {
-            var guestId = GetGuestId(); // ✅ replace
+            var guestId = GetGuestId(); // ✅ FIXED
 
-            if (string.IsNullOrEmpty(guestId)) return;
+            if (string.IsNullOrEmpty(guestId))
+                return;
 
             var guestCart = await _context.Carts
                 .Where(c => c.GuestId == guestId)
@@ -273,6 +258,8 @@ namespace VivekMedicalProducts.Controllers
             }
 
             await _context.SaveChangesAsync();
+
+            Response.Cookies.Delete("guest_id"); // 🔥 important
         }
     }
 }

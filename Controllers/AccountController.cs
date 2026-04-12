@@ -370,28 +370,6 @@ public class AccountController : Controller
 
     // ================= MERGE CART =================
 
-    private async Task MergeCartAfterLogin(string userId)
-    {
-        var sessionId = HttpContext.Session.Id;
-
-        var guestCart = _context.CartItems
-            .Where(c => c.SessionId == sessionId)
-            .ToList();
-
-        foreach (var item in guestCart)
-        {
-            var existing = _context.CartItems
-                .FirstOrDefault(c => c.UserId == userId && c.ProductId == item.ProductId);
-
-            if (existing != null)
-                existing.Quantity += item.Quantity;
-            else
-                item.UserId = userId;
-        }
-
-        await _context.SaveChangesAsync();
-    }
-
     public IActionResult Profile()
     {
         string userId = _userContext.GetUserId(); // ✅ FIX
@@ -471,5 +449,39 @@ public class AccountController : Controller
         await _signInManager.SignInAsync(user, isPersistent: true);
 
         return RedirectToAction("AdminHome", "Admin");
+    }
+
+    private async Task MergeCartAfterLogin(string userId)
+    {
+        var guestId = Request.Cookies["guest_id"];
+
+        if (string.IsNullOrEmpty(guestId))
+            return;
+
+        var guestCart = await _context.Carts
+            .Where(c => c.GuestId == guestId)
+            .ToListAsync();
+
+        foreach (var item in guestCart)
+        {
+            var existing = await _context.Carts.FirstOrDefaultAsync(c =>
+                c.UserId == userId && c.ProductId == item.ProductId);
+
+            if (existing != null)
+            {
+                existing.Quantity += item.Quantity;
+            }
+            else
+            {
+                item.UserId = userId;
+                item.GuestId = null;
+            }
+        }
+
+        _context.Carts.RemoveRange(_context.Carts.Where(c => c.GuestId == guestId));
+
+        await _context.SaveChangesAsync();
+
+        Response.Cookies.Delete("guest_id");
     }
 }

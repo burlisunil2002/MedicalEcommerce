@@ -1,36 +1,22 @@
 ﻿@model IEnumerable<VivekMedicalProducts.ViewModels.ProductViewModel>
-@Html.AntiForgeryToken()
 
+<form method="post">
+    @Html.AntiForgeryToken()
+</form>
 
 @{
     var selectedCategory = Context.Request.Query["category"].ToString();
     bool isCategoryPage = !string.IsNullOrEmpty(selectedCategory);
 }
 @{
-    var hotDeals = Model.Where(p => p.IsHotDeal).ToList();
+    var now = DateTime.UtcNow;
+
+    var hotDeals = Model
+        .Where(p => p.IsHotDeal
+            && p.DealEndDate.HasValue
+            && p.DealEndDate > now)
+        .ToList();
 }
-
-
-
-<!-- ✅ PAYMENT SUCCESS -->
-@if (TempData["PaymentSuccess"] != null)
-{
-    <div id="paymentSuccessBox"
-         class="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-white shadow-xl border border-green-200 rounded-xl px-5 py-4 w-[360px] flex items-start gap-3 animate-fadeIn">
-
-        <div class="text-green-500 text-xl">✔</div>
-
-        <div class="flex-1">
-            <h3 class="text-sm font-semibold text-gray-800">Payment Submitted</h3>
-            <p class="text-xs text-gray-500 mt-1">
-                Your payment is under verification.
-            </p>
-        </div>
-
-        <button onclick="closePaymentBox()" class="text-gray-400 hover:text-red-500">×</button>
-    </div>
-}
-
 
 @if (!isCategoryPage)
 {
@@ -154,7 +140,7 @@
 
                     <!-- Timer -->
                     <span class="absolute top-2 right-2 bg-black text-white text-xs px-2 py-1 rounded">
-                        <span class="countdown" data-date="@product.DealEndDate"></span>
+                            <span class="countdown" data-date="@product.DealEndDate?.ToString("yyyy-MM-ddTHH:mm:ss")"></span>
                     </span>
 
                     <img src="@product.ImageUrl" class="h-36 w-full object-contain p-2" />
@@ -208,7 +194,10 @@
             <div class="bg-white rounded-2xl border hover:shadow-2xl transition duration-300 overflow-hidden flex flex-col relative group">
 
                 <!-- 🔥 HOT DEAL BADGE -->
-                @if (product.IsHotDeal && discount > 0)
+                @if (product.IsHotDeal
+                            && product.DealEndDate.HasValue
+                            && product.DealEndDate > DateTime.UtcNow
+                            && discount > 0)
                 {
                     <span class="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-1 rounded shadow">
                         🔥 @discount% OFF
@@ -406,7 +395,7 @@
 
 
     // ================= COUNTDOWN =================
-    setInterval(() => {
+       setInterval(() => {
         document.querySelectorAll(".countdown").forEach(el => {
 
             const endDate = el.dataset.date;
@@ -417,16 +406,31 @@
             }
 
             const end = new Date(endDate);
+            const now = new Date();
 
             if (isNaN(end)) {
                 el.innerText = "Invalid";
                 return;
             }
 
-            const diff = end - new Date();
+            const diff = end - now;
 
+            // 🔥 EXPIRED FIX
             if (diff <= 0) {
                 el.innerText = "Expired";
+
+                // ❌ disable button
+                const card = el.closest(".min-w-[250px], .bg-white");
+                if (card) {
+                    const btn = card.querySelector(".add-cart-btn");
+                    if (btn) {
+                        btn.innerText = "Deal Ended";
+                        btn.disabled = true;
+                        btn.classList.remove("bg-red-500");
+                        btn.classList.add("bg-gray-400");
+                    }
+                }
+
                 return;
             }
 
@@ -437,6 +441,5 @@
             el.innerText = `${h}h ${m}m ${s}s`;
         });
     }, 1000);
-
 
 </script>

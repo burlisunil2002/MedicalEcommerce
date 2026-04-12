@@ -84,6 +84,8 @@ Rotativa.AspNetCore.RotativaConfiguration.Setup(builder.Environment.WebRootPath)
 
 builder.Services.AddScoped<IFileStorageService, SupabaseService>();
 
+builder.Services.AddScoped<ICartCalculationService, CartCalculationService>();
+
 
 var app = builder.Build();
 

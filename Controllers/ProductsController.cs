@@ -32,6 +32,25 @@ namespace VivekMedicalProducts.Controllers
         {
             var products = _context.Products.AsQueryable();
 
+            // 🔥 AUTO EXPIRE HOT DEALS
+            var now = DateTime.UtcNow;
+
+            var expiredDeals = _context.Products
+                .Where(p => p.IsHotDeal
+                    && p.DealEndDate.HasValue
+                    && p.DealEndDate <= now)
+                .ToList();
+
+            if (expiredDeals.Any())
+            {
+                foreach (var product in expiredDeals)
+                {
+                    product.IsHotDeal = false;
+                }
+
+                _context.SaveChanges();
+            }
+
             if (!string.IsNullOrEmpty(searchString))
             {
                 var normalizedSearch = Normalize(searchString);

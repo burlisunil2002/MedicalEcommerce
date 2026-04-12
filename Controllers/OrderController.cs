@@ -24,111 +24,105 @@ namespace VivekMedicalProducts.Controllers
         private readonly IUserContextService _userContext;
         private readonly InvoiceService _invoiceService;
         private readonly EmailService _emailService;
+        private readonly ICartCalculationService _calc;
 
-        public OrderController(IConfiguration config, ApplicationDbContext context, IUserContextService userContext, InvoiceService invoiceService, EmailService emailService)
+
+        public OrderController(IConfiguration config, ApplicationDbContext context, IUserContextService userContext, InvoiceService invoiceService, EmailService emailService, ICartCalculationService calc)
         {
             _config = config;
             _context = context;
             _userContext = userContext;
             _invoiceService = invoiceService;
             _emailService = emailService;
+            _calc = calc;
         }
 
-        // ================= CART TOTAL =================
-        private (decimal subtotal, decimal gst, decimal total) CalculateCartTotal(string userId)
+        private string GetGuestId()
         {
-            var carts = _context.Carts
+            return Request.Cookies["guest_id"];
+        }
+
+
+        [HttpPost]
+        public async Task<IActionResult> PlaceCOD()
+        {
+            var userId = _userContext.GetUserId();
+
+            if (string.IsNullOrEmpty(userId))
+                return Json(new { success = false, redirect = "/Account/Login" });
+
+            var guestId = GetGuestId();
+            var coupon = HttpContext.Session.GetString("CouponCode");
+
+            var carts = await _context.Carts
                 .Include(c => c.Product)
                 .Where(c => c.UserId == userId)
-                .ToList();
+                .ToListAsync();
 
-            decimal subtotal = 0m;
-            decimal gst = 0m;
+            if (!carts.Any())
+                return Json(new { success = false });
 
-            foreach (var c in carts)
+            // ✅ USE SERVICE
+            var totals = await _calc.CalculateAsync(userId, guestId, coupon);
+
+            var address = JsonConvert.DeserializeObject<CheckoutViewModel>(
+                HttpContext.Session.GetString("Address"));
+
+            var order = new OrderModel
             {
-                decimal price = c.Product?.Price ?? 0m;
-                decimal gstPercent = c.Product?.GSTPercentage ?? 0m;
+                UserId = userId,
+                FullName = address.FullName,
+                PhoneNumber = address.PhoneNumber,
+                Address = address.Address,
+                City = address.City,
+                Pincode = address.Pincode,
 
-                decimal net = price * c.Quantity;
+                SubTotal = totals.Subtotal,
+                GST = totals.GST,
+                GrandTotal = totals.GrandTotal,
 
-                // ✅ FIX: use 100m
-                decimal gstAmount = net * (gstPercent / 100m);
+                PaymentStatus = "Pending",
+                OrderStatus = "Confirmed",
+                OrderDate = DateTime.UtcNow
+            };
 
-                subtotal += net;
-                gst += gstAmount;
+            _context.Orders.Add(order);
+            await _context.SaveChangesAsync();
+
+            foreach (var item in carts)
+            {
+                _context.OrderItems.Add(new OrderItemModel
+                {
+                    OrderId = order.OrderId,
+                    ProductId = item.ProductId,
+                    ProductName = item.Product.Name,
+                    Quantity = item.Quantity,
+                    Price = item.Product.Price
+                });
             }
 
-            decimal total = subtotal + gst;
+            await _context.SaveChangesAsync();
 
-            // ✅ Round only at final stage
-            return (subtotal, gst, Math.Round(total, 2));
+            _context.Carts.RemoveRange(carts);
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true, redirect = "/Order/MyOrders" });
         }
 
-        // ================= REVIEW POST =================
-        [HttpPost]
-        public IActionResult Review(CheckoutViewModel model)
-        {
-            if (model == null || !ModelState.IsValid)
-            {
-                TempData["Error"] = "Invalid address details";
-                return RedirectToAction(nameof(Review));
-            }
 
-            HttpContext.Session.SetString("Address", JsonConvert.SerializeObject(model));
-            return RedirectToAction(nameof(Review));
-        }
-
-        // ================= REVIEW GET =================
-        // ✅ REVIEW GET (SAFE)
-        [HttpGet]
-        public IActionResult Review()
-        {
-            try
-            {
-                var userId = _userContext.GetUserId();
-
-                var carts = _context.Carts
-                    .Include(c => c.Product)
-                    .Where(c => c.UserId == userId)
-                    .ToList();
-
-                if (!carts.Any())
-                    return RedirectToAction("Index", "Cart");
-
-                var totals = CalculateCartTotal(userId);
-
-                var addressJson = HttpContext.Session.GetString("Address");
-
-                CheckoutViewModel address = string.IsNullOrEmpty(addressJson)
-                    ? new CheckoutViewModel()
-                    : JsonConvert.DeserializeObject<CheckoutViewModel>(addressJson)!;
-
-                ViewBag.Carts = carts;
-                ViewBag.Total = totals.total;
-                ViewBag.Address = address;
-                ViewBag.RazorpayKey = _config["Razorpay:Key"];
-
-                return View();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("REVIEW ERROR: " + ex.Message);
-                return RedirectToAction("Index", "Cart");
-            }
-        }
 
         // ================= CREATE ORDER =================
         [HttpPost]
-        public IActionResult CreateOrder([FromBody] CheckoutViewModel model)
+        public async Task<IActionResult> CreateOrder([FromBody] CheckoutViewModel model)
         {
             OrderModel? order = null;
 
             try
             {
                 var userId = _userContext.GetUserId();
+                var guestId = GetGuestId();
+                var coupon = HttpContext.Session.GetString("CouponCode");
 
-                // ✅ VALIDATION
                 if (model == null ||
                     string.IsNullOrWhiteSpace(model.FullName) ||
                     string.IsNullOrWhiteSpace(model.PhoneNumber) ||
@@ -139,21 +133,18 @@ namespace VivekMedicalProducts.Controllers
                     return Json(new { success = false, message = "Please fill all address fields" });
                 }
 
-                // ✅ FETCH CART
-                var carts = _context.Carts
+                var carts = await _context.Carts
                     .Include(c => c.Product)
                     .Where(c => c.UserId == userId)
-                    .ToList();
+                    .ToListAsync();
 
                 if (!carts.Any())
                     return Json(new { success = false, message = "Cart is empty" });
 
-                // ✅ CALCULATE TOTAL
-                var totals = CalculateCartTotal(userId);
-                var amountInPaise = (int)(totals.total * 100);
-                
+                // ✅ USE CALC SERVICE ONLY
+                var totals = await _calc.CalculateAsync(userId, guestId, coupon);
+                var amountInPaise = (int)(totals.GrandTotal * 100);
 
-                // ================= CREATE ORDER =================
                 order = new OrderModel
                 {
                     UserId = userId,
@@ -166,11 +157,11 @@ namespace VivekMedicalProducts.Controllers
                     City = model.City,
                     Pincode = model.Pincode,
 
-                    SubTotal = totals.subtotal,
-                    GST = totals.gst,
-                    GrandTotal = totals.total,
+                    SubTotal = totals.Subtotal,
+                    GST = totals.GST,
+                    GrandTotal = totals.GrandTotal,
 
-                    PaymentStatus = "Created",
+                    PaymentStatus = "Initiated",
                     OrderStatus = "Pending",
                     IsPaymentVerified = false,
 
@@ -178,40 +169,25 @@ namespace VivekMedicalProducts.Controllers
                 };
 
                 _context.Orders.Add(order);
-                _context.SaveChanges();
+                await _context.SaveChangesAsync();
 
-                // ================= SAVE ORDER ITEMS (🔥 FULL FIX) =================
-                var orderItems = carts.Select(c =>
+                // ✅ SAVE ITEMS (NO CALCULATION LOGIC HERE)
+                foreach (var item in carts)
                 {
-                    var price = c.Product.Price;
-                    var gstPercent = c.Product.GSTPercentage;
-                    var quantity = c.Quantity;
-
-                    var lineTotal = price * quantity;
-                    var gstAmount = lineTotal * (gstPercent / 100);
-                    var finalLineTotal = Math.Round(lineTotal + gstAmount, 2);
-
-                    return new OrderItemModel
+                    _context.OrderItems.Add(new OrderItemModel
                     {
                         OrderId = order.OrderId,
-                        ProductId = c.ProductId,
-
-                        ProductName = c.Product.Name,      // ✅ snapshot
-                        Quantity = quantity,
-
-                        Price = price,
-                        GSTPercentage = gstPercent,
-
-                        LineTotal = finalLineTotal,        // ✅ important
-
+                        ProductId = item.ProductId,
+                        ProductName = item.Product.Name,
+                        Quantity = item.Quantity,
+                        Price = item.Product.Price,   // raw price only
                         ItemStatus = "Pending"
-                    };
-                }).ToList();
+                    });
+                }
 
-                _context.OrderItems.AddRange(orderItems);
-                _context.SaveChanges();
+                await _context.SaveChangesAsync();
 
-                // ================= CREATE RAZORPAY ORDER =================
+                // ✅ RAZORPAY ORDER
                 var client = new RazorpayClient(
                     _config["Razorpay:Key"],
                     _config["Razorpay:Secret"]
@@ -227,10 +203,9 @@ namespace VivekMedicalProducts.Controllers
                 var razorOrder = client.Order.Create(options);
 
                 order.RazorpayOrderId = razorOrder["id"].ToString();
-                order.PaymentStatus = "Initiated";
                 order.UpdatedAt = DateTime.UtcNow;
 
-                _context.SaveChanges();
+                await _context.SaveChangesAsync();
 
                 return Json(new
                 {
@@ -247,7 +222,7 @@ namespace VivekMedicalProducts.Controllers
                     order.PaymentStatus = "Failed";
                     order.OrderStatus = "Failed";
                     order.FailureReason = ex.Message;
-                    _context.SaveChanges();
+                    await _context.SaveChangesAsync();
                 }
 
                 return Json(new { success = false, message = "Order creation failed" });
@@ -312,18 +287,18 @@ namespace VivekMedicalProducts.Controllers
                 order.RazorpaySignature = model.razorpay_signature;
                 order.PaymentVerifiedAt = DateTime.UtcNow;
 
-               await _context.SaveChangesAsync();
-
-                if (order.PaymentStatus == "Completed" && order.OrderStatus == "Confirmed")
-                {
-                    await SendInvoiceEmailAsync(order.OrderId);
-                }
-
-                var cartItems = await _context.Carts
-                .Where(c => c.UserId == order.UserId)
-                .ExecuteDeleteAsync();
-
                 await _context.SaveChangesAsync();
+
+                // 🔥 CLEAR CART (SAFE)
+                var cartItems = await _context.Carts
+                    .Where(c => c.UserId == order.UserId)
+                    .ToListAsync();
+
+                _context.Carts.RemoveRange(cartItems);
+                await _context.SaveChangesAsync();
+
+                await SendInvoiceEmailAsync(order.OrderId);
+            
 
                 return Json(new
                 {
@@ -401,12 +376,15 @@ namespace VivekMedicalProducts.Controllers
 
                     await _context.SaveChangesAsync();
 
-                    // ✅ SEND EMAIL HERE ONLY
-                    await SendInvoiceEmailAsync(order.OrderId);
+                    // 🔥 CLEAR CART SAFELY
+                    var cartItems = await _context.Carts
+                        .Where(c => c.UserId == order.UserId)
+                        .ToListAsync();
 
-                    
-
+                    _context.Carts.RemoveRange(cartItems);
                     await _context.SaveChangesAsync();
+
+                    await SendInvoiceEmailAsync(order.OrderId);
 
 
                 }
