@@ -1,5 +1,5 @@
 ﻿// ================= BASE URL =================
-const BASE = window.location.origin + "/";
+const BASE = "/";
 
 // ================= TOKEN =================
 function getToken() {
@@ -42,7 +42,7 @@ $(document).ready(function () {
 
         btn.prop("disabled", true).text("Adding...");
 
-        postAjax(BASE + "Cart/AddToCart", { productId })
+        postAjax("/Cart/AddToCart", { productId })
             .done(function (res) {
 
                 if (!res.success) {
@@ -73,7 +73,7 @@ $(document).ready(function () {
         const qtySpan = parent.find(".qty");
         const productId = parent.data("id");
 
-        postAjax(BASE + "Cart/UpdateQuantity", { productId, change: 1 })
+        postAjax("/Cart/UpdateQuantity", { productId, change: 1 })
             .done(function (res) {
 
                 if (!res.success) {
@@ -99,7 +99,7 @@ $(document).ready(function () {
         const qtySpan = parent.find(".qty");
         const productId = parent.data("id");
 
-        postAjax(BASE + "Cart/UpdateQuantity", { productId, change: -1 })
+        postAjax("/Cart/UpdateQuantity", { productId, change: -1 })
             .done(function (res) {
 
                 if (!res.success) {
@@ -129,7 +129,7 @@ $(document).ready(function () {
 
         if (!confirm("Remove item?")) return;
 
-        postAjax(BASE + "Cart/Remove", { productId })
+        postAjax("/Cart/Remove", { productId })
             .done(function (res) {
 
                 if (!res.success) {
@@ -153,7 +153,7 @@ $(document).ready(function () {
             return;
         }
 
-        postAjax(BASE + "Cart/ApplyCoupon", { code })
+        postAjax("/Cart/ApplyCoupon", { code })
             .done(function (res) {
 
                 if (!res.success) {
@@ -173,7 +173,7 @@ $(document).ready(function () {
 // ================= SUMMARY =================
 function refreshCartSummary() {
 
-    return $.get(BASE + "Cart/GetCartSummary")
+    return $.get("/Cart/GetCartSummary")
         .done(function (data) {
 
             if (!data) return;
@@ -191,6 +191,6 @@ function refreshCartSummary() {
 
 // ================= COUNT =================
 function loadCartCount() {
-    $.get(BASE + "Cart/GetCartCount")
+    $.get("/Cart/GetCartCount")
         .done(c => $("#cartCount").text(c));
 }

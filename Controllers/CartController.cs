@@ -49,7 +49,6 @@ namespace VivekMedicalProducts.Controllers
         // ================= APPLY COUPON =================
         [HttpPost]
         [ValidateAntiForgeryToken]
-        [Route("Cart/ApplyCoupon")]
         public IActionResult ApplyCoupon(string code)
         {
             if (string.IsNullOrEmpty(code))
@@ -63,7 +62,6 @@ namespace VivekMedicalProducts.Controllers
         // ================= ADD TO CART =================
         [HttpPost]
         [ValidateAntiForgeryToken]
-        [Route("Cart/AddToCart")]
         public async Task<IActionResult> AddToCart(int productId)
         {
             try
@@ -134,7 +132,6 @@ namespace VivekMedicalProducts.Controllers
 
         // ================= UPDATE QTY =================
         [HttpPost]
-        [Route("Cart/UpdateQuantity")]
         public async Task<IActionResult> UpdateQuantity(int productId, int change)
         {
             var userId = _userContext.GetUserId();
@@ -168,7 +165,6 @@ namespace VivekMedicalProducts.Controllers
 
         // ================= REMOVE =================
         [HttpPost]
-        [Route("Cart/Remove")]
         public async Task<IActionResult> Remove(int productId)
         {
             var userId = _userContext.GetUserId();
