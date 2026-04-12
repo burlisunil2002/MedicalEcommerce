@@ -142,16 +142,24 @@ namespace VivekMedicalProducts.Controllers
                  (userId == null && c.GuestId == guestId)));
 
             if (cartItem == null)
-                return Json(new { success = false });
+            {
+                return Json(new { success = false, message = "Item not found" }); // 🔥 better debug
+            }
 
             cartItem.Quantity += change;
 
             if (cartItem.Quantity <= 0)
+            {
                 _context.Carts.Remove(cartItem);
+            }
 
             await _context.SaveChangesAsync();
 
-            return Json(new { success = true });
+            return Json(new
+            {
+                success = true,
+                quantity = cartItem.Quantity > 0 ? cartItem.Quantity : 0
+            });
         }
 
         // ================= REMOVE =================
