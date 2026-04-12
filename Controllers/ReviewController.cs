@@ -23,8 +23,28 @@ public class ReviewController : Controller
         _calc = calc;
     }
 
+    private string GetOrCreateGuestId()
+    {
+        if (!Request.Cookies.TryGetValue("guest_id", out string guestId)
+            || string.IsNullOrEmpty(guestId))
+        {
+            guestId = Guid.NewGuid().ToString();
+
+            Response.Cookies.Append("guest_id", guestId, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true, // 🔥 important for production
+                SameSite = SameSiteMode.Lax,
+                Path = "/",
+                IsEssential = true,
+                Expires = DateTime.UtcNow.AddDays(7)
+            });
+        }
+
+        return guestId;
+    }
+
     // ✅ COOKIE
-    private string GetGuestId() => Request.Cookies["guest_id"];
 
     // ================= SAVE ADDRESS =================
     [HttpPost]
@@ -45,7 +65,8 @@ public class ReviewController : Controller
     public async Task<IActionResult> Review()
     {
         var userId = _userContext.GetUserId();
-        var guestId = string.IsNullOrEmpty(userId) ? GetGuestId() : null;
+        var guestId = string.IsNullOrEmpty(userId) ? GetOrCreateGuestId() : null;
+
         var coupon = HttpContext.Session.GetString("CouponCode");
 
         var carts = await _context.Carts

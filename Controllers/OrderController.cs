@@ -37,11 +37,26 @@ namespace VivekMedicalProducts.Controllers
             _calc = calc;
         }
 
-        private string GetGuestId()
+        private string GetOrCreateGuestId()
         {
-            return Request.Cookies["guest_id"];
-        }
+            if (!Request.Cookies.TryGetValue("guest_id", out string guestId)
+                || string.IsNullOrEmpty(guestId))
+            {
+                guestId = Guid.NewGuid().ToString();
 
+                Response.Cookies.Append("guest_id", guestId, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = true, // 🔥 important for production
+                    SameSite = SameSiteMode.Lax,
+                    Path = "/",
+                    IsEssential = true,
+                    Expires = DateTime.UtcNow.AddDays(7)
+                });
+            }
+
+            return guestId;
+        }
 
         [HttpPost]
         public async Task<IActionResult> PlaceCOD()
@@ -51,7 +66,7 @@ namespace VivekMedicalProducts.Controllers
             if (string.IsNullOrEmpty(userId))
                 return Json(new { success = false, redirect = "/Account/Login" });
 
-            var guestId = GetGuestId();
+            var guestId = string.IsNullOrEmpty(userId) ? GetOrCreateGuestId() : null;
             var coupon = HttpContext.Session.GetString("CouponCode");
 
             var carts = await _context.Carts
@@ -120,7 +135,7 @@ namespace VivekMedicalProducts.Controllers
             try
             {
                 var userId = _userContext.GetUserId();
-                var guestId = GetGuestId();
+                var guestId = string.IsNullOrEmpty(userId) ? GetOrCreateGuestId() : null;
                 var coupon = HttpContext.Session.GetString("CouponCode");
 
                 if (model == null ||

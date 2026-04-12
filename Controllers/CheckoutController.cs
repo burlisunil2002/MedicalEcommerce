@@ -19,10 +19,6 @@ public class CheckoutController : Controller
         _calc = calc;
     }
 
-    private string GetGuestId()
-    {
-        return Request.Cookies["guest_id"];
-    }
 
     // ================= CHECKOUT =================
     public async Task<IActionResult> Index()

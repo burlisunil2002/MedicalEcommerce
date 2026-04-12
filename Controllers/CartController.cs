@@ -26,16 +26,15 @@ namespace VivekMedicalProducts.Controllers
         // ================= COOKIE =================
         private string GetOrCreateGuestId()
         {
-            var guestId = Request.Cookies["guest_id"];
-
-            if (string.IsNullOrEmpty(guestId))
+            if (!Request.Cookies.TryGetValue("guest_id", out string guestId)
+                || string.IsNullOrEmpty(guestId))
             {
                 guestId = Guid.NewGuid().ToString();
 
                 Response.Cookies.Append("guest_id", guestId, new CookieOptions
                 {
                     HttpOnly = true,
-                    Secure = Request.IsHttps,
+                    Secure = true, // 🔥 important for production
                     SameSite = SameSiteMode.Lax,
                     Path = "/",
                     IsEssential = true,
@@ -46,10 +45,6 @@ namespace VivekMedicalProducts.Controllers
             return guestId;
         }
 
-        private string GetGuestId()
-        {
-            return Request.Cookies["guest_id"];
-        }
 
         // ================= APPLY COUPON =================
         [HttpPost]
@@ -185,7 +180,7 @@ namespace VivekMedicalProducts.Controllers
         public IActionResult GetCartCount()
         {
             var userId = _userContext.GetUserId();
-            var guestId = GetGuestId();
+            var guestId = string.IsNullOrEmpty(userId) ? GetOrCreateGuestId() : null;
 
             var count = _context.Carts
                 .Where(c =>
@@ -200,7 +195,8 @@ namespace VivekMedicalProducts.Controllers
         public async Task<IActionResult> GetCartSummary()
         {
             var userId = _userContext.GetUserId();
-            var guestId = string.IsNullOrEmpty(userId) ? Request.Cookies["guest_id"] : null;
+            var guestId = string.IsNullOrEmpty(userId) ? GetOrCreateGuestId() : null;
+
             var coupon = HttpContext.Session.GetString("CouponCode");
 
             var totals = await _calc.CalculateAsync(userId, guestId, coupon);
@@ -231,7 +227,7 @@ namespace VivekMedicalProducts.Controllers
         // ================= MERGE AFTER LOGIN =================
         public async Task MergeCartAfterLogin(string userId)
         {
-            var guestId = GetGuestId(); // ✅ FIXED
+            var guestId = string.IsNullOrEmpty(userId) ? GetOrCreateGuestId() : null;
 
             if (string.IsNullOrEmpty(guestId))
                 return;
