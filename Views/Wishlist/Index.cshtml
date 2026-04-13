@@ -1,0 +1,169 @@
+﻿@model IEnumerable<VivekMedicalProducts.ViewModels.ProductViewModel>
+
+<form id="antiForgeryForm">
+    @Html.AntiForgeryToken()
+</form>
+
+<div class="max-w-7xl mx-auto px-4 mt-6">
+
+    <!-- HEADER -->
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-2xl md:text-3xl font-bold flex items-center gap-2">
+            <span class="animate-pulse text-red-500">❤️</span>
+            My Wishlist
+        </h2>
+
+        <span id="wishlistCountBadge"
+              class="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm">
+            @Model.Count() Items
+        </span>
+    </div>
+
+    <!-- EMPTY STATE -->
+    <div id="emptyWishlist"
+         class="hidden flex flex-col items-center justify-center py-20 text-center">
+
+        <!-- Animated SVG -->
+        <img src="https://cdn-icons-png.flaticon.com/512/4076/4076549.png"
+             class="w-32 h-32 mb-6 opacity-80 animate-bounce" />
+
+        <h3 class="text-xl font-semibold text-gray-700">
+            Your Wishlist is Empty
+        </h3>
+
+        <p class="text-gray-500 mt-2">
+            Start adding products you love ❤️
+        </p>
+
+        <a href="/Products"
+           class="mt-6 px-6 py-3 rounded-full
+                  bg-gradient-to-r from-blue-500 to-indigo-600
+                  text-white font-medium shadow-md
+                  hover:scale-105 transition">
+            Browse Products
+        </a>
+    </div>
+
+    <!-- GRID -->
+    <div id="wishlistContainer"
+         class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+
+        @foreach (var item in Model)
+        {
+            var isNormal = item.PriceType == "Normal";
+            var isDealActive = item.IsHotDeal && item.DealEndDate != null && item.DealEndDate > DateTime.Now;
+
+            decimal finalPrice = item.Price;
+            int discount = 0;
+
+            if (isDealActive && item.DiscountPercentage.HasValue)
+            {
+                discount = (int)item.DiscountPercentage.Value;
+                finalPrice = item.Price - (item.Price * discount / 100);
+            }
+
+            <div class="wishlist-card group bg-white rounded-2xl shadow-md p-4 relative
+                            transition duration-300 hover:shadow-xl hover:-translate-y-1">
+
+                <!-- REMOVE -->
+                <button class="remove-wishlist absolute top-3 right-3
+                                   bg-white/80 backdrop-blur p-1 rounded-full
+                                   text-gray-400 hover:text-red-500
+                                   hover:scale-110 transition"
+                        data-id="@item.Id">
+                    ✖
+                </button>
+
+                <!-- IMAGE -->
+                <div class="overflow-hidden rounded-lg bg-gray-50">
+                    <img src="@item.ImageUrl"
+                         class="h-40 w-full object-contain
+                                    transition duration-500" />
+                </div>
+
+                <!-- CONTENT -->
+                <div class="mt-3 flex flex-col">
+
+                    <!-- NAME -->
+                    <h4 class="text-sm font-semibold text-gray-800 line-clamp-2 min-h-[40px]">
+                        @item.Name
+                    </h4>
+
+                    <!-- PRICE -->
+                    <div class="mt-2">
+
+                        @if (isNormal)
+                        {
+                            <div class="flex items-center gap-2 flex-wrap">
+
+                                <span class="text-blue-600 font-bold text-lg">
+                                    ₹@finalPrice.ToString("N0")
+                                </span>
+
+                                @if (isDealActive)
+                                {
+                                    <span class="line-through text-gray-400 text-sm">
+                                        ₹@item.Price.ToString("N0")
+                                    </span>
+
+                                    <span class="bg-green-100 text-green-600 text-xs px-2 py-0.5 rounded">
+                                        @discount% OFF
+                                    </span>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-orange-500 text-sm font-medium">
+                                📩 Price on Request
+                            </p>
+                        }
+
+                    </div>
+
+                    <!-- ACTION -->
+                    <div class="mt-4">
+
+                        @if (isNormal)
+                        {
+                            <button class="move-cart w-full
+                                                   bg-gradient-to-r from-green-500 to-green-600
+                                                   text-white py-2 rounded-lg text-sm
+                                                   shadow hover:shadow-lg
+                                                   hover:scale-105 active:scale-95
+                                                   transition"
+                                    data-id="@item.Id">
+                                🛒 Move to Cart
+                            </button>
+                        }
+                        else
+                        {
+                            <a asp-controller="Home"
+                               asp-action="Enquiry"
+                               asp-route-productId="@item.Id"
+                               class="block text-center
+                                              bg-orange-500 text-white py-2 rounded-lg text-sm
+                                              hover:bg-orange-600 transition active:scale-95">
+                                📞 Request Quote
+                            </a>
+                        }
+
+                    </div>
+
+                </div>
+
+            </div>
+        }
+
+    </div>
+
+</div>
+
+    
+<style>
+    .removing {
+        transform: scale(0.8);
+        opacity: 0;
+        transition: all 0.3s ease;
+    }
+</style>

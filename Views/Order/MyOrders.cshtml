@@ -1,20 +1,43 @@
 ﻿@model IEnumerable<VivekMedicalProducts.ViewModels.MyOrderViewModel>
 
-<div id="toast" class="hidden fixed bottom-5 right-5 bg-black text-white px-4 py-2 rounded">
-    Invoice available after delivery
-</div>
-
-<div class="max-w-6xl mx-auto px-4 py-10">
+<div class="max-w-7xl mx-auto px-4 py-10">
 
     <!-- HEADER -->
-    <h1 class="text-3xl font-bold text-gray-900 mb-10 text-center">
-        My Orders
-    </h1>
+    <div class="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
 
+        <h1 class="text-3xl md:text-4xl font-bold flex items-center gap-2">
+            📦 My Orders
+        </h1>
+
+        <span class="bg-gray-100 px-4 py-2 rounded-full text-sm text-gray-600">
+            @Model.Count() Orders
+        </span>
+    </div>
+
+    <!-- EMPTY STATE -->
     @if (!Model.Any())
     {
-        <div class="bg-blue-50 border border-blue-200 text-blue-700 p-6 rounded-xl text-center shadow-sm">
-            You have not placed any orders yet.
+        <div class="flex flex-col items-center justify-center text-center py-24">
+
+            <!-- Animated Illustration -->
+            <img src="https://cdn-icons-png.flaticon.com/512/4076/4076501.png"
+                 class="w-40 h-40 mb-6 animate-bounce opacity-90" />
+
+            <h2 class="text-2xl font-semibold text-gray-700">
+                No Orders Yet
+            </h2>
+
+            <p class="text-gray-500 mt-2">
+                You haven’t placed any orders yet.
+            </p>
+
+            <a href="/Products"
+               class="mt-6 px-6 py-3 rounded-full
+                          bg-gradient-to-r from-blue-500 to-indigo-600
+                          text-white shadow-lg
+                          hover:scale-105 transition">
+                Start Shopping
+            </a>
         </div>
     }
     else
@@ -23,14 +46,18 @@
 
             @foreach (var item in Model)
             {
-                <div class="bg-white rounded-2xl border shadow-sm hover:shadow-lg transition p-6">
+                <div class="group bg-white/70 backdrop-blur-lg rounded-2xl p-5
+                                    shadow-md hover:shadow-2xl transition duration-300
+                                    hover:-translate-y-1">
 
                     <div class="flex flex-col md:flex-row gap-6 items-center md:items-start">
 
                         <!-- IMAGE -->
-                        <img src="@item.ProductImage"
-                             class="w-24 h-24 object-contain border rounded-xl p-2 bg-white"
-                             onerror="this.src='/images/no-image.png'" />
+                        <div class="bg-gray-50 p-3 rounded-xl">
+                            <img src="@item.ProductImage"
+                                 class="w-24 h-24 object-contain transition group-hover:scale-110"
+                                 onerror="this.src='/images/no-image.png'" />
+                        </div>
 
                         <!-- DETAILS -->
                         <div class="flex-1 w-full">
@@ -40,29 +67,31 @@
                             </h3>
 
                             <!-- GRID -->
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600 mb-4">
-                                <p><span class="font-medium">Order ID:</span> #@item.OrderId</p>
-                                <p><span class="font-medium">Date:</span> @item.OrderDate.ToString("dd MMM yyyy")</p>
-                                <p><span class="font-medium">Qty:</span> @item.Quantity</p>
-                                <p><span class="font-medium">Total:</span> ₹@item.Total</p>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm text-gray-600">
+
+                                <p>🧾 <b>#@item.OrderId</b></p>
+                                <p>📅 @item.OrderDate.ToString("dd MMM yyyy")</p>
+                                <p>📦 Qty: @item.Quantity</p>
+                                <p class="font-semibold text-blue-600">₹@item.Total</p>
+
                             </div>
 
                             <!-- STATUS -->
-                            <div class="flex flex-wrap gap-2">
+                            <div class="mt-3 flex flex-wrap gap-2">
 
                                 <!-- ORDER STATUS -->
-                                <span class="px-3 py-1 text-xs font-semibold rounded-full
-                                            @(item.OrderStatus.ToLower() == "delivered" ? "bg-green-100 text-green-800" :
-                                          item.OrderStatus.ToLower() == "confirmed" ? "bg-blue-100 text-blue-800" :
-                                          item.OrderStatus.ToLower() == "pending" ? "bg-yellow-100 text-yellow-800" :
+                                <span class="px-3 py-1 text-xs rounded-full font-semibold
+                                            @(item.OrderStatus.ToLower() == "delivered" ? "bg-green-100 text-green-700 animate-pulse" :
+                                                                            item.OrderStatus.ToLower() == "confirmed" ? "bg-blue-100 text-blue-700" :
+                                                                            item.OrderStatus.ToLower() == "pending" ? "bg-yellow-100 text-yellow-700 animate-pulse" :
                                                                             "bg-gray-100 text-gray-700")">
-                                           Order: @item.OrderStatus
-                                        </span>
+                                                                                                      @item.OrderStatus
+                                                                                                  </span>
 
-                                <!-- PAYMENT STATUS -->
-                                <span class="px-3 py-1 text-xs font-semibold rounded-full
-                                            @(item.PaymentStatus.ToLower() == "completed" ? "bg-green-100 text-green-800" :
-                                                                            item.PaymentStatus.ToLower() == "failed" ? "bg-red-100 text-red-800" :
+                                <!-- PAYMENT -->
+                                <span class="px-3 py-1 text-xs rounded-full font-semibold
+                                            @(item.PaymentStatus.ToLower() == "completed" ? "bg-green-100 text-green-700" :
+                                                                            item.PaymentStatus.ToLower() == "failed" ? "bg-red-100 text-red-700" :
                                                                             "bg-gray-100 text-gray-700")">
                             Payment: @item.PaymentStatus
                         </span>
@@ -71,31 +100,31 @@
                         </div>
 
                         <!-- ACTIONS -->
-                        <div class="flex flex-col gap-3 w-full md:w-auto md:items-end">
+                        <div class="flex flex-col gap-3 w-full md:w-auto">
 
                     @if (item.PaymentStatus == "Completed")
                             {
                                 <button onclick="openInvoice(@item.OrderId)"
-                                        class="px-4 py-2 bg-indigo-600 text-white rounded-lg">
-                                    View Invoice
+                                        class="px-4 py-2 bg-indigo-600 text-white rounded-lg
+                                                           hover:bg-indigo-700 transition hover:scale-105">
+                                    📄 Invoice
                                 </button>
                             }
                             else
                             {
-                                <button onclick="showInvoiceAlert()"
-                                        class="px-4 py-2 bg-gray-300 text-gray-600 rounded-lg cursor-not-allowed">
-                                    View Invoice
+                                <button onclick="showToast()"
+                                        class="px-4 py-2 bg-gray-300 text-gray-600 rounded-lg">
+                                    📄 Invoice
                                 </button>
                             }
-                    @if (item.OrderStatus.ToLower() == "confirmed")
-                            {
-                                <a asp-controller="Products"
-                                   asp-action="Details"
-                                   asp-route-id="@item.ProductId"
-                                   class="px-4 py-2 bg-green-600 text-white rounded-lg">
-                                    Reorder
-                                </a>
-                            }
+
+                            <a asp-controller="Products"
+                               asp-action="Details"
+                               asp-route-id="@item.ProductId"
+                               class="px-4 py-2 bg-green-600 text-white rounded-lg
+                                              hover:bg-green-700 transition hover:scale-105">
+                                🔁 Reorder
+                            </a>
 
                         </div>
 
@@ -103,7 +132,6 @@
 
                 </div>
             }
-
         </div>
     }
 
@@ -137,3 +165,24 @@
         setTimeout(() => t.classList.add("hidden"), 3000);
     }
 </script>
+
+<style>
+    @@keyframes fadeUp {
+        from
+
+    {
+        opacity: 0;
+        transform: translateY(15px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    }
+
+    .group {
+        animation: fadeUp 0.4s ease forwards;
+    }
+</style>

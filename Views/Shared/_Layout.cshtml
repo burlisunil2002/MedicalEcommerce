@@ -214,17 +214,17 @@
     </div>
 
     <!-- 🔥 HEADER -->
-    <header class="bg-white shadow-md sticky top-0 z-50">
+    <header class="bg-white/90 backdrop-blur-lg shadow-sm sticky top-0 z-50 border-b">
 
         <div class="max-w-7xl mx-auto px-4">
 
             <div class="flex items-center justify-between h-16">
-                
+
                 <!-- LOGO -->
                 <div class="flex items-center gap-2">
-                    <div class="flex items-center h-full">
+                    <div class="flex items-center h-full group">
                         <img src="~/images/sunillogo.png"
-                             class="h-12 md:h-14 w-auto max-w-[260px] object-contain">
+                             class="h-12 md:h-14 object-contain transition duration-300 group-hover:scale-105">
                     </div>
                 </div>
 
@@ -239,50 +239,52 @@
                            name="searchString"
                            placeholder="Search medical products..."
                            autocomplete="off"
-                           class="w-full px-5 py-2 rounded-full border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm">
+                           class="w-full px-5 py-2 rounded-full border border-gray-300
+                      focus:ring-2 focus:ring-blue-500 outline-none
+                      shadow-sm hover:shadow-md transition duration-300">
 
                     <div id="suggestions"
-                         class="absolute top-12 left-0 w-full bg-white border rounded-lg shadow-lg hidden z-50 max-h-60 overflow-y-auto">
+                         class="absolute top-12 left-0 w-full bg-white border rounded-xl shadow-xl hidden z-50 max-h-60 overflow-y-auto">
                     </div>
 
                     <button type="submit"
-                            class="absolute right-1 top-1 bg-blue-600 text-white px-4 py-1 rounded-full hover:bg-blue-700">
+                            class="absolute right-1 top-1 bg-blue-600 text-white px-4 py-1 rounded-full hover:bg-blue-700 transition">
                         🔍
                     </button>
-
                 </form>
 
-                <!-- RIGHT MENU -->
-                <div class="flex items-center gap-5">
+                <!-- RIGHT -->
+                <div class="flex items-center gap-4 md:gap-5">
 
-
+                    <!-- 🔒 KYC (UNCHANGED LOGIC) -->
                     @if (User.Identity.IsAuthenticated && user != null)
                     {
                         if (user.IsProfileCompleted)
                         {
-                            <span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-medium">
+                            <span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-medium animate-pulse">
                                 ✔ KYC Verified
                             </span>
                         }
                         else
                         {
                             <a asp-controller="Account" asp-action="Register"
-                               class="bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-blue-800">
+                               class="bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-blue-800 transition">
                                 Complete Full KYC
                             </a>
                         }
                     }
 
+                    <!-- HOME -->
                     <a asp-controller="Products" asp-action="Index"
-                       class="hidden md:block hover:text-blue-600 font-medium">
+                       class="hidden md:block font-medium hover:text-blue-600 transition">
                         Home
                     </a>
 
+                    <!-- CHAT -->
                     <a href="https://wa.me/919014060858?text=Hi%20I%20need%20support"
                        target="_blank"
-                       class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-green-600 hover:text-green-700 transition">
+                       class="flex items-center gap-2 text-green-600 hover:scale-105 transition">
 
-                        <!-- Chat Icon -->
                         <svg xmlns="http://www.w3.org/2000/svg"
                              class="w-5 h-5"
                              fill="none"
@@ -292,13 +294,14 @@
                                   d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.77 9.77 0 01-4-.8L3 20l1.1-3.3A7.93 7.93 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
 
-                        <span>Chat Now</span>
+                        <span class="hidden md:block">Chat Now</span>
                     </a>
 
                     <!-- CART -->
-                    <a href="/Cart" class="relative">
+                    <a href="/Cart" class="relative group">
 
-                        <svg class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" stroke-width="2"
+                        <svg class="w-6 h-6 text-gray-700 group-hover:scale-110 transition"
+                             fill="none" stroke="currentColor" stroke-width="2"
                              viewBox="0 0 24 24">
                             <path d="M3 3h2l3 12h11l3-8H6"></path>
                             <circle cx="9" cy="20" r="1"></circle>
@@ -306,7 +309,21 @@
                         </svg>
 
                         <span id="cartCount"
-                              class="absolute -top-2 -right-3 bg-red-500 text-white text-xs px-1.5 rounded-full">
+                              class="absolute -top-2 -right-3 bg-red-500 text-white text-xs px-1.5 rounded-full animate-pulse">
+                            0
+                        </span>
+                    </a>
+
+                    <!-- WISHLIST -->
+                    <a href="/Wishlist/Index"
+                       class="relative flex items-center justify-center p-2 group">
+
+                        <i id="wishlistIcon"
+                           class="fa-regular fa-heart text-xl text-gray-700 group-hover:text-red-500 transition">
+                        </i>
+
+                        <span id="wishlistCount"
+                              class="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-1.5 rounded-full animate-pulse">
                             0
                         </span>
                     </a>
@@ -316,22 +333,19 @@
                     {
                         <div class="relative">
 
-                            <!-- BUTTON -->
                             <button id="userMenuBtn"
                                     class="flex items-center gap-3 bg-gray-100 px-3 py-2 rounded-full hover:bg-gray-200 transition">
 
-                                <!-- Avatar -->
                                 <div class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-semibold">
                                     @displayName?.Substring(0, 1).ToUpper()
                                 </div>
 
-                                <!-- Name -->
-                                <span class="text-sm font-medium">
+                                <span class="hidden md:block text-sm font-medium">
                                     @displayName
                                 </span>
 
-                                <!-- Arrow -->
-                                <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" stroke-width="2"
+                                <svg class="w-4 h-4 text-gray-500 transition group-hover:rotate-180"
+                                     fill="none" stroke="currentColor" stroke-width="2"
                                      viewBox="0 0 24 24">
                                     <path d="M6 9l6 6 6-6"></path>
                                 </svg>
@@ -339,55 +353,34 @@
 
                             <!-- DROPDOWN -->
                             <div id="userDropdown"
-                                 class="hidden absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden">
+                                 class="hidden absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-2xl border z-50 overflow-hidden">
 
-                                <!-- HEADER -->
                                 <div class="px-4 py-3 border-b bg-gray-50">
                                     <p class="text-sm text-gray-500">Signed in as</p>
-                                    <p class="font-semibold text-gray-800 truncate">
-                                        @displayName
-                                    </p>
+                                    <p class="font-semibold text-gray-800 truncate">@displayName</p>
                                 </div>
 
-                                <!-- MENU -->
                                 <div class="p-2 space-y-1">
 
                                     <a asp-controller="Account" asp-action="Profile" class="menu-item">
-                                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <circle cx="12" cy="7" r="4"></circle>
-                                            <path d="M5.5 21a6.5 6.5 0 0113 0"></path>
-                                        </svg>
-                                        My Profile
+                                        👤 My Profile
                                     </a>
 
                                     <a asp-controller="Order" asp-action="MyOrders" class="menu-item">
-                                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M3 3h18v4H3z"></path>
-                                            <path d="M3 7l2 13h14l2-13"></path>
-                                        </svg>
-                                        My Orders
+                                        📦 My Orders
                                     </a>
 
                                     <a asp-controller="Home" asp-action="Enquiry"
                                        class="menu-item text-blue-600 hover:bg-blue-50">
-                                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18"></path>
-                                        </svg>
-                                        Customer Support
+                                        🛠 Customer Support
                                     </a>
 
                                 </div>
 
-                                <!-- LOGOUT -->
                                 <div class="border-t p-2">
                                     <a asp-controller="Account" asp-action="Logout"
                                        class="menu-item text-red-500 hover:bg-red-50">
-                                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"></path>
-                                            <path d="M16 17l5-5-5-5"></path>
-                                            <path d="M21 12H9"></path>
-                                        </svg>
-                                        Logout
+                                        🚪 Logout
                                     </a>
                                 </div>
 
@@ -399,7 +392,7 @@
                     {
                         <a asp-controller="Account"
                            asp-action="Login"
-                           class="bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700">
+                           class="bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700 transition">
                             Login
                         </a>
                     }
@@ -637,6 +630,12 @@
                 suggestions.classList.add("hidden");
             }
         });
+
+                function loadWishlistCount() {
+            $.get("/Wishlist/Count", function (count) {
+                $("#wishlistCount").text(count);
+            });
+        }
     </script>
 
            
@@ -644,6 +643,25 @@
     @await RenderSectionAsync("Scripts", required: false)
 
     <script src="~/js/cart.js?v=2"></script>
+    <script src="~/js/wishlist.js"></script>
 
 </body>
 </html>
+
+<style>
+
+    .menu-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px;
+        border-radius: 10px;
+        transition: all 0.2s ease;
+    }
+
+        .menu-item:hover {
+            background: #f3f4f6;
+            transform: translateX(4px);
+        }
+
+</style>

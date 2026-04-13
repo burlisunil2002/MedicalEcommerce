@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Identity;
+﻿using DocumentFormat.OpenXml.Spreadsheet;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
@@ -194,6 +195,7 @@ public class AccountController : Controller
 
             // Merge guest cart
             await MergeCartAfterLogin(user.Id);
+            await MergeWishlist(user.Id);
 
             return Json(new
             {
@@ -483,5 +485,31 @@ public class AccountController : Controller
         await _context.SaveChangesAsync();
 
         Response.Cookies.Delete("guest_id");
+    }
+
+    public async Task MergeWishlist(string userId)
+    {
+        var guestId = Request.Cookies["GuestId"];
+
+        if (string.IsNullOrEmpty(guestId)) return;
+
+        var guestItems = _context.Wishlists
+            .Where(x => x.GuestId == guestId)
+            .ToList();
+
+        foreach (var item in guestItems)
+        {
+            bool exists = _context.Wishlists.Any(x =>
+                x.ProductId == item.ProductId &&
+                x.UserId == userId);
+
+            if (!exists)
+            {
+                item.UserId = userId;
+                item.GuestId = null;
+            }
+        }
+
+        await _context.SaveChangesAsync();
     }
 }

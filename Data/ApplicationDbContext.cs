@@ -29,6 +29,8 @@ public class ApplicationDbContext
 
     public DbSet<GstResponseModel> GstVerification { get; set; }
 
+    public DbSet<WishlistModel> Wishlists { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
 

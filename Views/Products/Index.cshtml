@@ -242,10 +242,6 @@
                     <span class="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-1 rounded shadow">
                         🔥 @discount% OFF
                     </span>
-
-                    <span class="absolute top-2 right-2 bg-black text-white text-xs px-2 py-1 rounded shadow">
-                        <span class="countdown" data-date="@product.DealEndDate?.ToString("yyyy-MM-ddTHH:mm:ss")"></span>
-                    </span>
                 }
 
                 <!-- 🖼 IMAGE -->
@@ -340,6 +336,11 @@
                         }
 
                     </div>
+
+                    <button class="wishlist-btn absolute top-2 right-2 bg-white p-2 rounded-full shadow"
+                            data-id="@product.Id">
+                        <i class="fa-regular fa-heart"></i>
+                    </button>
 
                 </div>
             </div>
