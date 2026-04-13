@@ -134,6 +134,23 @@
 
         }
 
+        /* AD */
+
+        @@keyframes slideUp {
+            0%
+
+        {
+            transform: translateY(50px);
+            opacity: 0;
+        }
+
+        100% {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        }
+
     </style>
 
     @RenderSection("Styles", required: false)
@@ -636,9 +653,41 @@
                 $("#wishlistCount").text(count);
             });
         }
+
+                document.addEventListener("DOMContentLoaded", function () {
+
+            if (!localStorage.getItem("flashAdShown")) {
+                setTimeout(() => {
+                    document.getElementById("flashAd").classList.remove("hidden");
+                }, 800); // slight delay feels premium
+            }
+
+        });
+
+        function closeAd() {
+            document.getElementById("flashAd").classList.add("hidden");
+            localStorage.setItem("flashAdShown", "true");
+        }
     </script>
 
-           
+    <!-- Bottom Left Flash Ad -->
+    <div id="flashAd"
+         class="fixed bottom-5 left-5 z-[9999] hidden">
+
+        <div class="relative animate-[slideUp_0.5s_ease]">
+
+            <!-- Close Button -->
+            <button onclick="closeAd()"
+                    class="absolute -top-2 -right-2 bg-black text-white w-7 h-7 rounded-full flex items-center justify-center shadow-lg hover:bg-red-500 transition">
+                ✕
+            </button>
+
+            <!-- Ad Image -->
+            <img src="/images/ADBanner.png"
+                 alt="50% Discount"
+                 class="w-[260px] md:w-[320px] rounded-xl shadow-2xl border border-gray-200 hover:scale-105 transition duration-300 cursor-pointer" />
+        </div>
+    </div>
 
     @await RenderSectionAsync("Scripts", required: false)
 

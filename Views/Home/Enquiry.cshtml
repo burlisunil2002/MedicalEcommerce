@@ -97,8 +97,14 @@
                     <input type="text" name="Contact" placeholder="Mobile Number"
                            class="input" required />
 
-                    <input type="text" name="ProductName" placeholder="Product (optional)"
-                           class="input" />
+                    <input type="hidden" name="productId" value="@Context.Request.Query["productId"]" />
+
+                    <input type="text"
+                           name="ProductName"
+                           value="@Model?.ProductName"
+                           placeholder="Product (optional)"
+                           class="input @(string.IsNullOrEmpty(Model?.ProductName) ? "" : "bg-gray-100")"
+                           @(string.IsNullOrEmpty(Model?.ProductName) ? "" : "readonly") />
 
                 </div>
 

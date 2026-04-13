@@ -54,41 +54,70 @@ using VivekMedicalProducts.Models;
             return View();
         }
 
-        // -------- NEW ENQUIRY ACTIONS --------
+    // -------- NEW ENQUIRY ACTIONS --------
 
-        [HttpGet]
-        public IActionResult Enquiry()
+    [HttpGet]
+    public IActionResult Enquiry(int? productId)
+    {
+        var model = new EnquiryModel();
+
+        if (productId.HasValue)
         {
-            return View();
+            var product = _context.Products.FirstOrDefault(x => x.Id == productId);
+            model.ProductName = product?.Name;
         }
 
-
-
-        [HttpPost]
-        public IActionResult Enquiry(EnquiryModel model)
+        if (User.Identity.IsAuthenticated)
         {
-            if (ModelState.IsValid)
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = _context.Users.FirstOrDefault(x => x.Id == userId);
+
+            model.Name = user?.CustomerName;
+            model.Email = user?.Email;
+            model.Contact = user?.MobileNo;
+        }
+
+        return View(model);
+    }
+
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public IActionResult Enquiry(EnquiryModel model, int? productId)
+    {
+        if (ModelState.IsValid)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = _context.Users.FirstOrDefault(x => x.Id == userId);
+
+            // 🔒 Secure overwrite (avoid tampering)
+            model.Name = user?.CustomerName;
+            model.Email = user?.Email;
+            model.Contact = user?.MobileNo;
+
+            // 🔹 Fetch product again (secure)
+            if (productId.HasValue)
             {
-                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                var user = _context.Users.FirstOrDefault(x => x.Id == userId);
-
-                // ✅ overwrite user input (security)
-                model.Name = user?.CustomerName;
-                model.Email = user?.Email;
-                model.Contact = user?.MobileNo;
-
-                _context.Enquiry.Add(model);
-                _context.SaveChanges();
-
-                _emailService.SendEnquiryMail(model);
-
-                TempData["Success"] = "Your Enquiry submitted successfully";
-
-                return RedirectToAction("Enquiry");
+                var product = _context.Products.FirstOrDefault(x => x.Id == productId);
+                model.ProductName = product?.Name;
             }
 
-            return View(model);
+            model.CreatedDate = DateTime.Now;
+
+            _context.Enquiry.Add(model);
+            _context.SaveChanges();
+
+            _emailService.SendEnquiryMail(model);
+
+            TempData["Success"] = "Your enquiry has been submitted successfully";
+
+            // 🔁 Redirect with productId again (to refill)
+            return RedirectToAction("Enquiry", new { productId = productId });
         }
+
+        return View(model);
+    }
+
 
         public IActionResult EnquiryList(DateTime? fromDate, DateTime? toDate)
         {
