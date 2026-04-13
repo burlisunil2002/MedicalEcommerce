@@ -1,5 +1,8 @@
 ﻿@model IEnumerable<VivekMedicalProducts.ViewModels.ProductViewModel>
 
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+<script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+
 <form method="post">
     @Html.AntiForgeryToken()
 </form>
@@ -22,28 +25,42 @@
 {
 
 <!-- ✅ HERO -->
-<div class="swiper mySwiper mb-8">
-    <div class="swiper-wrapper">
+    <div class="max-w-7xl mx-auto px-4 mt-2">
 
-        <div class="swiper-slide bg-blue-600 text-white text-center py-14">
-            <h1 class="text-3xl font-bold">Medical Products Store</h1>
-            <p class="text-sm mt-2">Trusted Healthcare Equipment</p>
-        </div>
+        <div class="swiper bannerSwiper rounded-xl overflow-hidden shadow-md">
 
-        <div class="swiper-slide bg-blue-500 text-white text-center py-14">
-            <h1 class="text-3xl font-bold">Quality Devices</h1>
-            <p class="text-sm mt-2">Best price guaranteed</p>
-        </div>
+            <div class="swiper-wrapper">
 
-        <div class="swiper-slide bg-blue-700 text-white text-center py-14">
-            <h1 class="text-3xl font-bold">Hospital Equipment</h1>
-            <p class="text-sm mt-2">Bulk orders available</p>
+                <!-- Slide 1 -->
+                <div class="swiper-slide">
+                    <img src="/images/MadeInIndiaBanner.png"
+                         class="w-full h-full object-cover" />
+                </div>
+
+                <!-- Slide 2 -->
+                <div class="swiper-slide">
+                    <img src="/images/bannerMRI.png"
+                         class="w-full h-full object-cover" />
+                </div>
+
+                <!-- Slide 3 -->
+                <div class="swiper-slide">
+                    <img src="/images/offerbanner.png"
+                         class="w-full h-full object-cover" />
+                </div>
+
+            </div>
+
+            <!-- Pagination -->
+            <div class="swiper-pagination"></div>
+
+            <!-- Arrows -->
+            <div class="swiper-button-next"></div>
+            <div class="swiper-button-prev"></div>
+
         </div>
 
     </div>
-
-    <div class="swiper-pagination"></div>
-</div>
 
 <!-- ✅ CATEGORY (UPGRADED) -->
 <div class="max-w-7xl mx-auto mt-6 px-4">
@@ -379,7 +396,164 @@
         background: #cbd5f5;
         border-radius: 10px;
     }
+
+/* ============================= */
+/* 🔥 HERO BANNER SLIDER PREMIUM */
+/* ============================= */
+
+    /* ============================= */
+    /* 🔥 HERO BANNER (FINAL) */
+    /* ============================= */
+
+    .bannerSwiper {
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+        position: relative;
+    }
+
+        /* ============================= */
+        /* 📏 HEIGHT CONTROL */
+        /* ============================= */
+
+        /* Mobile */
+        .bannerSwiper .swiper-slide {
+            height: 150px;
+        }
+
+    /* Tablet */
+    @@media (min-width: 640px) {
+        .bannerSwiper .swiper-slide
+
+    {
+        height: 180px;
+    }
+
+    }
+
+    /* Desktop */
+    @@media (min-width: 1024px) {
+        .bannerSwiper .swiper-slide
+
+    {
+        height: 360px;
+    }
+
+    }
+
+    /* ============================= */
+    /* 🖼 IMAGE FIT */
+    /* ============================= */
+
+    .bannerSwiper img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover; /* 🔥 full stretch */
+        object-position: center; /* safe center */
+
+        display: block;
+        transition: transform 4s ease;
+    }
+
+    /* subtle zoom (premium feel) */
+    .bannerSwiper .swiper-slide-active img {
+        transform: scale(1.01);
+    }
+
+    /* ============================= */
+    /* 🎯 PAGINATION */
+    /* ============================= */
+
+    .swiper-pagination {
+        bottom: 8px !important;
+    }
+
+    .swiper-pagination-bullet {
+        width: 6px;
+        height: 6px;
+        background: rgba(255,255,255,0.8);
+        opacity: 0.6;
+        transition: all 0.3s ease;
+    }
+
+    .swiper-pagination-bullet-active {
+        background: #22c55e;
+        width: 16px;
+        border-radius: 10px;
+        opacity: 1;
+    }
+
+    /* ============================= */
+    /* ➡️ NAVIGATION ARROWS */
+    /* ============================= */
+
+    .swiper-button-next,
+    .swiper-button-prev {
+        width: 32px;
+        height: 32px;
+        background: rgba(255,255,255,0.85);
+        border-radius: 50%;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        transition: all 0.3s ease;
+    }
+
+        /* icon */
+        .swiper-button-next::after,
+        .swiper-button-prev::after {
+            font-size: 12px;
+            color: #111;
+            font-weight: bold;
+        }
+
+        /* hover */
+        .swiper-button-next:hover,
+        .swiper-button-prev:hover {
+            background: #22c55e;
+            transform: scale(1.1);
+        }
+
+            .swiper-button-next:hover::after,
+            .swiper-button-prev:hover::after {
+                color: #fff;
+            }
+
+    /* ============================= */
+    /* 📱 MOBILE */
+    /* ============================= */
+
+    @@media (max-width: 768px) {
+        /* hide arrows */
+        .swiper-button-next, .swiper-button-prev
+
+    {
+        display: none;
+    }
+
+    /* smaller dots */
+    .swiper-pagination-bullet {
+        width: 5px;
+        height: 5px;
+    }
+
+    }
+
+    /* ============================= */
+    /* ✨ FINAL TOUCH */
+    /* ============================= */
+
+    .swiper-slide {
+        backface-visibility: hidden;
+    }
+
+    /* optional hover brightness */
+    .bannerSwiper:hover img {
+        filter: brightness(1.03);
+    }
+
+ 
+
 </style>
+
 
 <!-- ✅ SCRIPTS -->
 
@@ -488,4 +662,32 @@
         });
     }, 1000);
 
+</script>
+
+<script>
+    var swiper = new Swiper(".bannerSwiper", {
+        loop: true,
+        spaceBetween: 20,
+        centeredSlides: true,
+
+        autoplay: {
+            delay: 3000,
+            disableOnInteraction: false,
+        },
+
+        pagination: {
+            el: ".swiper-pagination",
+            clickable: true,
+        },
+
+        navigation: {
+            nextEl: ".swiper-button-next",
+            prevEl: ".swiper-button-prev",
+        },
+
+        effect: "fade",
+        fadeEffect: {
+            crossFade: true
+        }
+    });
 </script>

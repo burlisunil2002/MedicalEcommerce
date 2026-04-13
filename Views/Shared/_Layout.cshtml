@@ -208,7 +208,7 @@
     <div class="announcement-bar">
         <div class="announcement-track">
             <span>
-                🚀 This website is for Testing Purpose | Please Note 🚀 This website is for Testing Purpose | Please Note
+                🚀 This website is under Testing | Please Note 🚀 This website is under Testing | Please Note
             </span>
         </div>
     </div>
@@ -219,10 +219,13 @@
         <div class="max-w-7xl mx-auto px-4">
 
             <div class="flex items-center justify-between h-16">
-
+                
                 <!-- LOGO -->
                 <div class="flex items-center gap-2">
-                    <img src="~/images/sunillogo.png" class="h-16 w-auto object-contain">
+                    <div class="flex items-center h-full">
+                        <img src="~/images/sunillogo.png"
+                             class="h-12 md:h-14 w-auto max-w-[260px] object-contain">
+                    </div>
                 </div>
 
                 <!-- SEARCH -->
@@ -410,7 +413,7 @@
     </header>
 
     <!-- 🔥 PAGE CONTENT -->
-    <main class="max-w-7xl mx-auto px-4 py-6 min-h-screen">
+    <main class="w-full mt-0 p-0">
         @RenderBody()
     </main>
 

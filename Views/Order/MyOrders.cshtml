@@ -87,11 +87,14 @@
                                     View Invoice
                                 </button>
                             }
-                    @if (item.OrderStatus.ToLower() == "delivered")
+                    @if (item.OrderStatus.ToLower() == "confirmed")
                             {
-                                <button class="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg">
+                                <a asp-controller="Products"
+                                   asp-action="Details"
+                                   asp-route-id="@item.ProductId"
+                                   class="px-4 py-2 bg-green-600 text-white rounded-lg">
                                     Reorder
-                                </button>
+                                </a>
                             }
 
                         </div>

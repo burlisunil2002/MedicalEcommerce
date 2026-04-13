@@ -453,6 +453,7 @@ namespace VivekMedicalProducts.Controllers
                 {
                     OrderId = i.OrderId,
                     OrderDate = i.Order.OrderDate,
+                    ProductId = i.ProductId,
 
                     ProductName = i.Product.Name,
 
