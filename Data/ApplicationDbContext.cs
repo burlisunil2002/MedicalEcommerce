@@ -31,6 +31,8 @@ public class ApplicationDbContext
 
     public DbSet<WishlistModel> Wishlists { get; set; }
 
+    public DbSet<PincodeServiceabilityModel> PincodeServiceability { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
 

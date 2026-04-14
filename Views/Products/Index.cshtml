@@ -1,4 +1,9 @@
 ﻿@model IEnumerable<VivekMedicalProducts.ViewModels.ProductViewModel>
+@using VivekMedicalProducts.Data
+@using Microsoft.AspNetCore.Identity
+
+@inject UserManager<ApplicationUser> UserManager
+
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
 <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
@@ -19,6 +24,15 @@
             && p.DealEndDate.HasValue
             && p.DealEndDate > now)
         .ToList();
+}
+@{
+    var user = await UserManager.GetUserAsync(User);
+    bool showReminder = false;
+
+        if (user != null)
+        {
+                showReminder = !user.IsProfileCompleted;
+        }
 }
 
 @if (!isCategoryPage)
@@ -349,6 +363,43 @@
     </div>
 
 </div>
+
+@if (showReminder)
+{
+    <div id="profilePopup"
+         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+
+        <div class="bg-white rounded-2xl shadow-xl p-6 w-[90%] max-w-md text-center">
+
+            <h2 class="text-lg font-semibold mb-2 text-gray-800">
+                Complete Your KYC Registration
+            </h2>
+
+            <p class="text-sm text-gray-600 mb-5">
+                Please complete your profile to access all features and place orders smoothly.
+            </p>
+
+            <div class="flex justify-center gap-4">
+
+                <!-- COMPLETE -->
+                <a asp-controller="Account"
+                   asp-action="Register"
+                   class="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+                    Complete KYC
+                </a>
+
+                <!-- SKIP -->
+                <button onclick="closeProfilePopup()"
+                        class="px-5 py-2 bg-gray-300 rounded-lg hover:bg-gray-400 transition">
+                    Skip
+                </button>
+
+            </div>
+
+        </div>
+    </div>
+}
+
 
 <!-- ✅ STYLES -->
 <style>

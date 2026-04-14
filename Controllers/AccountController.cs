@@ -1,4 +1,5 @@
 ﻿using DocumentFormat.OpenXml.Spreadsheet;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -372,27 +373,35 @@ public class AccountController : Controller
 
     // ================= MERGE CART =================
 
-    public IActionResult Profile()
+    [HttpGet("Profile")]
+    public async Task<IActionResult> Profile()
     {
-        string userId = _userContext.GetUserId(); // ✅ FIX
+        var userId = _userContext.GetUserId();
 
-        var user = _context.Users
-            .Where(x => x.Id == userId)
-            .Select(x => new RegisterViewModel
-            {
-                CustomerName = x.CustomerName,
-                Email = x.Email,
-                MobileNo = x.MobileNo,
-                Address = x.Address
-            })
-            .FirstOrDefault();
+        if (string.IsNullOrEmpty(userId))
+            return RedirectToAction("Login");
+
+        var user = await _userManager.FindByIdAsync(userId);
 
         if (user == null)
-        {
             return RedirectToAction("Login");
+
+        // 🚨 MAIN CONDITION
+        if (!user.IsProfileCompleted)
+        {
+            return RedirectToAction("Register");
         }
 
-        return View(user);
+        // ✅ SHOW PROFILE IF COMPLETED
+        var model = new RegisterViewModel
+        {
+            CustomerName = user.CustomerName,
+            Email = user.Email,
+            MobileNo = user.MobileNo,
+            Address = user.Address
+        };
+
+        return View(model);
     }
 
     [HttpPost]

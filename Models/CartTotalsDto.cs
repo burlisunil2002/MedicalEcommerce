@@ -5,6 +5,7 @@
         public decimal Subtotal { get; set; }
         public decimal GST { get; set; }
         public decimal Discount { get; set; }
+        public decimal CouponDiscount { get; set; }
         public decimal Delivery { get; set; }
         public decimal GrandTotal { get; set; }
     }

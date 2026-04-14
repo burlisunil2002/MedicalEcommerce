@@ -110,8 +110,29 @@ $(document).ready(function () {
 
         let qty = parseInt(qtySpan.text()) || 1;
 
-        if (qty > 1) {
+        // ✅ REMOVE WHEN QTY = 1
+        if (qty === 1) {
 
+            postAjax("/Cart/Remove", { productId: productId })
+                .done(function () {
+
+                    parent.remove();
+
+                    loadCartCount();
+
+                    if (window.location.pathname.includes("Cart")) {
+                        refreshCartSummary().then(() => {
+                            checkEmptyCart();
+                        });
+                    }
+                })
+                .fail(err => console.error("Remove error:", err.responseText))
+                .always(() => isProcessing = false);
+
+        }
+        else {
+
+            // ✅ DECREASE
             postAjax("/Cart/UpdateQuantity", {
                 productId: productId,
                 change: -1
@@ -119,30 +140,6 @@ $(document).ready(function () {
                 .done(function () {
 
                     qtySpan.text(qty - 1);
-                    loadCartCount();
-
-                    if (window.location.pathname.includes("Cart")) {
-                        refreshCartSummary();
-                    }
-                })
-                .fail(function (err) {
-                    console.error("Minus error:", err.responseText);
-                })
-                .always(function () {
-                    isProcessing = false;
-                });
-
-        } else {
-
-            // REMOVE when qty = 1
-            postAjax("/Cart/Remove", { productId: productId })
-                .done(function () {
-
-                    parent.find(".qty-controller")
-                        .addClass("hidden")
-                        .removeClass("flex");
-
-                    parent.find(".add-cart-btn").show();
 
                     loadCartCount();
 
@@ -150,12 +147,8 @@ $(document).ready(function () {
                         refreshCartSummary();
                     }
                 })
-                .fail(function (err) {
-                    console.error("Remove error:", err.responseText);
-                })
-                .always(function () {
-                    isProcessing = false;
-                });
+                .fail(err => console.error("Update error:", err.responseText))
+                .always(() => isProcessing = false);
         }
     });
 
@@ -180,10 +173,10 @@ $(document).ready(function () {
                 setTimeout(() => {
                     parent.remove();
                     loadCartCount();
-                    refreshCartSummary();
 
                     if (window.location.pathname.includes("Cart")) {
                         refreshCartSummary();
+                        checkEmptyCart();
                     }
                 }, 300);
             })
@@ -195,21 +188,20 @@ $(document).ready(function () {
 });
 
 // ================= LIVE SUMMARY =================
+
 function refreshCartSummary() {
 
-    $.get("/Cart/GetCartSummary")
+    return $.get("/Cart/GetCartSummary")
         .done(function (data) {
 
             $("#subtotal").text("₹ " + data.subtotal.toFixed(2));
             $("#gsttotal").text("₹ " + data.gst.toFixed(2));
             $("#saved").text("₹ " + data.discount.toFixed(2));
-
-            $("#couponAmount").text("- ₹ " + data.coupon.toFixed(2)); // 🔥 NEW
+            $("#couponAmount").text("- ₹ " + data.coupon.toFixed(2));
 
             $("#delivery").text(data.delivery === 0 ? "FREE" : "₹ 5");
             $("#grandtotal").text("₹ " + data.total.toFixed(2));
 
-            // delivery animation
             let remaining = 20 - data.subtotal;
 
             if (remaining > 0) {

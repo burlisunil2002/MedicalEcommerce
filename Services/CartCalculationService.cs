@@ -66,7 +66,7 @@ namespace VivekMedicalProducts.Services
             }
 
             // 🚚 DELIVERY
-            decimal delivery = subtotal >= 20 ? 0 : 5;
+            decimal delivery = subtotal > 0 && subtotal < 20 ? 5 : 0;
 
             decimal total = subtotal + gst + delivery - couponDiscount;
 
@@ -74,7 +74,8 @@ namespace VivekMedicalProducts.Services
             {
                 Subtotal = subtotal,
                 GST = gst,
-                Discount = discount + couponDiscount,
+                Discount = discount,
+                CouponDiscount = couponDiscount,
                 Delivery = delivery,
                 GrandTotal = Math.Round(total, 2)
             };

@@ -79,21 +79,8 @@ public class ReviewController : Controller
         if (!carts.Any())
             return RedirectToAction("Index", "Cart");
 
-        // 🔥 CENTRAL CALCULATION
+        // ✅ SINGLE SOURCE OF TRUTH
         var totals = await _calc.CalculateAsync(userId, guestId, coupon);
-
-        // 🎟️ COUPON CALCULATION (SEPARATE DISPLAY)
-        decimal couponDiscount = 0;
-
-        if (!string.IsNullOrEmpty(coupon))
-        {
-            if (coupon == "SAVE10")
-                couponDiscount = totals.Subtotal * 0.10m;
-            else if (coupon == "SAVE20")
-                couponDiscount = totals.Subtotal * 0.20m;
-            else if (coupon == "FLAT100")
-                couponDiscount = 100;
-        }
 
         // 📦 ADDRESS
         var addressJson = HttpContext.Session.GetString("Address");
@@ -102,15 +89,19 @@ public class ReviewController : Controller
             ? new CheckoutViewModel()
             : JsonConvert.DeserializeObject<CheckoutViewModel>(addressJson)!;
 
-        // ✅ VIEW DATA
+        // ✅ PASS EVERYTHING FROM SERVICE
         ViewBag.Carts = carts;
         ViewBag.Subtotal = totals.Subtotal;
         ViewBag.GST = totals.GST;
         ViewBag.Discount = totals.Discount;
-        ViewBag.CouponDiscount = couponDiscount; // 🔥 IMPORTANT
+
+        // 🔥 FIX: coupon directly from service
+        ViewBag.CouponDiscount = totals.CouponDiscount;
+        ViewBag.Coupon = coupon;
+
         ViewBag.Delivery = totals.Delivery;
         ViewBag.Total = totals.GrandTotal;
-        ViewBag.Coupon = coupon;
+
         ViewBag.RazorpayKey = _config["Razorpay:Key"];
         ViewBag.Address = address;
 

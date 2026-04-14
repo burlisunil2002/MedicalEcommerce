@@ -1,6 +1,6 @@
 ﻿@model VivekMedicalProducts.ViewModels.CartItemViewModel
 
-<div class="max-w-7xl mx-auto px-4 py-8">
+<div id="cartContainer" class="max-w-7xl mx-auto px-4 py-8">
 
     <h2 class="text-3xl font-bold text-center mb-8">
         🛒 Your Cart
@@ -8,8 +8,22 @@
 
     @if (!Model.CartItems.Any())
     {
-        <div class="text-center py-20 text-gray-500">
-            Your cart is empty
+        <div class="flex flex-col items-center justify-center h-[65vh] text-center">
+
+            <div class="text-6xl mb-4 animate-bounce">🛒</div>
+
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">
+                Your Cart is Empty
+            </h2>
+
+            <p class="text-gray-500 mb-6">
+                Looks like you haven’t added anything yet
+            </p>
+
+            <a href="/Products"
+               class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl shadow hover:scale-105 transition">
+                Start Shopping →
+            </a>
         </div>
     }
     else
@@ -45,7 +59,7 @@
 
                                 <div class="flex items-center gap-2">
 
-                                    <span class="text-green-600 font-bold">
+                                    <span class="text-green-600 font-bold text-lg">
                                         ₹ @final
                                     </span>
 
@@ -69,18 +83,23 @@
                         <!-- RIGHT -->
                         <div class="flex items-center gap-4">
 
-                            <div class="qty-controller flex items-center bg-gray-100 rounded-lg px-2 py-1">
+                            <div class="qty-controller flex items-center bg-gray-100 rounded-xl px-2 py-1 shadow-inner">
 
-                                <button class="minus px-2 text-lg">-</button>
+                                <button class="minus w-10 h-10 flex items-center justify-center text-xl font-bold bg-white rounded-lg shadow hover:bg-red-100 transition">
+                                    −
+                                </button>
 
-                                <span class="qty px-3 font-semibold">
+                                <span class="qty px-4 text-lg font-semibold">
                                     @item.Quantity
                                 </span>
 
-                                <button class="plus px-2 text-lg">+</button>
+                                <button class="plus w-10 h-10 flex items-center justify-center text-xl font-bold bg-white rounded-lg shadow hover:bg-green-100 transition">
+                                    +
+                                </button>
+
                             </div>
 
-                            <button class="delete-btn text-red-500 text-xl hover:scale-110 transition">
+                            <button class="delete-btn bg-red-100 text-red-600 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-red-200 transition shadow">
                                 🗑️
                             </button>
 
@@ -151,7 +170,7 @@
                     </div>
 
                     <div class="flex justify-between text-red-500">
-                        <span>Coupon</span>
+                        <span>Coupon Savings</span>
                         <span id="couponAmount">₹ 0</span>
                     </div>
 
@@ -227,6 +246,27 @@ function updateDeliveryProgress() {
         msg.classList.add("text-orange-500");
     }
 }
+
+            function checkEmptyCart() {
+
+        if (!window.location.pathname.toLowerCase().includes("cart")) return;
+
+        if ($(".cart-area").length === 0) {
+
+            $("#cartContainer").html(`
+                <div class="flex flex-col items-center justify-center h-[65vh] text-center">
+                    <div class="text-6xl mb-4 animate-bounce">🛒</div>
+                    <h2 class="text-2xl font-bold mb-2">Your Cart is Empty</h2>
+                    <p class="text-gray-500 mb-6">Start adding products to continue</p>
+                    <a href="/Products"
+                       class="bg-blue-600 text-white px-6 py-3 rounded-xl shadow hover:scale-105 transition">
+                       Continue Shopping →
+                    </a>
+                </div>
+            `);
+        }
+    }
+
 </script>
 
 <style>
