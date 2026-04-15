@@ -218,8 +218,6 @@ namespace VivekMedicalProducts.Controllers
                     couponDiscount = totals.Subtotal * 0.10m;
                 else if (coupon == "SAVE20")
                     couponDiscount = totals.Subtotal * 0.20m;
-                else if (coupon == "FLAT100")
-                    couponDiscount = 100;
             }
 
             return Json(new

@@ -61,8 +61,6 @@ namespace VivekMedicalProducts.Services
                 else if (couponCode == "SAVE20")
                     couponDiscount = subtotal * 0.20m;
 
-                else if (couponCode == "FLAT100")
-                    couponDiscount = 100;
             }
 
             // 🚚 DELIVERY

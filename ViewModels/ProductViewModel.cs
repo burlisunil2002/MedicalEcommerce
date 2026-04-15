@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using VivekMedicalProducts.Models;
 
 namespace VivekMedicalProducts.ViewModels
 {
@@ -7,34 +6,54 @@ namespace VivekMedicalProducts.ViewModels
     {
         public int Id { get; set; }
 
+        // 🔹 BASIC
         public string Name { get; set; }
-
         public string Description { get; set; }
-
         public string Category { get; set; }
 
-        public decimal Price { get; set; }
+        // 🔹 SELLER
+        public int SellerId { get; set; }
+        public string? SellerName { get; set; }
 
+        // 🔹 PRICING
+        public decimal Price { get; set; }
         public int GSTPercentage { get; set; }
 
         [Required(ErrorMessage = "Please select price type")]
         public string PriceType { get; set; }
 
+        // 🔹 IMAGES
         public string? ImageUrl { get; set; }
+        public string? ImageUrl2 { get; set; }
+        public string? ImageUrl3 { get; set; }
+        public string? ImageUrl4 { get; set; }
 
         public string? QuotationUrl { get; set; }
 
-        // ⭐ CART
+        // 🔹 CART
         public int CartQuantity { get; set; }
 
-        // 🔥 HOT DEAL FIELDS (NEW)
+        // 🔥 DEALS
         public bool IsHotDeal { get; set; }
-
         public decimal? DiscountPercentage { get; set; }
-
         public DateTime? DealEndDate { get; set; }
 
-        // ⭐ CALCULATED PRICE (BEST PRACTICE)
+        // 🔹 INVENTORY
+        public int? StockQuantity { get; set; }
+
+        // 🔹 SHIPPING
+        public string? ProductType { get; set; }
+        public decimal? Weight { get; set; }
+        public bool? IsFragile { get; set; }
+
+        // 🔹 STATUS
+        public bool IsActive { get; set; }
+
+        // 🔹 MEDICAL
+        public string? BatchNumber { get; set; }
+        public DateTime? ExpiryDate { get; set; }
+
+        // ⭐ FINAL PRICE
         public decimal FinalPrice
         {
             get
@@ -46,12 +65,12 @@ namespace VivekMedicalProducts.ViewModels
             }
         }
 
-        // ⭐ OPTIONAL: URGENCY (UI USE)
+        // ⭐ URGENCY (UI)
         public int FakeStockLeft
         {
             get
             {
-                return new Random(Id).Next(2, 10); // stable random per product
+                return new Random(Id).Next(2, 10);
             }
         }
     }

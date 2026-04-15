@@ -11,6 +11,9 @@ public class ApplicationDbContext
         : base(options) { }
 
     public DbSet<ProductModel> Products { get; set; }
+
+    public DbSet<SellerModel> Sellers { get; set; }
+
     public DbSet<EnquiryModel> Enquiry { get; set; }
 
     public DbSet<PasswordResetOtp> PasswordResetOtps { get; set; }

@@ -731,6 +731,57 @@ namespace VivekMedicalProducts.Migrations
                     b.ToTable("Payments");
                 });
 
+            modelBuilder.Entity("VivekMedicalProducts.Models.PincodeServiceabilityModel", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("City")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DeliveryDays")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsCODAvailable")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Pincode")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<decimal>("ShippingCharge")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Zone")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PincodeServiceability");
+                });
+
             modelBuilder.Entity("VivekMedicalProducts.Models.ProductModel", b =>
                 {
                     b.Property<int>("Id")
@@ -738,6 +789,9 @@ namespace VivekMedicalProducts.Migrations
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BatchNumber")
+                        .HasColumnType("text");
 
                     b.Property<string>("Category")
                         .IsRequired()
@@ -756,11 +810,29 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<decimal?>("DiscountPercentage")
                         .HasColumnType("numeric");
 
+                    b.Property<DateTime?>("ExpiryDate")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("GSTPercentage")
                         .HasColumnType("integer");
 
                     b.Property<string>("ImageUrl")
                         .HasColumnType("text");
+
+                    b.Property<string>("ImageUrl2")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ImageUrl3")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ImageUrl4")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsFragile")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsHotDeal")
                         .HasColumnType("boolean");
@@ -777,12 +849,130 @@ namespace VivekMedicalProducts.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("ProductType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("QuotationUrl")
                         .HasColumnType("text");
 
+                    b.Property<int>("SellerId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("StockQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("Weight")
+                        .HasColumnType("numeric");
+
                     b.HasKey("Id");
 
+                    b.HasIndex("SellerId");
+
                     b.ToTable("Products");
+                });
+
+            modelBuilder.Entity("VivekMedicalProducts.Models.SellerModel", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AccountHolderName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("AccountNumber")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("AddressLine1")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("AddressLine2")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BankName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("BusinessName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("City")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("GSTFilePath")
+                        .HasColumnType("text");
+
+                    b.Property<string>("GSTNumber")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("IFSCCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsGSTVerified")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsPANVerified")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("OwnerName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PAN")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PANFilePath")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Pincode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("SubscriptionEndDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Sellers");
                 });
 
             modelBuilder.Entity("VivekMedicalProducts.Models.WishlistModel", b =>
@@ -913,6 +1103,17 @@ namespace VivekMedicalProducts.Migrations
                         .IsRequired();
 
                     b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("VivekMedicalProducts.Models.ProductModel", b =>
+                {
+                    b.HasOne("VivekMedicalProducts.Models.SellerModel", "Seller")
+                        .WithMany()
+                        .HasForeignKey("SellerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Seller");
                 });
 
             modelBuilder.Entity("VivekMedicalProducts.Models.WishlistModel", b =>

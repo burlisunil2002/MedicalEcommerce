@@ -1,0 +1,129 @@
+﻿@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Seller Register</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gradient-to-br from-blue-50 to-blue-100 min-h-screen flex items-center justify-center">
+
+    <div class="w-full max-w-4xl bg-white rounded-2xl shadow-xl p-8">
+
+        <h2 class="text-2xl font-bold text-blue-600 mb-6 text-center">
+            Seller Registration 🚀
+        </h2>
+
+        <!-- MESSAGE -->
+        <div id="messageBox" class="hidden mb-4 p-3 rounded text-sm"></div>
+
+        <form id="registerForm" class="grid grid-cols-2 gap-4">
+
+            @Html.AntiForgeryToken()
+
+            <!-- BASIC -->
+            <input name="BusinessName" placeholder="Business Name" class="input" required />
+            <input name="OwnerName" placeholder="Owner Name" class="input" required />
+
+            <input name="Email" type="email" placeholder="Email" class="input" required />
+            <input name="Phone" placeholder="Phone (10 digits)" class="input" required pattern="[6-9]{1}[0-9]{9}" />
+
+            <input name="Password" type="password" placeholder="Password (min 6 chars)" class="input col-span-2" required minlength="6" />
+
+            <!-- GST / PAN -->
+            <input name="GSTNumber" placeholder="GST Number (15 chars)" class="input" required maxlength="15" />
+            <input name="PAN" placeholder="PAN Number (10 chars)" class="input" required maxlength="10" />
+
+            <!-- ADDRESS -->
+            <input name="AddressLine1" placeholder="Address" class="input col-span-2" required />
+            <input name="City" placeholder="City" class="input" required />
+            <input name="State" placeholder="State" class="input" required />
+            <input name="Pincode" placeholder="Pincode (6 digits)" class="input col-span-2" required pattern="[0-9]{6}" />
+
+            <!-- BANK -->
+            <input name="AccountHolderName" placeholder="Account Holder Name" class="input" required />
+            <input name="AccountNumber" placeholder="Account Number" class="input" required />
+            <input name="IFSCCode" placeholder="IFSC Code" class="input" required />
+
+            <input name="BankName" placeholder="Bank Name" class="input col-span-2" required />
+
+            <!-- BUTTON -->
+            <button type="submit"
+                    class="col-span-2 bg-gradient-to-r from-blue-600 to-indigo-600
+                       text-white py-2 rounded-lg font-semibold hover:scale-105 transition">
+                Register Seller
+            </button>
+        </form>
+    </div>
+
+    <style>
+        .input {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            outline: none;
+        }
+
+            .input:focus {
+                border-color: #2563eb;
+                box-shadow: 0 0 0 2px #bfdbfe;
+            }
+    </style>
+
+    <script>
+        const form = document.getElementById("registerForm");
+
+        // 🔥 AUTO UPPERCASE
+        ["GSTNumber", "PAN", "IFSCCode"].forEach(name => {
+            document.querySelector(`[name="${name}"]`).addEventListener("input", function () {
+                this.value = this.value.toUpperCase();
+            });
+        });
+
+        // 🚀 SUBMIT
+        form.addEventListener("submit", async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(form);
+            const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+            const res = await fetch('/Seller/SellerRegister', {
+                method: 'POST',
+                headers: {
+                    'RequestVerificationToken': token
+                },
+                body: formData
+            });
+
+            const data = await res.json();
+
+            const box = document.getElementById("messageBox");
+            box.classList.remove("hidden");
+
+            if (data.success) {
+                box.className = "mb-4 p-3 rounded text-sm bg-green-100 text-green-700";
+                box.innerText = data.message;
+
+                form.reset();
+
+                setTimeout(() => {
+                    window.location.href = data.redirectUrl;
+                }, 1500);
+            } else {
+                box.className = "mb-4 p-3 rounded text-sm bg-red-100 text-red-700";
+
+                // 🔥 Show detailed errors if exist
+                if (data.errors) {
+                    box.innerText = data.errors.map(e => e.field + ": " + e.errors.join(", ")).join("\n");
+                } else {
+                    box.innerText = data.message;
+                }
+            }
+        });
+    </script>
+
+</body>
+</html>

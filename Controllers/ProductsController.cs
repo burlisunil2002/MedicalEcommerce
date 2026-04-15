@@ -86,27 +86,59 @@ namespace VivekMedicalProducts.Controllers
                             .Where(c => c.UserId == userId)
                             .ToList();
 
+            var cartDict = cartItems
+    .GroupBy(c => c.ProductId)
+    .ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity));
+
             var result = products
                 .ToList()
-                .Select(p => new VivekMedicalProducts.ViewModels.ProductViewModel
+                .Select(p => new ProductViewModel
                 {
                     Id = p.Id,
                     Name = p.Name,
                     Description = p.Description,
                     Category = p.Category,
+
+                    // 🔹 SELLER
+                    SellerId = p.SellerId ?? 0,
+                    SellerName = p.Seller != null ? p.Seller.BusinessName : "",
+
+                    // 🔹 PRICING
                     Price = p.Price,
                     GSTPercentage = p.GSTPercentage,
+                    PriceType = p.PriceType ?? "Fixed",
+
+                    // 🔹 IMAGES
                     ImageUrl = p.ImageUrl,
+                    ImageUrl2 = p.ImageUrl2,
+                    ImageUrl3 = p.ImageUrl3,
+                    ImageUrl4 = p.ImageUrl4,
                     QuotationUrl = p.QuotationUrl,
-                    PriceType = p.PriceType,
+
+                    // 🔥 DEALS
                     IsHotDeal = p.IsHotDeal,
                     DiscountPercentage = p.DiscountPercentage,
                     DealEndDate = p.DealEndDate,
 
-                    CartQuantity = cartItems
-                        .Where(c => c.ProductId == p.Id)
-                        .Select(c => c.Quantity)
-                        .FirstOrDefault()
+                    // 🔹 INVENTORY
+                    StockQuantity = p.StockQuantity,
+
+                    // 🔹 SHIPPING ✅ SAFE
+                    ProductType = p.ProductType ?? "Consumable",
+                    Weight = p.Weight ?? 0,
+                    IsFragile = p.IsFragile ?? false,
+
+                    // 🔹 STATUS
+                    IsActive = p.IsActive,
+
+                    // 🔹 MEDICAL
+                    BatchNumber = p.BatchNumber,
+                    ExpiryDate = p.ExpiryDate,
+
+                    // 🔹 CART
+                    CartQuantity = cartDict.ContainsKey(p.Id)
+                        ? cartDict[p.Id]
+                        : 0
                 })
                 .ToList();
 
