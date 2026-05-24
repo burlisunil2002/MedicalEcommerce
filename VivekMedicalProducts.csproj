@@ -84,7 +84,7 @@
   </ItemGroup>
 	
 
-	<Target Name="BuildReact" BeforeTargets="Build">
+	<Target Name="BuildReact" BeforeTargets="Build" Condition="'$(RENDER)' != 'true'">
   <Exec WorkingDirectory="sunilmedical-ui" Command="npm install" />
   <Exec WorkingDirectory="sunilmedical-ui" Command="npm run build" />
 </Target>
