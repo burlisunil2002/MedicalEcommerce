@@ -17,7 +17,7 @@
     "react": "react-scripts start",
     "dotnet": "dotnet run --project ../VivekMedicalProducts",
     "start": "concurrently \"npm run react\" \"npm run dotnet\"",
-    "build": "react-scripts build",
+    "build": "node --max-old-space-size=8192 node_modules/react-scripts/bin/react-scripts.js build",
     "test": "react-scripts test"
   },
   "devDependencies": {
