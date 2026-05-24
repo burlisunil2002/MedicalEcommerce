@@ -8,10 +8,37 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Remove="wwwroot\build\favicon.ico" />
+    <Content Remove="wwwroot\build\images\bannerMRI.png" />
+    <Content Remove="wwwroot\build\images\MadeInIndiaBanner.png" />
+    <Content Remove="wwwroot\build\images\offerbanner.png" />
+    <Content Remove="wwwroot\build\index.html" />
+    <Content Remove="wwwroot\build\logo192.png" />
+    <Content Remove="wwwroot\build\logo512.png" />
+    <Content Remove="wwwroot\build\robots.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="sunilmedical-ui\public\images\bannerMRI.png">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="sunilmedical-ui\public\images\MadeInIndiaBanner.png">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="sunilmedical-ui\public\images\offerbanner.png">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />
     <PackageReference Include="ClosedXML" Version="0.105.0" />
     <PackageReference Include="CloudinaryDotNet" Version="1.28.0" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="8.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.4" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.4">
       <PrivateAssets>all</PrivateAssets>
@@ -32,7 +59,42 @@
 
   <ItemGroup>
     <Folder Include="Migrations\" />
+    <Folder Include="Views\Cart\" />
+    <Folder Include="Views\Checkout\" />
     <Folder Include="wwwroot\quotations\" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Include="wwwroot\build\favicon.ico" />
+    <None Include="wwwroot\build\images\bannerMRI.png" />
+    <None Include="wwwroot\build\images\MadeInIndiaBanner.png" />
+    <None Include="wwwroot\build\images\offerbanner.png" />
+    <None Include="wwwroot\build\logo192.png" />
+    <None Include="wwwroot\build\logo512.png" />
+    <None Include="wwwroot\build\robots.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="wwwroot\build\asset-manifest.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Update="wwwroot\build\manifest.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+	
+
+	<Target Name="BuildReact" BeforeTargets="Build">
+  <Exec WorkingDirectory="sunilmedical-ui" Command="npm install" />
+  <Exec WorkingDirectory="sunilmedical-ui" Command="npm run build" />
+</Target>
+
+<Target Name="CopyReactBuild" AfterTargets="Build">
+  <ItemGroup>
+    <ReactBuildFiles Include="sunilmedical-ui/build/**/*" />
+  </ItemGroup>
+
+  <Copy SourceFiles="@(ReactBuildFiles)" DestinationFiles="@(ReactBuildFiles->'wwwroot/react/%(RecursiveDir)%(Filename)%(Extension)')" />
+</Target>
 
 </Project>

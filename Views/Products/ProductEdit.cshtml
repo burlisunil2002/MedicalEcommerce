@@ -1,173 +1,295 @@
 ﻿@model VivekMedicalProducts.Models.ProductModel
+@{
+    Layout = null;
+    var variants = Model.Variants?.ToList() ?? new List<ProductVariant>();
+}
 
-<div asp-validation-summary="All" class="text-red-500 mb-4"></div>
+<head>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
 
-<div class="min-h-screen bg-gradient-to-br from-blue-50 via-white to-gray-100 py-10 px-4">
+<div class="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-800 p-8 text-white">
 
-    <div class="max-w-5xl mx-auto bg-white shadow-2xl rounded-3xl p-8">
+    <div class="max-w-7xl mx-auto bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-8">
 
-        <!-- HEADER -->
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-3">
-            <h2 class="text-2xl font-bold text-gray-800">
-                ✏️ Edit Product
-            </h2>
+        <h2 class="text-3xl font-bold mb-6">Edit Product</h2>
 
-            <a asp-controller="Products"
-               asp-action="ProductManagement"
-               class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">
-                ← Back
-            </a>
-        </div>
+        <form asp-action="ProductEdit" method="post" enctype="multipart/form-data" class="space-y-8">
 
-        <!-- FORM -->
-        <form asp-controller="Products"
-              asp-action="ProductEdit"
-              method="post"
-              enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
 
             <input type="hidden" asp-for="Id" />
             <input type="hidden" asp-for="ImageUrl" />
             <input type="hidden" asp-for="QuotationUrl" />
 
-            <!-- GRID -->
+            <!-- ================= BASIC ================= -->
             <div class="grid md:grid-cols-2 gap-6">
 
-                <!-- NAME -->
                 <div>
-                    <label class="label">Product Name</label>
+                    <label>Product Name</label>
                     <input asp-for="Name" class="input" />
                 </div>
 
-                <!-- CATEGORY -->
                 <div>
-                    <label class="label">Category</label>
-                    <input asp-for="Category" class="input" />
+                    <label>Brand</label>
+                    <input asp-for="Brand" class="input" />
                 </div>
 
-                <!-- PRICE TYPE -->
                 <div>
-                    <label class="label">Price Type</label>
-                    <input asp-for="PriceType" class="input" />
+                    <label>Category</label>
+                    <select asp-for="Category" class="input text-black">
+                        <option value="">Select</option>
+                        <option>Mother & Child Care</option>
+                        <option>Radiology</option>
+                        <option>Critical Care Equipment</option>
+                        <option>Lab & Diagnostics</option>
+                        <option>Consumables & Disposables</option>
+                        <option>Thermal Camera</option>
+                        <option>Medicine Vending Machine</option>
+                        <option>Surgical Instruments</option>
+                        <option>Hospital Furniture</option>
+                        <option>iLAB</option>
+                        <option>Safe Zone Container</option>
+                        <option>Oxy Wheel</option>
+                        <option>Water Recycling System</option>
+                        <option>Portable Ventilators</option>
+                        <option>Anesthesia Machine</option>
+                        <option>Point of Care Devices</option>
+                        <option>Prosthesis</option>
+                        <option>Instruments</option>
+                        <option>Uroflowrometry</option>
+                        <option>Microbiology</option>
+                    </select>
                 </div>
 
-                <!-- PRICE -->
                 <div>
-                    <label class="label">Price</label>
-                    <input asp-for="Price" class="input" />
-                </div>
-
-                <!-- GST -->
-                <div>
-                    <label class="label">GST (%)</label>
+                    <label>GST (%)</label>
                     <input asp-for="GSTPercentage" class="input" />
                 </div>
 
-                <!-- 🔥 HOT DEAL TOGGLE -->
-                <div class="flex items-center gap-3 mt-6">
-                    <input asp-for="IsHotDeal" class="h-5 w-5" id="hotDealToggle" />
-                    <span class="text-sm font-medium text-gray-700">
-                        🔥 Mark as Hot Deal
-                    </span>
+                <div>
+                    <label>HSN Code</label>
+                    <input asp-for="HSNCode" class="input" />
                 </div>
 
-                <!-- DISCOUNT -->
-                <div id="discountSection">
-                    <label class="label">Discount (%)</label>
-                    <input asp-for="DiscountPercentage"
-                           type="number"
-                           step="0.01"
-                           class="input" />
+                <div>
+                    <label>Price Type</label>
+                    <select asp-for="PriceType" class="input text-black">
+                        <option value="Normal">Normal</option>
+                        <option value="AskForPrice">Ask For Price</option>
+                    </select>
                 </div>
 
-                <!-- 🔥 DEAL DATE (IMPORTANT FIX) -->
-                <div id="dateSection">
-                    <label class="label">Deal End Date</label>
-                    <input asp-for="DealEndDate"
-                           type="datetime-local"
+            </div>
+
+            <!-- ================= VARIANTS ================= -->
+            <div>
+                <h3 class="text-xl font-semibold mb-4">Variants</h3>
+
+                <div id="variantContainer">
+
+                    @for (int i = 0; i < variants.Count; i++)
+                    {
+                        var v = variants[i];
+                        var specs = v.Specifications?.ToList() ?? new List<ProductSpecifications>();
+
+                        <div class="bg-white/5 p-4 rounded-xl mb-4">
+
+                            <input type="hidden" name="Variants.Index" value="@i" />
+                            <input type="hidden" name="Variants[@i].Id" value="@v.ProductVariantId" />
+                            <input type="hidden" name="Variants[@i].ProductVariantId" value="@v.ProductVariantId" />
+
+                            <div class="grid md:grid-cols-6 gap-3">
+
+                                <input name="Variants[@i].Model" value="@v.Model" class="input" />
+                                <input name="Variants[@i].Size" value="@v.Size" class="input" />
+
+                                <select name="Variants[@i].Unit" class="input text-black">
+                                    <option value="">Unit</option>
+                                    <option selected="@(v.Unit == "ml")">ml</option>
+                                    <option selected="@(v.Unit == "mg")">mg</option>
+                                    <option selected="@(v.Unit == "cm")">cm</option>
+                                    <option selected="@(v.Unit == "piece")">piece</option>
+                                </select>
+
+                                <input name="Variants[@i].PackSize" value="@v.PackSize" class="input" />
+                                <input name="Variants[@i].MinQuantity" value="@v.MinQuantity" class="input" />
+                                <input name="Variants[@i].MaxQuantity" value="@v.MaxQuantity" class="input" />
+                                <input name="Variants[@i].StepQuantity" value="@v.StepQuantity" class="input" />
+                                <input name="Variants[@i].Price" value="@v.Price" class="input" />
+                                <input name="Variants[@i].StockQuantity" value="@v.StockQuantity" class="input" />
+
+                                <input type="file" name="Variants[@i].ImageFile" class="input" />
+                                <img src="@v.ImageUrl" class="w-16 mt-2 rounded" />
+                            </div>
+
+                            <div id="spec-@i" class="mt-3">
+                                @for (int j = 0; j < specs.Count; j++)
+                                {
+                                    <div class="grid md:grid-cols-2 gap-2 mt-2">
+                                        <input name="Variants[@i].Specifications[@j].Key" value="@specs[j].Key" class="input" />
+                                        <input name="Variants[@i].Specifications[@j].Value" value="@specs[j].Value" class="input" />
+                                    </div>
+                                }
+                            </div>
+
+                            <button type="button" onclick="addSpec(@i)" class="btn mt-2">+ Spec</button>
+
+                        </div>
+                    }
+
+                </div>
+
+                <button type="button" onclick="addVariant()" class="btn mt-3">+ Add Variant</button>
+
+            </div>
+
+            <!-- ================= DESCRIPTION ================= -->
+            <div>
+                <label>Description</label>
+<textarea asp-for="Description" class="input"></textarea>
+            </div>
+
+            <!-- ================= MEDICAL ================= -->
+            <div class="grid md:grid-cols-2 gap-6">
+
+                <div>
+                    <label>Batch Number</label>
+                    <input asp-for="BatchNumber" class="input" />
+                </div>
+
+                <div>
+                    <label>Expiry Date</label>
+                    <input asp-for="ExpiryDate" type="date" class="input" />
+                </div>
+
+            </div>
+
+            <!-- ================= SHIPPING ================= -->
+            <div class="grid md:grid-cols-2 gap-6">
+
+                <div>
+                    <label>Weight</label>
+                    <input asp-for="Weight" class="input" />
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <input asp-for="IsFragile" type="checkbox" />
+                    <span>Fragile</span>
+                </div>
+
+            </div>
+
+            <!-- ================= DEAL ================= -->
+            <div class="grid md:grid-cols-2 gap-6">
+
+                <div class="flex items-center gap-2">
+                    <input asp-for="IsHotDeal" type="checkbox" />
+                    <span>Hot Deal</span>
+                </div>
+
+                <div>
+                    <label>Discount %</label>
+                    <input asp-for="DiscountPercentage" class="input" />
+                </div>
+
+                <div>
+                    <label>Deal End Date</label>
+                    <input asp-for="DealEndDate" type="datetime-local"
                            value="@Model.DealEndDate?.ToLocalTime().ToString("yyyy-MM-ddTHH:mm")"
                            class="input" />
                 </div>
 
-                <!-- DESCRIPTION -->
-                <div class="md:col-span-2">
-                    <label class="label">Description</label>
-                    <textarea asp-for="Description" rows="3" class="input"></textarea>
+            </div>
+
+            <!-- ================= FILES ================= -->
+            <div class="grid md:grid-cols-2 gap-6">
+
+                <div>
+                    <label>Product Image</label>
+                    <input type="file" name="imageFile" class="input" />
                 </div>
 
-                <!-- IMAGE -->
                 <div>
-                    <label class="label">Product Image</label>
-
-                    @if (!string.IsNullOrEmpty(Model.ImageUrl))
-                    {
-                        <img src="@Model.ImageUrl"
-                             class="h-24 mb-3 rounded-xl border object-cover shadow-sm" />
-                    }
-
-                    <input type="file" name="imageFile" class="file-input" />
-                </div>
-
-                <!-- PDF -->
-                <div>
-                    <label class="label">Quotation (PDF)</label>
-
-                    @if (!string.IsNullOrEmpty(Model.QuotationUrl))
-                    {
-                        <a href="https://docs.google.com/gview?url=@Model.QuotationUrl&embedded=true"
-                           target="_blank"
-                           class="block text-center px-4 py-2 bg-black text-white rounded-xl mb-3 hover:bg-gray-800 transition">
-                            View Document
-                        </a>
-                    }
-
-                    <input type="file" name="quotationFile" class="file-input" />
+                    <label>Quotation</label>
+                    <input type="file" name="quotationFile" class="input" />
                 </div>
 
             </div>
 
-            <!-- BUTTON -->
-            <div class="flex justify-end pt-6 border-t">
-                <button type="submit"
-                        class="px-6 py-3 bg-blue-600 text-white rounded-xl shadow hover:bg-blue-700 transition transform hover:scale-105">
-                    💾 Update Product
-                </button>
-            </div>
+            <button type="submit" class="btn w-full mt-6">Update Product</button>
 
         </form>
-
     </div>
 </div>
 
-<!-- 🎨 COMMON STYLES -->
-<style>
-    .label {
-        display: block;
-        font-size: 13px;
-        font-weight: 600;
-        color: #374151;
-        margin-bottom: 6px;
+<script>
+    let vIndex=@variants.Count;
+
+    function addVariant(){
+    let html=`
+    <div class="bg-white/5 p-4 rounded-xl mt-3">
+
+    <input type="hidden" name="Variants.Index" value="${vIndex}"/>
+
+    <div class="grid md:grid-cols-6 gap-3">
+
+    <input name="Variants[${vIndex}].Model" class="input"/>
+    <input name="Variants[${vIndex}].Size" class="input"/>
+
+    <select name="Variants[${vIndex}].Unit" class="input text-black">
+    <option value="">Unit</option>
+    <option value="ml">ml</option>
+    <option value="mg">mg</option>
+    <option value="cm">cm</option>
+    <option value="piece">piece</option>
+    </select>
+
+    <input name="Variants[${vIndex}].PackSize" class="input"/>
+    <input name="Variants[${vIndex}].MinQuantity" class="input"/>
+    <input name="Variants[${vIndex}].MaxQuantity" class="input"/>
+    <input name="Variants[${vIndex}].StepQuantity" class="input"/>
+    <input name="Variants[${vIndex}].Price" class="input"/>
+    <input name="Variants[${vIndex}].StockQuantity" class="input"/>
+
+    <input name="Variants[${vIndex}].ImageUrl" placeholder="Image URL" class="input"/>
+    </div>
+
+    <div id="spec-${vIndex}" class="mt-3"></div>
+
+    <button onclick="addSpec(${vIndex})" type="button" class="btn mt-2">+ Spec</button>
+
+    </div>`;
+
+    document.getElementById("variantContainer").insertAdjacentHTML('beforeend',html);
+    vIndex++;
     }
 
+    function addSpec(vIdx){
+    let c=document.getElementById(`spec-${vIdx}`);
+    let i=c.children.length;
+
+    c.insertAdjacentHTML('beforeend',
+    `<div class="grid md:grid-cols-2 gap-2 mt-2">
+    <input name="Variants[${vIdx}].Specifications[${i}].Key" class="input"/>
+    <input name="Variants[${vIdx}].Specifications[${i}].Value" class="input"/>
+    </div>`);
+    }
+</script>
+
+<style>
     .input {
         width: 100%;
         padding: 10px;
         border-radius: 10px;
-        border: 1px solid #d1d5db;
-        transition: 0.2s;
+        background: rgba(255,255,255,0.1);
+        border: 1px solid rgba(255,255,255,0.2);
+        color: white;
     }
 
-        .input:focus {
-            outline: none;
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 2px #bfdbfe;
-        }
-
-    .file-input {
-        width: 100%;
-        padding: 8px;
+    .btn {
+        padding: 10px 20px;
+        background: linear-gradient(to right,#6366f1,#a855f7);
         border-radius: 10px;
-        border: 1px solid #d1d5db;
-        background: #f9fafb;
-        cursor: pointer;
     }
 </style>

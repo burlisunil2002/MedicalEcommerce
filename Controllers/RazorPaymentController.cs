@@ -27,13 +27,13 @@ public class RazorPaymentController : Controller
 
         var carts = _context.Carts
             .Include(c => c.Product)
-            .Where(c => c.UserId == userId || c.SessionId == userId)
+            .Where(c => c.UserId == userId || c.UserId == userId)
             .ToList();
 
         if (carts == null || !carts.Any())
             return BadRequest("Cart is empty");
 
-        var total = carts.Sum(x => x.Product.Price * x.Quantity);
+        var total = carts.Sum(x => x.ProductVariant.Price * x.Quantity);
 
         // ✅ GET ADDRESS FROM SESSION
         var addressJson = HttpContext.Session.GetString("Address");

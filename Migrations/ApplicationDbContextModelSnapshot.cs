@@ -62,13 +62,16 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<string>("GSTState")
                         .HasColumnType("text");
 
-                    b.Property<bool>("GSTVerified")
+                    b.Property<bool?>("GSTVerified")
                         .HasColumnType("boolean");
 
                     b.Property<string>("IndustrySector")
                         .HasColumnType("text");
 
                     b.Property<bool>("IsApproved")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsOtpUser")
                         .HasColumnType("boolean");
 
                     b.Property<bool>("IsProfileCompleted")
@@ -119,6 +122,10 @@ namespace VivekMedicalProducts.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("SecurityStamp")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<bool>("TwoFactorEnabled")
@@ -297,7 +304,7 @@ namespace VivekMedicalProducts.Migrations
                         .HasColumnType("integer");
 
                     b.Property<decimal>("Price")
-                        .HasColumnType("decimal(18,2)");
+                        .HasColumnType("numeric");
 
                     b.Property<int>("ProductId")
                         .HasColumnType("integer");
@@ -306,7 +313,13 @@ namespace VivekMedicalProducts.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("ProductVariantId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SellerId")
                         .HasColumnType("integer");
 
                     b.HasKey("OrderItemId");
@@ -314,6 +327,10 @@ namespace VivekMedicalProducts.Migrations
                     b.HasIndex("OrderId");
 
                     b.HasIndex("ProductId");
+
+                    b.HasIndex("ProductVariantId");
+
+                    b.HasIndex("SellerId");
 
                     b.ToTable("OrderItems");
                 });
@@ -388,11 +405,14 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<int>("ProductId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("ProductVariantId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
 
-                    b.Property<string>("SessionId")
-                        .HasColumnType("text");
+                    b.Property<int?>("SellerId")
+                        .HasColumnType("integer");
 
                     b.Property<string>("UserId")
                         .HasColumnType("text");
@@ -400,6 +420,10 @@ namespace VivekMedicalProducts.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ProductId");
+
+                    b.HasIndex("ProductVariantId");
+
+                    b.HasIndex("SellerId");
 
                     b.ToTable("Carts");
                 });
@@ -612,6 +636,9 @@ namespace VivekMedicalProducts.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("SellerId")
+                        .HasColumnType("integer");
+
                     b.Property<decimal>("ShippingCharge")
                         .HasColumnType("decimal(18,2)");
 
@@ -638,6 +665,10 @@ namespace VivekMedicalProducts.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("OrderId");
+
+                    b.HasIndex("SellerId");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("Orders");
                 });
@@ -793,6 +824,10 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<string>("BatchNumber")
                         .HasColumnType("text");
 
+                    b.Property<string>("Brand")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("Category")
                         .IsRequired()
                         .HasColumnType("text");
@@ -813,23 +848,14 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<DateTime?>("ExpiryDate")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("GSTPercentage")
-                        .HasColumnType("integer");
+                    b.Property<decimal>("GSTPercentage")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("HSNCode")
+                        .HasColumnType("text");
 
                     b.Property<string>("ImageUrl")
                         .HasColumnType("text");
-
-                    b.Property<string>("ImageUrl2")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ImageUrl3")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ImageUrl4")
-                        .HasColumnType("text");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsFragile")
                         .HasColumnType("boolean");
@@ -842,30 +868,21 @@ namespace VivekMedicalProducts.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
-                    b.Property<decimal>("Price")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<string>("PriceType")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ProductType")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("QuotationUrl")
                         .HasColumnType("text");
 
-                    b.Property<int>("SellerId")
+                    b.Property<int?>("SellerId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("StockQuantity")
-                        .HasColumnType("integer");
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
 
-                    b.Property<DateTime?>("UpdatedDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<decimal>("Weight")
+                    b.Property<decimal?>("Weight")
                         .HasColumnType("numeric");
 
                     b.HasKey("Id");
@@ -875,13 +892,91 @@ namespace VivekMedicalProducts.Migrations
                     b.ToTable("Products");
                 });
 
-            modelBuilder.Entity("VivekMedicalProducts.Models.SellerModel", b =>
+            modelBuilder.Entity("VivekMedicalProducts.Models.ProductSpecifications", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("ProductVariantId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductVariantId");
+
+                    b.ToTable("ProductSpecifications");
+                });
+
+            modelBuilder.Entity("VivekMedicalProducts.Models.ProductVariant", b =>
+                {
+                    b.Property<int>("ProductVariantId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ProductVariantId"));
+
+                    b.Property<string>("ImageUrl")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("MaxQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MinQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Model")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("PackSize")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("numeric");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Size")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("StepQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("StockQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Unit")
+                        .HasColumnType("text");
+
+                    b.HasKey("ProductVariantId");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("ProductVariants");
+                });
+
+            modelBuilder.Entity("VivekMedicalProducts.Models.SellerModel", b =>
+                {
+                    b.Property<int>("SellerId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SellerId"));
 
                     b.Property<string>("AccountHolderName")
                         .IsRequired()
@@ -895,11 +990,11 @@ namespace VivekMedicalProducts.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("AddressLine2")
-                        .HasColumnType("text");
-
                     b.Property<string>("BankName")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Brand")
                         .HasColumnType("text");
 
                     b.Property<string>("BusinessName")
@@ -915,9 +1010,6 @@ namespace VivekMedicalProducts.Migrations
 
                     b.Property<string>("Email")
                         .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("GSTFilePath")
                         .HasColumnType("text");
 
                     b.Property<string>("GSTNumber")
@@ -945,13 +1037,6 @@ namespace VivekMedicalProducts.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("PANFilePath")
-                        .HasColumnType("text");
-
-                    b.Property<string>("PasswordHash")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("Phone")
                         .IsRequired()
                         .HasColumnType("text");
@@ -960,7 +1045,15 @@ namespace VivekMedicalProducts.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("ProductType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -970,9 +1063,59 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("SellerId");
 
                     b.ToTable("Sellers");
+                });
+
+            modelBuilder.Entity("VivekMedicalProducts.Models.SubscriptionModel", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("EndDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ProductRange")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RazorpayOrderId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("SellerId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("StartDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Years")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Subscriptions");
                 });
 
             modelBuilder.Entity("VivekMedicalProducts.Models.WishlistModel", b =>
@@ -992,12 +1135,22 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<int>("ProductId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("ProductVariantId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SellerId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("UserId")
                         .HasColumnType("text");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ProductId");
+
+                    b.HasIndex("ProductVariantId");
+
+                    b.HasIndex("SellerId");
 
                     b.ToTable("Wishlists");
                 });
@@ -1067,9 +1220,23 @@ namespace VivekMedicalProducts.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("VivekMedicalProducts.Models.ProductVariant", "ProductVariant")
+                        .WithMany()
+                        .HasForeignKey("ProductVariantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("VivekMedicalProducts.Models.SellerModel", "Seller")
+                        .WithMany()
+                        .HasForeignKey("SellerId");
+
                     b.Navigation("Order");
 
                     b.Navigation("Product");
+
+                    b.Navigation("ProductVariant");
+
+                    b.Navigation("Seller");
                 });
 
             modelBuilder.Entity("VivekMedicalProducts.Models.CartModel", b =>
@@ -1080,7 +1247,21 @@ namespace VivekMedicalProducts.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("VivekMedicalProducts.Models.ProductVariant", "ProductVariant")
+                        .WithMany()
+                        .HasForeignKey("ProductVariantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("VivekMedicalProducts.Models.SellerModel", "Seller")
+                        .WithMany()
+                        .HasForeignKey("SellerId");
+
                     b.Navigation("Product");
+
+                    b.Navigation("ProductVariant");
+
+                    b.Navigation("Seller");
                 });
 
             modelBuilder.Entity("VivekMedicalProducts.Models.GstResponseModel", b =>
@@ -1092,6 +1273,25 @@ namespace VivekMedicalProducts.Migrations
                         .IsRequired();
 
                     b.Navigation("data");
+                });
+
+            modelBuilder.Entity("VivekMedicalProducts.Models.OrderModel", b =>
+                {
+                    b.HasOne("VivekMedicalProducts.Models.SellerModel", "Seller")
+                        .WithMany()
+                        .HasForeignKey("SellerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Seller");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("VivekMedicalProducts.Models.PaymentModel", b =>
@@ -1108,12 +1308,33 @@ namespace VivekMedicalProducts.Migrations
             modelBuilder.Entity("VivekMedicalProducts.Models.ProductModel", b =>
                 {
                     b.HasOne("VivekMedicalProducts.Models.SellerModel", "Seller")
-                        .WithMany()
+                        .WithMany("Products")
                         .HasForeignKey("SellerId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Seller");
+                });
+
+            modelBuilder.Entity("VivekMedicalProducts.Models.ProductSpecifications", b =>
+                {
+                    b.HasOne("VivekMedicalProducts.Models.ProductVariant", "ProductVariant")
+                        .WithMany("Specifications")
+                        .HasForeignKey("ProductVariantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Seller");
+                    b.Navigation("ProductVariant");
+                });
+
+            modelBuilder.Entity("VivekMedicalProducts.Models.ProductVariant", b =>
+                {
+                    b.HasOne("VivekMedicalProducts.Models.ProductModel", "Product")
+                        .WithMany("Variants")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("VivekMedicalProducts.Models.WishlistModel", b =>
@@ -1124,7 +1345,19 @@ namespace VivekMedicalProducts.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("VivekMedicalProducts.Models.ProductVariant", "productVariant")
+                        .WithMany()
+                        .HasForeignKey("ProductVariantId");
+
+                    b.HasOne("VivekMedicalProducts.Models.SellerModel", "Seller")
+                        .WithMany()
+                        .HasForeignKey("SellerId");
+
                     b.Navigation("Product");
+
+                    b.Navigation("Seller");
+
+                    b.Navigation("productVariant");
                 });
 
             modelBuilder.Entity("VivekMedicalProducts.Models.OrderModel", b =>
@@ -1132,6 +1365,21 @@ namespace VivekMedicalProducts.Migrations
                     b.Navigation("OrderItems");
 
                     b.Navigation("Payment");
+                });
+
+            modelBuilder.Entity("VivekMedicalProducts.Models.ProductModel", b =>
+                {
+                    b.Navigation("Variants");
+                });
+
+            modelBuilder.Entity("VivekMedicalProducts.Models.ProductVariant", b =>
+                {
+                    b.Navigation("Specifications");
+                });
+
+            modelBuilder.Entity("VivekMedicalProducts.Models.SellerModel", b =>
+                {
+                    b.Navigation("Products");
                 });
 #pragma warning restore 612, 618
         }

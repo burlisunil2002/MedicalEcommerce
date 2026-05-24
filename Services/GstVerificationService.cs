@@ -15,7 +15,7 @@ namespace VivekMedicalProducts.Models
         public async Task<GstResponseModel?> VerifyGST(string gst)
         {
             var response = await _client.GetAsync(
-                $"https://sheet.gstincheck.co.in/check/c25a6ec870b2bae526d91b71452a53df/{gst}");
+                $"https://sheet.gstincheck.co.in/check/96f5b4624ca8993a9ebd254007a7d04d/{gst}");
 
             if (!response.IsSuccessStatusCode)
                 return null;

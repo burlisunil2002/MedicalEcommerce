@@ -12,6 +12,11 @@ namespace VivekMedicalProducts.Models
         [Required]
         public int ProductId { get; set; }
 
+        public int? ProductVariantId { get; set; }
+
+        public int? SellerId { get; set; }
+
+        public SellerModel Seller { get; set; }
         public string? UserId { get; set; }
         public string? GuestId { get; set; }
 
@@ -20,5 +25,8 @@ namespace VivekMedicalProducts.Models
         // 🔥 Navigation Property
         [ForeignKey(nameof(ProductId))]
         public virtual ProductModel? Product { get; set; }
+
+        public ProductVariant productVariant { get; set; }
+
     }
 }

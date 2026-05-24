@@ -7,6 +7,8 @@ using System.Security.Claims;
 using VivekMedicalProducts.Data;
 using VivekMedicalProducts.Models;
 using VivekMedicalProducts.ViewModels;
+using VivekMedicalProducts.DTOs;
+
 
 
 
@@ -50,62 +52,66 @@ public class AccountController : Controller
         return new Random().Next(100000, 999999).ToString();
     }
 
-    // ================= LOGIN =================
-
-    [HttpGet("Login")]
-    public IActionResult Login()
-    {
-        return View();
-    }
 
     // ================= SEND OTP =================
-
-    [HttpPost("SendOtp")]
-    public async Task<IActionResult> SendOtp(string email)
+    [HttpPost("/api/account/send-otp")]
+    public async Task<IActionResult> SendOtp([FromBody] SendOtpRequest req)
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(email))
-                return Json(new { success = false, message = "Email is required" });
+            if (string.IsNullOrWhiteSpace(req.Email))
+                return BadRequest(new { success = false, message = "Email is required" });
 
-            var user = await _userManager.FindByEmailAsync(email);
+            var email = req.Email.Trim();
+            var normalized = email.ToUpper();
 
-            // Create user if not exists
+            // 🔹 STEP 1: Find existing user
+            var user = await _userManager.Users
+                .FirstOrDefaultAsync(u => u.NormalizedUserName == normalized);
+
+            // 🔹 STEP 2: Create user if not exists (SAFE)
             if (user == null)
             {
-                user = new ApplicationUser
+                var newUser = new ApplicationUser
                 {
                     Email = email,
                     UserName = email,
-                    CompanyName = "Temp",
-                    CustomerName = "User",
-                    IsApproved = true,
-                    IsProfileCompleted = false,
-                    GSTVerified = false
+                    EmailConfirmed = true,
+                    IsProfileCompleted = false
                 };
 
-                var result = await _userManager.CreateAsync(user, "Temp@1234");
+                var result = await _userManager.CreateAsync(newUser);
 
                 if (!result.Succeeded)
                 {
                     var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-                    return Json(new { success = false, message = errors });
+                    return BadRequest(new { success = false, message = errors });
                 }
+
+                // 🔥 Re-fetch (important)
+                user = await _userManager.FindByEmailAsync(email);
             }
 
-            // ✅ Cooldown check
+            // 🔹 STEP 3: Cooldown check (30 seconds)
             if (user.OTPLastSentAt.HasValue &&
                 (DateTime.UtcNow - user.OTPLastSentAt.Value).TotalSeconds < 30)
             {
-                return Json(new
+                return BadRequest(new
                 {
                     success = false,
                     message = "Please wait 30 seconds before requesting another OTP"
                 });
             }
 
-            // Generate OTP
-            var otp = GenerateOTP();
+            // 🔹 STEP 4: Ensure role
+            var roles = await _userManager.GetRolesAsync(user);
+            if (!roles.Contains("Customer"))
+            {
+                await _userManager.AddToRoleAsync(user, "Customer");
+            }
+
+            // 🔹 STEP 5: Generate OTP
+            var otp = new Random().Next(100000, 999999).ToString();
 
             user.LoginOTP = otp;
             user.OTPExpiry = DateTime.UtcNow.AddMinutes(5);
@@ -115,36 +121,21 @@ public class AccountController : Controller
 
             if (!updateResult.Succeeded)
             {
-                return Json(new
-                {
-                    success = false,
-                    message = "Failed to save OTP"
-                });
+                var errors = string.Join(", ", updateResult.Errors.Select(e => e.Description));
+                return BadRequest(new { success = false, message = errors });
             }
 
-            // ✅ SEND EMAIL (IMPORTANT: await it)
-            try
-            {
-                await _emailService.SendEmailAsync(
-                    email,
-                    "Login OTP",
-                    $@"<h3>Login Verification</h3>
-                   <p>Your OTP is: <b>{otp}</b></p>
-                   <p>This OTP is valid for 5 minutes.</p>"
-                );
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("EMAIL ERROR: " + ex.Message);
+            // 🔹 STEP 6: Send email
+            await _emailService.SendEmailAsync(
+                user.Email,
+                "Login OTP",
+                $@"<h3>Login Verification</h3>
+               <p>Your OTP is: <b>{otp}</b></p>
+               <p>This OTP is valid for 5 minutes.</p>"
+            );
 
-                return Json(new
-                {
-                    success = false,
-                    message = ex.Message
-                });
-            }
-
-            return Json(new
+            // 🔹 STEP 7: Response
+            return Ok(new
             {
                 success = true,
                 message = "OTP sent successfully"
@@ -152,62 +143,53 @@ public class AccountController : Controller
         }
         catch (Exception ex)
         {
-            return Json(new
+            return StatusCode(500, new
             {
                 success = false,
-                message = ex.Message
+                message = ex.InnerException?.Message ?? ex.Message
             });
         }
     }
 
     // ================= VERIFY OTP =================
 
-    [HttpPost("VerifyOtp")]
-    public async Task<IActionResult> VerifyOtp(string email, string otp)
+    [HttpPost("/api/account/verify-otp")]
+    public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequest req)
     {
-        try
+        var user = await _userManager.FindByEmailAsync(req.Email);
+
+        if (user == null)
+            return BadRequest(new { message = "User not found" });
+
+        if (user.LoginOTP != req.Otp)
+            return BadRequest(new { message = "Invalid OTP" });
+
+        if (user.OTPExpiry < DateTime.UtcNow)
+            return BadRequest(new { message = "OTP expired" });
+
+        user.LoginOTP = null;
+        user.OTPExpiry = null;
+
+        await _userManager.UpdateAsync(user);
+
+        await _signInManager.SignInAsync(user, true);
+
+        await MergeCartAfterLogin(user.Id);
+        await MergeWishlist(user.Id);
+
+        return Ok(new
         {
-            var user = await _userManager.FindByEmailAsync(email);
+            success = true,
+            isProfileCompleted = user.IsProfileCompleted
+        });
+    }
 
-            if (user == null)
-                return Json(new { success = false, message = "User not found" });
 
-            // Validate OTP
-            if (string.IsNullOrEmpty(user.LoginOTP) ||
-                user.LoginOTP.Trim() != otp?.Trim())
-            {
-                return Json(new { success = false, message = "Invalid OTP" });
-            }
-
-            // Expiry check
-            if (user.OTPExpiry == null || user.OTPExpiry < DateTime.UtcNow)
-            {
-                return Json(new { success = false, message = "OTP expired" });
-            }
-
-            // Clear OTP after success
-            user.LoginOTP = null;
-            user.OTPExpiry = null;
-
-            await _userManager.UpdateAsync(user);
-
-            // Sign in
-            await _signInManager.SignInAsync(user, isPersistent: true);
-
-            // Merge guest cart
-            await MergeCartAfterLogin(user.Id);
-            await MergeWishlist(user.Id);
-
-            return Json(new
-            {
-                success = true,
-                isProfileCompleted = user.IsProfileCompleted
-            });
-        }
-        catch (Exception)
-        {
-            return Json(new { success = false, message = "Verification failed" });
-        }
+    [HttpPost("/api/account/logout")]
+    public async Task<IActionResult> Logout()
+    {
+        await _signInManager.SignOutAsync();
+        return Ok(new { success = true });
     }
 
     // ================= REGISTER =================
@@ -251,72 +233,63 @@ public class AccountController : Controller
         return name.Trim();
     }
 
-    [HttpPost("Register")]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Register(RegisterViewModel model)
+    [HttpPost("/api/account/register")]
+    public async Task<IActionResult> Register([FromForm] RegisterViewModel model)
     {
         if (!ModelState.IsValid)
         {
-            return Json(new
+            return BadRequest(new
             {
                 success = false,
-                message = "Please fill all required fields correctly."
+                message = "Invalid data"
             });
         }
 
         var userId = _userContext.GetUserId();
 
         if (userId == null)
-        {
-            return Json(new { success = false, message = "Session expired. Please login again." });
-        }
+            return Unauthorized();
 
         var user = await _userManager.FindByIdAsync(userId);
 
-        // GST Validation
+        // GST VALIDATION (keep your logic)
         var gstResult = await _gstService.VerifyGST(model.GSTNo);
 
         if (gstResult == null)
-        {
-            return Json(new { success = false, message = "GST number not found." });
-        }
+            return BadRequest(new { success = false, message = "GST not found" });
 
         if (gstResult.sts != "Active")
-        {
-            return Json(new { success = false, message = "GST is inactive." });
-        }
+            return BadRequest(new { success = false, message = "GST inactive" });
 
-        // Normalize + exact match
         var gstName = NormalizeCompName(gstResult.tradeNam);
         var inputName = NormalizeCompName(model.CompanyName);
 
         if (gstName != inputName)
         {
-            return Json(new
+            return BadRequest(new
             {
                 success = false,
-                message = "Company/Firm name does not match GST registered name."
+                message = "Company name mismatch with GST"
             });
         }
 
-        // PAN Validation
+        // PAN VALIDATION
         if (!string.IsNullOrEmpty(model.PANNo) &&
-            !string.IsNullOrEmpty(model.GSTNo) &&
             model.GSTNo.Length >= 12)
         {
             var gstPan = model.GSTNo.Substring(2, 10);
 
             if (!gstPan.Equals(model.PANNo, StringComparison.OrdinalIgnoreCase))
             {
-                return Json(new
+                return BadRequest(new
                 {
                     success = false,
-                    message = "PAN does not match GST."
+                    message = "PAN does not match GST"
                 });
             }
         }
 
-        // File Upload (safe version)
+        // FILE UPLOAD
         string documentPath = null;
 
         if (model.Document != null && model.Document.Length > 0)
@@ -325,9 +298,7 @@ public class AccountController : Controller
             var allowed = new[] { ".pdf", ".jpg", ".jpeg", ".png" };
 
             if (!allowed.Contains(ext))
-            {
-                return Json(new { success = false, message = "Invalid file type." });
-            }
+                return BadRequest(new { success = false, message = "Invalid file" });
 
             var uploads = Path.Combine(_env.WebRootPath, "uploads");
             Directory.CreateDirectory(uploads);
@@ -341,7 +312,7 @@ public class AccountController : Controller
             documentPath = "/uploads/" + fileName;
         }
 
-        // Update user
+        // UPDATE USER
         user.CompanyName = model.CompanyName;
         user.CustomerName = model.CustomerName;
         user.MobileNo = model.MobileNo;
@@ -352,62 +323,39 @@ public class AccountController : Controller
         user.IsProfileCompleted = true;
 
         await _userManager.UpdateAsync(user);
-        await _userManager.AddToRoleAsync(user, "Customer");
 
-        return Json(new
+        return Ok(new
         {
             success = true,
-            message = "KYC Registration completed successfully!",
-            redirectUrl = "/Products"
+            message = "KYC completed",
+            isProfileCompleted = true
         });
     }
 
-    // ================= LOGOUT =================
-
-    [HttpGet("Logout")]
-    public async Task<IActionResult> Logout()
-    {
-        await _signInManager.SignOutAsync();
-        return RedirectToAction("Login");
-    }
-
-    // ================= MERGE CART =================
-
-    [HttpGet("Profile")]
+    [HttpGet("/api/account/profile")]
     public async Task<IActionResult> Profile()
     {
         var userId = _userContext.GetUserId();
 
-        if (string.IsNullOrEmpty(userId))
-            return RedirectToAction("Login");
+        if (userId == null)
+            return Unauthorized();
 
         var user = await _userManager.FindByIdAsync(userId);
 
-        if (user == null)
-            return RedirectToAction("Login");
-
-        // 🚨 MAIN CONDITION
-        if (!user.IsProfileCompleted)
+        return Ok(new
         {
-            return RedirectToAction("Register");
-        }
-
-        // ✅ SHOW PROFILE IF COMPLETED
-        var model = new RegisterViewModel
-        {
-            CustomerName = user.CustomerName,
-            Email = user.Email,
-            MobileNo = user.MobileNo,
-            Address = user.Address
-        };
-
-        return View(model);
+            name = user.CustomerName,
+            email = user.Email,
+            mobile = user.MobileNo,
+            address = user.Address
+        });
     }
 
-    [HttpPost]
-    public IActionResult UpdateProfile(RegisterViewModel model)
+
+    [HttpPost("/api/account/update-profile")]
+    public IActionResult UpdateProfile([FromBody] RegisterViewModel model)
     {
-        var userId = _userContext.GetUserId(); // ✅ always use logged-in user
+        var userId = _userContext.GetUserId();
 
         var user = _context.Users.FirstOrDefault(x => x.Id == userId);
 
@@ -420,9 +368,11 @@ public class AccountController : Controller
 
         _context.SaveChanges();
 
-        TempData["SuccessMessage"] = "Updated Successfully";
-
-        return RedirectToAction("Profile");
+        return Ok(new
+        {
+            success = true,
+            message = "Profile updated"
+        });
     }
 
     [HttpGet("AdminLogin")]
@@ -476,7 +426,7 @@ public class AccountController : Controller
         foreach (var item in guestCart)
         {
             var existing = await _context.Carts.FirstOrDefaultAsync(c =>
-                c.UserId == userId && c.ProductId == item.ProductId);
+                c.UserId == userId && c.ProductVariantId == item.ProductVariantId);
 
             if (existing != null)
             {
@@ -520,5 +470,27 @@ public class AccountController : Controller
         }
 
         await _context.SaveChangesAsync();
+    }
+
+
+    /* React APIs */
+
+    [HttpGet("/api/user")]
+    public async Task<IActionResult> GetUser()
+    {
+        if (!User.Identity.IsAuthenticated)
+            return Unauthorized();
+
+        var user = await _userManager.GetUserAsync(User);
+
+        return Ok(new
+        {
+            name = user.CustomerName ?? user.Email,
+            email = user.Email,
+            isProfileCompleted = user.IsProfileCompleted,
+
+            // 🔥 ADD THIS
+            kycStatus = user.IsProfileCompleted ? "Completed" : "Pending"
+        });
     }
 }

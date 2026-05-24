@@ -19,8 +19,11 @@
   },
   "homepage": "https://github.com/burlisunil2002/MedicalEcommerce#readme",
   "devDependencies": {
-    "autoprefixer": "^10.4.27",
-    "postcss": "^8.5.8",
-    "tailwindcss": "^3.4.1"
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.10",
+    "tailwindcss": "^3.4.19"
+  },
+  "dependencies": {
+    "react-scripts": "^5.0.1"
   }
 }

@@ -2,6 +2,20 @@
     Layout = null;
 }
 
+@if (ViewBag.Error != null)
+{
+    <div class="alert alert-danger">
+        @ViewBag.Error
+    </div>
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">
+        @TempData["Error"]
+    </div>
+}
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -21,7 +35,7 @@
         <!-- MESSAGE -->
         <div id="messageBox" class="hidden mb-4 p-3 rounded text-sm"></div>
 
-        <form id="loginForm" class="space-y-4">
+        <form method="post" action="/Seller/SellerLogin" class="space-y-4">
 
             <!-- EMAIL -->
             <input type="email" name="email" placeholder="Email"
@@ -48,36 +62,6 @@
             </p>
         </form>
     </div>
-
-    <script>
-        document.getElementById("loginForm").addEventListener("submit", async function(e) {
-            e.preventDefault();
-
-            const form = new FormData(this);
-
-            const res = await fetch('/Seller/SellerLogin', {
-                method: 'POST',
-                body: form
-            });
-
-            const data = await res.json();
-
-            const box = document.getElementById("messageBox");
-            box.classList.remove("hidden");
-
-            if (data.success) {
-                box.className = "mb-4 p-3 rounded text-sm bg-green-100 text-green-700";
-                box.innerText = data.message;
-
-                setTimeout(() => {
-                    window.location.href = data.redirectUrl;
-                }, 1000);
-            } else {
-                box.className = "mb-4 p-3 rounded text-sm bg-red-100 text-red-700";
-                box.innerText = data.message;
-            }
-        });
-    </script>
 
 </body>
 </html>

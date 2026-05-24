@@ -15,6 +15,14 @@ namespace VivekMedicalProducts.Models
 
         public string UserId { get; set; } = string.Empty;
 
+        [ForeignKey("UserId")]
+        public ApplicationUser User { get; set; }
+
+        public int SellerId { get; set; }
+
+        [ForeignKey("SellerId")]
+        public SellerModel Seller { get; set; }
+
         // 🔢 Order Identity
         [Required]
         public string OrderNumber { get; set; } = "ORD-" + DateTime.UtcNow.Ticks;

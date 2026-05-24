@@ -29,6 +29,10 @@ public class ApplicationDbContext
 
     public DbSet<AdminOrderTableModel> AdminOrderTable { get; set; }
 
+    public DbSet<ProductVariant> ProductVariants { get; set; }
+
+    public DbSet<ProductSpecifications> ProductSpecifications { get; set; }
+
 
     public DbSet<GstResponseModel> GstVerification { get; set; }
 
@@ -36,6 +40,7 @@ public class ApplicationDbContext
 
     public DbSet<PincodeServiceabilityModel> PincodeServiceability { get; set; }
 
+    public DbSet<SubscriptionModel> Subscriptions { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
 
@@ -49,8 +54,19 @@ public class ApplicationDbContext
             .HasMaxLength(100);
 
         modelBuilder.Entity<ProductModel>()
-            .Property(p => p.Price)
-            .HasColumnType("decimal(18,2)");
+     .HasQueryFilter(p => p.Status == "Active");
+
+        modelBuilder.Entity<ProductVariant>()
+        .HasOne(v => v.Product)
+        .WithMany(p => p.Variants)
+        .HasForeignKey(v => v.ProductId);
+
+
+        modelBuilder.Entity<SellerModel>()
+            .HasQueryFilter(s => s.Status == "Active");
+
+        modelBuilder.Entity<ApplicationUser>()
+            .HasQueryFilter(u => u.Status == "Active");
 
         modelBuilder.Entity<EnquiryModel>()
             .ToTable("Enquiry");
@@ -66,8 +82,16 @@ public class ApplicationDbContext
             .WithOne(i => i.Order)
             .HasForeignKey(i => i.OrderId);
 
+        modelBuilder.Entity<ProductModel>()
+            .HasOne(p => p.Seller)
+            .WithMany(s => s.Products)
+            .HasForeignKey(p => p.SellerId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+
         modelBuilder.Entity<AdminOrderModel>().HasNoKey();
         modelBuilder.Entity<AdminOrderTableModel>().HasNoKey();
+
 
         base.OnModelCreating(modelBuilder);
 

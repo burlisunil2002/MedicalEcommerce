@@ -1,0 +1,229 @@
+﻿@model IEnumerable<VivekMedicalProducts.Models.AdminOrderModel>
+
+<div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+
+    <!-- HEADER -->
+    <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+
+        <h1 class="text-3xl font-bold text-gray-800">Order Management</h1>
+
+        @{
+            var sellerId = Context.Session.GetString("SellerId");
+        }
+
+        @if (User.IsInRole("Admin"))
+        {
+            <a asp-controller="Admin" asp-action="AdminHome"
+               class="px-5 py-2 bg-blue-600 text-white rounded-xl shadow hover:bg-blue-700 transition">
+                ← Back
+            </a>
+        }
+        else if (!string.IsNullOrEmpty(sellerId))
+        {
+            <a asp-controller="Seller" asp-action="SellerLanding"
+               class="px-5 py-2 bg-indigo-600 text-white rounded-xl shadow hover:bg-indigo-700 transition">
+                ← Back
+            </a>
+        }
+    </div>
+
+    <!-- STATS -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-white/60 backdrop-blur-lg p-4 rounded-xl shadow">
+            <p class="text-gray-500 text-sm">Total Orders</p>
+            <h2 class="text-2xl font-bold">@Model.Count()</h2>
+        </div>
+
+        <div class="bg-green-100 p-4 rounded-xl shadow">
+            <p class="text-sm">Completed</p>
+            <h2 class="text-2xl font-bold">
+                @Model.Count(x => x.PaymentStatus == "Completed")
+            </h2>
+        </div>
+
+        <div class="bg-yellow-100 p-4 rounded-xl shadow">
+            <p class="text-sm">Pending</p>
+            <h2 class="text-2xl font-bold">
+                @Model.Count(x => x.PaymentStatus == "Pending")
+            </h2>
+        </div>
+    </div>
+
+    <!-- SEARCH -->
+    <div class="flex gap-3 mb-6">
+        <input type="text"
+               id="searchBox"
+               placeholder="🔍 Search by Order, Customer, Product..."
+               class="w-full px-5 py-3 rounded-xl border shadow focus:ring-2 focus:ring-blue-400 outline-none" />
+
+        <button onclick="searchOrders()"
+                class="bg-blue-600 text-white px-6 rounded-xl shadow hover:bg-blue-700">
+            Search
+        </button>
+    </div>
+
+    <!-- TABLE -->
+    <div class="backdrop-blur-lg bg-white/60 border border-white/30 rounded-2xl shadow-xl overflow-hidden">
+
+        <div class="overflow-y-auto max-h-[70vh]" id="scrollContainer">
+
+            <table class="w-full text-sm">
+
+                <thead class="sticky top-0 bg-white/80 backdrop-blur-md text-gray-700 text-xs uppercase">
+                    <tr>
+                        <th class="p-4">Order</th>
+                        <th class="p-4">Item</th>
+                        <th class="p-4">Date</th>
+                        <th class="p-4">User</th>
+                        <th class="p-4">Product</th>
+                        <th class="p-4">Qty</th>
+                        <th class="p-4">Total</th>
+                        <th class="p-4">Payment</th>
+                        <th class="p-4">Status</th>
+                        <th class="p-4">Action</th>
+                    </tr>
+                </thead>
+
+                <tbody id="orderTable">
+
+                    @foreach (var item in Model)
+                    {
+                        <tr class="hover:bg-white/40 transition">
+
+                            <td class="p-4 font-bold text-blue-600">#@item.OrderId</td>
+
+                            <td class="p-4">
+                                <input type="hidden" class="OrderId" value="@item.OrderId" />
+                                @item.OrderItemId
+                            </td>
+
+                            <td class="p-4">@item.OrderDate.ToString("dd MMM yyyy")</td>
+                            <td class="p-4">@item.Customer</td>
+                            <td class="p-4">@item.ProductName</td>
+                            <td class="p-4">@item.Quantity</td>
+
+                            <td class="p-4 text-green-600 font-semibold">
+                                ₹ @(item.GrandTotal?.ToString("N2") ?? "0.00")
+                            </td>
+
+                            <td class="p-4">
+                                <span class="px-3 py-1 rounded-full text-white text-xs
+                                    @(item.PaymentStatus == "Completed" ? "bg-green-500" :
+                                      item.PaymentStatus == "Initiated" ? "bg-yellow-500" :
+                                      "bg-red-500")">
+                                    @item.PaymentStatus
+                                </span>
+                            </td>
+
+                            <td class="p-4">
+                                <select class="OrderStatus px-3 py-2 rounded-lg text-white text-xs"
+                                        onchange="updateStatusColor(this)">
+                                    <option value="Pending" selected="@(item.OrderStatus=="Pending")">Pending</option>
+                                    <option value="Processing" selected="@(item.OrderStatus=="Processing")">Processing</option>
+                                    <option value="Shipped" selected="@(item.OrderStatus=="Shipped")">Shipped</option>
+                                    <option value="Delivered" selected="@(item.OrderStatus=="Delivered")">Delivered</option>
+                                    <option value="Cancelled" selected="@(item.OrderStatus=="Cancelled")">Cancelled</option>
+                                </select>
+                            </td>
+
+                            <td class="p-4">
+                                <button onclick="updateOrder(this)"
+                                        class="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-lg shadow hover:scale-105 transition">
+                                    Update
+                                </button>
+                            </td>
+
+                        </tr>
+                    }
+
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+
+function updateStatusColor(select) {
+    select.className = "OrderStatus px-3 py-2 rounded-lg text-white text-xs";
+
+    const map = {
+        "Delivered": "bg-green-500",
+        "Processing": "bg-blue-500",
+        "Shipped": "bg-indigo-500",
+        "Cancelled": "bg-red-500"
+    };
+
+    select.classList.add(map[select.value] || "bg-yellow-500");
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll(".OrderStatus").forEach(updateStatusColor);
+});
+
+// 🔍 SEARCH
+function searchOrders() {
+    const input = document.getElementById("searchBox").value.toLowerCase();
+    const rows = document.querySelectorAll("#orderTable tr");
+
+    rows.forEach(row => {
+        row.style.display = row.innerText.toLowerCase().includes(input) ? "" : "none";
+    });
+}
+
+// ENTER KEY SEARCH
+document.getElementById("searchBox").addEventListener("keypress", function (e) {
+    if (e.key === "Enter") searchOrders();
+});
+
+// UPDATE ORDER
+function updateOrder(btn) {
+    let row = btn.closest("tr");
+
+    let orderId = row.querySelector(".OrderId").value;
+    let orderStatus = row.querySelector(".OrderStatus").value;
+
+    fetch('/Admin/UpdateOrder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            OrderId: parseInt(orderId),
+            OrderStatus: orderStatus
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        Swal.fire({
+            icon: data.success ? 'success' : 'error',
+            title: data.success ? 'Updated!' : 'Error',
+            text: data.message,
+            timer: 1500,
+            showConfirmButton: false
+        });
+    });
+}
+
+    let page = 1;
+    let loading = false;
+
+    document.getElementById("scrollContainer").addEventListener("scroll", async function () {
+
+        let container = this;
+
+        if (container.scrollTop + container.clientHeight >= container.scrollHeight - 50) {
+
+            if (loading) return;
+
+            loading = true;
+            page++;
+
+            let res = await fetch(`/Admin/AdminOrders?page=${page}&partial=true`);
+            let html = await res.text();
+
+            document.getElementById("orderTable").insertAdjacentHTML("beforeend", html);
+
+            loading = false;
+        }
+    });
+
+</script>

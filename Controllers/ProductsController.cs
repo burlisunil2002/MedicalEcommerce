@@ -1,5 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Razorpay.Api;
 using VivekMedicalProducts.Data;
 using VivekMedicalProducts.Models;
 using VivekMedicalProducts.Services;
@@ -13,140 +16,65 @@ namespace VivekMedicalProducts.Controllers
         private readonly ProductService _service;
         private readonly ApplicationDbContext _context;
         private readonly IUserContextService _userContext;
+        private readonly UserManager<ApplicationUser> _userManager;
         private readonly IFileStorageService _fileStorage;
 
         public ProductsController(
+            UserManager<ApplicationUser> userManager,
             ProductService service,
             ApplicationDbContext context,
             IUserContextService userContext,
             IFileStorageService fileStorage)
         {
+            _userManager = userManager;
             _service = service;
             _context = context;
             _userContext = userContext;
             _fileStorage = fileStorage;
         }
 
-        // ================= INDEX =================
-        public IActionResult Index(string? searchString, string? category)
+        [HttpGet("/api/products/search")]
+        public IActionResult Search(string term)
         {
-            var products = _context.Products.AsQueryable();
+            if (string.IsNullOrWhiteSpace(term))
+                return Ok(new List<object>());
 
-            // 🔥 AUTO EXPIRE HOT DEALS
-            var now = DateTime.UtcNow;
+            term = term.ToLower();
 
-            var expiredDeals = _context.Products
-                .Where(p => p.IsHotDeal
-                    && p.DealEndDate.HasValue
-                    && p.DealEndDate <= now)
-                .ToList();
-
-            if (expiredDeals.Any())
-            {
-                foreach (var product in expiredDeals)
+            var results = _context.Products
+                .Include(p => p.Variants)
+                .Where(p =>
+                    p.Name.ToLower().Contains(term) ||
+                    p.Brand.ToLower().Contains(term) ||
+                    p.Variants.Any(v => v.Model.ToLower().Contains(term))
+                )
+                .Select(p => new
                 {
-                    product.IsHotDeal = false;
-                }
+                    id = p.Id,
+                    brand = p.Brand,
+                    name = p.Name,
+                    category = p.Category,
+                    imageUrl = p.ImageUrl,
+                    priceType = p.PriceType,
 
-                _context.SaveChanges();
-            }
+                    minPrice = p.Variants.Any()
+         ? p.Variants.Min(v => v.Price)
+         : 0,
 
-            if (!string.IsNullOrEmpty(searchString))
-            {
-                var normalizedSearch = Normalize(searchString);
+                    maxPrice = p.Variants.Any()
+         ? p.Variants.Max(v => v.Price)
+         : 0,
 
-                products = products
-                    .AsEnumerable() // 🔥 switch to memory (important)
-                    .Where(p =>
-                        Normalize(p.Name).Contains(normalizedSearch) ||
-                        Normalize(p.Category).Contains(normalizedSearch)
-                    )
-                    .AsQueryable();
-            }
-
-            if (!string.IsNullOrEmpty(category))
-                products = products.Where(p => p.Category == category);
-
-            // 🔥 GET UNIQUE CATEGORIES WITH IMAGE
-            ViewBag.Categories = _context.Products
-                .Where(p => p.Category != null)
-                .GroupBy(p => p.Category)
-                .Select(g => new
-                {
-                    Name = g.Key,
-                    ImageUrl = g.Where(x => x.ImageUrl != null)
-                             .Select(x => x.ImageUrl)
-                             .FirstOrDefault()
+                    isHotDeal = p.IsHotDeal,
+                    discount = p.DiscountPercentage ?? 0,
+                    dealEndDate = p.DealEndDate
                 })
+                .Take(10)
                 .ToList();
 
-            var userId = _userContext.GetUserId();
-
-            var cartItems = _context.Carts
-                            .Where(c => c.UserId == userId)
-                            .ToList();
-
-            var cartDict = cartItems
-    .GroupBy(c => c.ProductId)
-    .ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity));
-
-            var result = products
-                .ToList()
-                .Select(p => new ProductViewModel
-                {
-                    Id = p.Id,
-                    Name = p.Name,
-                    Description = p.Description,
-                    Category = p.Category,
-
-                    // 🔹 SELLER
-                    SellerId = p.SellerId ?? 0,
-                    SellerName = p.Seller != null ? p.Seller.BusinessName : "",
-
-                    // 🔹 PRICING
-                    Price = p.Price,
-                    GSTPercentage = p.GSTPercentage,
-                    PriceType = p.PriceType ?? "Fixed",
-
-                    // 🔹 IMAGES
-                    ImageUrl = p.ImageUrl,
-                    ImageUrl2 = p.ImageUrl2,
-                    ImageUrl3 = p.ImageUrl3,
-                    ImageUrl4 = p.ImageUrl4,
-                    QuotationUrl = p.QuotationUrl,
-
-                    // 🔥 DEALS
-                    IsHotDeal = p.IsHotDeal,
-                    DiscountPercentage = p.DiscountPercentage,
-                    DealEndDate = p.DealEndDate,
-
-                    // 🔹 INVENTORY
-                    StockQuantity = p.StockQuantity,
-
-                    // 🔹 SHIPPING ✅ SAFE
-                    ProductType = p.ProductType ?? "Consumable",
-                    Weight = p.Weight ?? 0,
-                    IsFragile = p.IsFragile ?? false,
-
-                    // 🔹 STATUS
-                    IsActive = p.IsActive,
-
-                    // 🔹 MEDICAL
-                    BatchNumber = p.BatchNumber,
-                    ExpiryDate = p.ExpiryDate,
-
-                    // 🔹 CART
-                    CartQuantity = cartDict.ContainsKey(p.Id)
-                        ? cartDict[p.Id]
-                        : 0
-                })
-                .ToList();
-
-            if (!result.Any())
-                TempData["InfoMessage"] = "No products available.";
-
-            return View(result);
+            return Ok(results);
         }
+
 
         [HttpGet]
         public IActionResult GetSuggestions(string term)
@@ -185,90 +113,160 @@ namespace VivekMedicalProducts.Controllers
         }
 
         // ================= ADD (GET) =================
-        [HttpGet]
-        public IActionResult AddProducts()
+
+
+        public async Task<IActionResult> AddProducts()
         {
-            return View();
+            var userId = _userContext.GetUserId();
+
+            var user = await _userManager.FindByIdAsync(userId);
+
+            if (user == null)
+                return RedirectToAction("Login", "Account");
+
+            // 🔥 Check role
+            bool isAdmin = await _userManager.IsInRoleAsync(user, "Admin");
+
+            SellerModel seller = null;
+
+            if (!isAdmin)
+            {
+                seller = _context.Sellers.FirstOrDefault(s => s.UserId == userId);
+
+                if (seller == null)
+                    return RedirectToAction("SellerLogin", "Seller");
+
+                ViewBag.sellerName = seller.BusinessName;
+                ViewBag.IsSubscribed = seller.SubscriptionEndDate != null &&
+                                       seller.SubscriptionEndDate > DateTime.UtcNow;
+            }
+            else
+            {
+                ViewBag.sellerName = "Admin";
+                ViewBag.IsSubscribed = true;
+            }
+
+            return View(new ProductModel());
         }
 
-        // ================= ADD (POST) =================
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> AddProducts(
-    ProductModel product,
-    IFormFile imageFile,
-    IFormFile quotationFile)
+      ProductModel product,
+      IFormFile imageFile,
+      IFormFile quotationFile)
         {
-            if (!ModelState.IsValid)
-                return View(product);
+            var userId = _userContext.GetUserId();
+            var user = await _userManager.FindByIdAsync(userId);
 
-            try
+            if (user == null)
+                return RedirectToAction("Login", "Account");
+
+            bool isAdmin = await _userManager.IsInRoleAsync(user, "Admin");
+
+            if (!isAdmin)
             {
-                // ✅ COMMON ALLOWED TYPES
-                var allowedTypes = new[]
-                {
-            "image/jpeg",
-            "image/png",
-            "image/jpg",
-            "application/pdf",
-            "application/msword", // .doc
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" // .docx
-        };
+                var seller = _context.Sellers.FirstOrDefault(s => s.UserId == userId);
+                if (seller == null)
+                    return RedirectToAction("SellerLogin", "Seller");
 
-                // ================= IMAGE FILE =================
-                if (imageFile != null && imageFile.Length > 0)
-                {
-                    if (!allowedTypes.Contains(imageFile.ContentType))
-                    {
-                        ModelState.AddModelError("", "Only JPG, PNG, PDF, DOC, DOCX allowed");
-                        return View(product);
-                    }
-
-                    if (imageFile.Length > 10 * 1024 * 1024)
-                    {
-                        ModelState.AddModelError("", "File must be less than 10MB");
-                        return View(product);
-                    }
-
-                    product.ImageUrl = await _fileStorage.UploadAsync(imageFile, "products");
-                }
-
-                // ================= QUOTATION FILE =================
-                if (quotationFile != null && quotationFile.Length > 0)
-                {
-                    if (!allowedTypes.Contains(quotationFile.ContentType))
-                    {
-                        ModelState.AddModelError("", "Only JPG, PNG, PDF, DOC, DOCX allowed");
-                        return View(product);
-                    }
-
-                    if (quotationFile.Length > 10 * 1024 * 1024)
-                    {
-                        ModelState.AddModelError("", "File must be less than 10MB");
-                        return View(product);
-                    }
-
-                    product.QuotationUrl = await _fileStorage.UploadAsync(quotationFile, "quotations");
-                }
-
-                // ================= SAVE =================
-                _context.Products.Add(product);
-                await _context.SaveChangesAsync();
-
-                TempData["SuccessMessage"] = "Product added successfully!";
-                return RedirectToAction("AddProducts");
+                product.SellerId = seller.SellerId;
             }
-            catch (Exception ex)
+
+            // ✅ UTC FIX
+            if (product.ExpiryDate.HasValue)
+                product.ExpiryDate = DateTime.SpecifyKind(product.ExpiryDate.Value, DateTimeKind.Local).ToUniversalTime();
+
+            if (product.DealEndDate.HasValue)
+                product.DealEndDate = DateTime.SpecifyKind(product.DealEndDate.Value, DateTimeKind.Local).ToUniversalTime();
+
+            product.CreatedDate = DateTime.UtcNow;
+            product.Status = "Active";
+
+            // ✅ PRODUCT IMAGE
+            if (imageFile != null && imageFile.Length > 0)
+                product.ImageUrl = await _fileStorage.UploadAsync(imageFile, "products");
+
+            // ✅ VARIANTS
+            if (product.Variants != null && product.Variants.Any())
             {
-                ModelState.AddModelError("", "Upload failed: " + ex.Message);
-                return View(product);
+                foreach (var v in product.Variants)
+                {
+                    v.Status = "Active";
+
+                    // 🔥 VARIANT IMAGE
+                    if (v.ImageFile != null && v.ImageFile.Length > 0)
+                    {
+                        v.ImageUrl = await _fileStorage.UploadAsync(v.ImageFile, "variants");
+                    }
+
+                    // CLEAN SPECS
+                    if (v.Specifications != null)
+                    {
+                        v.Specifications = v.Specifications
+                            .Where(s => !string.IsNullOrWhiteSpace(s.Key) &&
+                                        !string.IsNullOrWhiteSpace(s.Value))
+                            .ToList();
+                    }
+                }
             }
+
+            _context.Products.Add(product);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Product added successfully!";
+            return RedirectToAction("ProductManagement");
         }
 
         // ================= PRODUCT MANAGEMENT =================
         public IActionResult ProductManagement()
         {
-            var products = _context.Products.ToList();
+            if (!User.Identity.IsAuthenticated)
+                return RedirectToAction("SellerLogin", "Seller");
+
+            List<ProductModel> products;
+
+            // 👑 ADMIN
+            if (User.IsInRole("Admin"))
+            {
+                products = _context.Products
+    .Include(p => p.Variants)
+        .ThenInclude(v => v.Specifications) // 🔥 NEW
+    .OrderByDescending(p => p.CreatedDate)
+    .ToList();
+
+                ViewBag.sellerName = "Admin";
+                ViewBag.IsSubscribed = true;
+
+                return View(products);
+            }
+
+            // 🧑 SELLER
+            var userId = _userContext.GetUserId();
+
+            var seller = _context.Sellers
+                .FirstOrDefault(s => s.UserId == userId);
+
+            if (seller == null)
+                return RedirectToAction("SellerLogin", "Seller");
+
+            // 🔥 subscription check
+            if (seller.SubscriptionEndDate == null ||
+                seller.SubscriptionEndDate < DateTime.UtcNow)
+            {
+                TempData["ErrorMessage"] = "Your subscription has expired. Please upgrade your plan.";
+                return Redirect("/Subscription");
+            }
+
+            ViewBag.sellerName = seller.BusinessName;
+            ViewBag.IsSubscribed = true;
+
+            products = _context.Products
+    .Include(p => p.Variants)
+        .ThenInclude(v => v.Specifications) // 🔥 NEW
+    .OrderByDescending(p => p.CreatedDate)
+    .ToList();
+
             return View(products);
         }
 
@@ -276,7 +274,11 @@ namespace VivekMedicalProducts.Controllers
         [HttpGet]
         public IActionResult ProductEdit(int id)
         {
-            var product = _context.Products.Find(id);
+            var product = _context.Products
+    .Include(p => p.Variants)
+        .ThenInclude(v => v.Specifications)
+    .FirstOrDefault(p => p.Id == id);
+
             if (product == null)
                 return NotFound();
 
@@ -288,80 +290,114 @@ namespace VivekMedicalProducts.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ProductEdit(
-  ProductModel model,
-  IFormFile imageFile,
-  IFormFile quotationFile)
+     ProductModel model,
+     IFormFile imageFile,
+     IFormFile quotationFile)
         {
-            // 🔥 Fix validation issues
-            ModelState.Remove("imageFile");
-            ModelState.Remove("quotationFile");
+            var product = await _context.Products
+                .Include(p => p.Variants)
+                .ThenInclude(v => v.Specifications)
+                .FirstOrDefaultAsync(p => p.Id == model.Id);
 
-            if (!ModelState.IsValid)
-            {
-                return View(model);
-            }
-
-            var product = await _context.Products.FindAsync(model.Id);
             if (product == null)
                 return NotFound();
 
-            // ================= BASIC =================
+            // ✅ UTC FIX
+            if (model.ExpiryDate.HasValue)
+                product.ExpiryDate = DateTime.SpecifyKind(model.ExpiryDate.Value, DateTimeKind.Local).ToUniversalTime();
+
+            if (model.DealEndDate.HasValue)
+                product.DealEndDate = DateTime.SpecifyKind(model.DealEndDate.Value, DateTimeKind.Local).ToUniversalTime();
+
+            // ✅ BASIC UPDATE
             product.Name = model.Name;
-            product.Price = model.Price;
-            product.GSTPercentage = model.GSTPercentage;
-            product.Description = model.Description;
+            product.Brand = model.Brand;
             product.Category = model.Category;
+            product.Description = model.Description;
             product.PriceType = model.PriceType;
-
-            // ================= HOT DEAL =================
+            product.GSTPercentage = model.GSTPercentage;
+            product.HSNCode = model.HSNCode;
+            product.Weight = model.Weight;
+            product.BatchNumber = model.BatchNumber;
+            product.IsFragile = model.IsFragile;
             product.IsHotDeal = model.IsHotDeal;
             product.DiscountPercentage = model.DiscountPercentage;
 
-            // 🔥 IMPORTANT: PostgreSQL UTC FIX
-            product.DealEndDate = model.DealEndDate.HasValue
-                ? model.DealEndDate.Value.ToUniversalTime()
-                : null;
-
-            // ================= IMAGE =================
+            // ✅ PRODUCT IMAGE
             if (imageFile != null && imageFile.Length > 0)
-            {
                 product.ImageUrl = await _fileStorage.UploadAsync(imageFile, "products");
-            }
 
-            // ================= PDF =================
-            if (quotationFile != null && quotationFile.Length > 0)
+            // 🔥 STORE OLD VARIANTS (CRITICAL)
+            var oldVariants = product.Variants.ToList();
+
+            // ❌ REMOVE OLD
+            _context.ProductVariants.RemoveRange(product.Variants);
+
+            var newVariants = new List<ProductVariant>();
+
+            if (model.Variants != null && model.Variants.Any())
             {
-                product.QuotationUrl = await _fileStorage.UploadAsync(quotationFile, "quotations");
+                foreach (var v in model.Variants)
+                {
+                    // Skip empty rows
+                    if (string.IsNullOrWhiteSpace(v.Model) &&
+                        v.Price <= 0 &&
+                        v.StockQuantity <= 0)
+                        continue;
+
+                    var oldVariant = oldVariants
+                        .FirstOrDefault(x => x.ProductVariantId == v.ProductVariantId);
+
+                    var newVariant = new ProductVariant
+                    {
+                        ProductId = product.Id,
+                        Model = v.Model,
+                        Size = v.Size,
+                        Unit = v.Unit,
+                        PackSize = v.PackSize,
+                        MinQuantity = v.MinQuantity > 0 ? v.MinQuantity : 1,
+                        MaxQuantity = v.MaxQuantity,
+                        StepQuantity = v.StepQuantity > 0 ? v.StepQuantity : 1,
+                        Price = v.Price,
+                        StockQuantity = v.StockQuantity,
+                        Status = "Active"
+                    };
+
+                    // 🔥 IMAGE (FINAL LOGIC)
+                    if (v.ImageFile != null && v.ImageFile.Length > 0)
+                    {
+                        newVariant.ImageUrl = await _fileStorage.UploadAsync(v.ImageFile, "variants");
+                    }
+                    else
+                    {
+                        newVariant.ImageUrl = oldVariant?.ImageUrl;
+                    }
+
+                    // 🔥 SPECS
+                    if (v.Specifications != null)
+                    {
+                        newVariant.Specifications = v.Specifications
+                            .Where(s => !string.IsNullOrWhiteSpace(s.Key) &&
+                                        !string.IsNullOrWhiteSpace(s.Value))
+                            .Select(s => new ProductSpecifications
+                            {
+                                Key = s.Key,
+                                Value = s.Value
+                            }).ToList();
+                    }
+
+                    newVariants.Add(newVariant);
+                }
             }
 
-            var result = await _context.SaveChangesAsync();
-            Console.WriteLine("Rows affected: " + result);
-
-            return RedirectToAction("ProductManagement");
-        }
-
-
-     /*   [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ProductEdit(ProductEditViewModel model)
-        {
-            var product = await _context.Products.FindAsync(model.Id);
-
-            if (product == null)
-                return NotFound();
-
-            product.IsHotDeal = model.IsHotDeal;
-            product.DiscountPercentage = model.DiscountPercentage;
-
-            // 🔥 FIX HERE
-            product.DealEndDate = model.DealEndDate.HasValue
-                ? DateTime.SpecifyKind(model.DealEndDate.Value, DateTimeKind.Utc)
-                : null;
+            product.Variants = newVariants;
 
             await _context.SaveChangesAsync();
 
-            return RedirectToAction("ProductManagement"); // ✅ REQUIRED
-        } */
+            TempData["SuccessMessage"] = "Product updated successfully!";
+            return RedirectToAction("ProductManagement");
+        }
+
 
         // ================= DELETE =================
         [HttpPost]
@@ -401,7 +437,7 @@ namespace VivekMedicalProducts.Controllers
                                       p.Id,
                                       p.Name,
                                       p.Category,
-                                      p.Price,
+                                     // p.Price,
                                       p.Description,
                                       p.ImageUrl,
                                       p.PriceType,
@@ -416,5 +452,138 @@ namespace VivekMedicalProducts.Controllers
 
             return Json(product);
         }
+
+
+// -------------------- REACT API ------------------------- //
+
+        [HttpGet("/api/products")]
+        public IActionResult GetProducts()
+        {
+            var products = _context.Products
+               .Include(p => p.Variants)
+               .Where(p => p.Status == "Active")
+               .Select(p => new
+               {
+                   id = p.Id,
+                   name = p.Name,
+                   brand = p.Brand,
+                   category = p.Category,
+                   imageUrl = p.ImageUrl,
+                   description = p.Description,
+                   priceType = p.PriceType,
+                   // 🔥 PRICE RANGE
+                   minPrice = p.Variants.Any()
+                                ? p.Variants.Min(v => v.Price)
+                                : 0,
+
+                   maxPrice = p.Variants.Any()
+                                ? p.Variants.Max(v => v.Price)
+                                : 0,
+
+                   isHotDeal = p.IsHotDeal,
+                   discount = p.DiscountPercentage ?? 0,
+                  
+
+                   // 🔥 VARIANTS
+                   variants = p.Variants
+                       .Where(v => v.Status == "Active")
+                       .Select(v => new
+                       {
+                           id = v.ProductVariantId,
+
+                           model = v.Model,
+                           size = v.Size,
+                           unit = v.Unit,
+                           packSize = v.PackSize,
+
+                           price = v.Price,
+                           stock = v.StockQuantity,
+
+                           minQty = v.MinQuantity,
+                           maxQty = v.MaxQuantity,
+                           stepQty = v.StepQuantity,
+                           specifications = v.Specifications.Select(s => new
+                           {
+                               key = s.Key,
+                               value = s.Value
+                           }).ToList()
+                       }).ToList()
+               })
+                .ToList();
+
+            if (products == null)
+                return NotFound();
+
+            return Ok(products);
+        }
+
+        /* Details Page API */
+
+        [HttpGet("/api/products/{id}")]
+        public async Task<IActionResult> GetProduct(int id)
+        {
+            var product = await _context.Products
+                .Where(p => p.Id == id)
+                .Select(p => new
+                {
+                    id = p.Id,
+                    name = p.Name,
+                    brand = p.Brand,
+                    category = p.Category,
+                    description = p.Description,
+                    imageUrl = p.ImageUrl,
+
+                    priceType = p.PriceType,
+                    isHotDeal = p.IsHotDeal,
+                    discountPercentage = p.DiscountPercentage,
+                    gstPercentage = p.GSTPercentage,
+                    
+
+                    // 🔥 VARIANTS (WITH IMAGE + SPECS)
+                    variants = p.Variants
+                        .Where(v => v.Status == "Active")
+                        .OrderBy(v => v.ProductVariantId)
+                        .Select(v => new
+                        {
+                            id = v.ProductVariantId,
+
+                            model = v.Model,
+                            size = v.Size,
+                            unit = v.Unit,
+                            packSize = v.PackSize,
+
+                            price = v.Price,
+                            stock = v.StockQuantity,
+
+                            minQty = v.MinQuantity,
+                            maxQty = v.MaxQuantity,
+                            stepQty = v.StepQuantity,
+
+                            imageUrl = v.ImageUrl, // 🔥 IMPORTANT
+
+                            specifications = v.Specifications.Select(s => new
+                            {
+                                key = s.Key,
+                                value = s.Value
+                            }).ToList()
+                        }).ToList(),
+
+                    // 🔥 DEFAULT VARIANT (FIRST)
+                    defaultVariantId = p.Variants
+                        .Where(v => v.Status == "Active")
+                        .OrderBy(v => v.ProductVariantId)
+                        .Select(v => v.ProductVariantId)
+                        .FirstOrDefault()
+                })
+                .FirstOrDefaultAsync();
+
+            if (product == null)
+                return NotFound();
+
+            return Ok(product);
+        }
+
     }
 }
+
+

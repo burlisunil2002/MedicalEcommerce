@@ -10,9 +10,13 @@
         && Model.DealEndDate > DateTime.UtcNow
         && discount > 0;
 
+    var firstVariant = Model.Variants?.FirstOrDefault();
+
+    var originalPrice = firstVariant?.Price ?? 0;
+
     var finalPrice = isDealActive
-        ? Model.Price - (Model.Price * discount / 100)
-        : Model.Price;
+        ? originalPrice - (originalPrice * discount / 100)
+        : originalPrice;
 }
 
 <div class="min-h-screen bg-gradient-to-br from-gray-100 via-white to-gray-200 py-10 px-4">
@@ -58,24 +62,19 @@
                     {
                         <div>
 
+                            <span class="text-3xl font-bold text-green-600">
+                                ₹ @finalPrice.ToString("N0")
+                            </span>
+
                             @if (isDealActive)
                             {
-                                <!-- HOT DEAL PRICE -->
-                                <div class="flex items-center gap-3">
+                                <span class="line-through text-gray-400 text-lg">
+                                    ₹ @originalPrice.ToString("N0")
+                                </span>
 
-                                    <span class="text-3xl font-bold text-green-600">
-                                        ₹ @finalPrice.ToString("N0")
-                                    </span>
-
-                                    <span class="line-through text-gray-400 text-lg">
-                                        ₹ @Model.Price.ToString("N0")
-                                    </span>
-
-                                    <span class="text-red-500 text-sm font-semibold">
-                                        @discount% OFF
-                                    </span>
-
-                                </div>
+                                <span class="text-red-500 text-sm font-semibold">
+                                    @discount% OFF
+                                </span>
 
                                 <p class="text-xs text-red-500 mt-1">
                                     ⚡ Limited time deal!
@@ -85,7 +84,7 @@
                             {
                                 <!-- NORMAL PRICE -->
                                 <span class="text-3xl font-bold text-green-600">
-                                    ₹ @Model.Price.ToString("N0")
+                                    ₹ @originalPrice.ToString("N0")
                                 </span>
                             }
 

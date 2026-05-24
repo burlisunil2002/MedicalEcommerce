@@ -1,5 +1,6 @@
 ﻿using DocumentFormat.OpenXml.Drawing.Charts;
 using DocumentFormat.OpenXml.InkML;
+using DocumentFormat.OpenXml.Spreadsheet;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,6 +13,7 @@ using VivekMedicalProducts.Data;
 using VivekMedicalProducts.Models;
 using VivekMedicalProducts.Services;
 using VivekMedicalProducts.ViewModels;
+
 
 
 namespace VivekMedicalProducts.Controllers
@@ -58,6 +60,7 @@ namespace VivekMedicalProducts.Controllers
             return guestId;
         }
 
+
         [HttpPost]
         public async Task<IActionResult> PlaceCOD()
         {
@@ -66,58 +69,72 @@ namespace VivekMedicalProducts.Controllers
             if (string.IsNullOrEmpty(userId))
                 return Json(new { success = false, redirect = "/Account/Login" });
 
-            var guestId = string.IsNullOrEmpty(userId) ? GetOrCreateGuestId() : null;
-            var coupon = HttpContext.Session.GetString("CouponCode");
-
             var carts = await _context.Carts
-                .Include(c => c.Product)
+                .Include(c => c.ProductVariant)
                 .Where(c => c.UserId == userId)
                 .ToListAsync();
 
             if (!carts.Any())
                 return Json(new { success = false });
 
-            // ✅ USE SERVICE
-            var totals = await _calc.CalculateAsync(userId, guestId, coupon);
-
             var address = JsonConvert.DeserializeObject<CheckoutViewModel>(
                 HttpContext.Session.GetString("Address"));
 
-            var order = new OrderModel
+            var grouped = carts.GroupBy(c => c.Product.SellerId);
+
+            foreach (var group in grouped)
             {
-                UserId = userId,
-                FullName = address.FullName,
-                PhoneNumber = address.PhoneNumber,
-                Address = address.Address,
-                City = address.City,
-                Pincode = address.Pincode,
+                if (group.Key == null || group.Key == 0)
+                    continue; // skip invalid
 
-                SubTotal = totals.Subtotal,
-                GST = totals.GST,
-                GrandTotal = totals.GrandTotal,
+                var sellerExists = _context.Sellers.Any(s => s.SellerId == group.Key);
 
-                PaymentStatus = "Pending",
-                OrderStatus = "Confirmed",
-                OrderDate = DateTime.UtcNow
-            };
+                if (!sellerExists)
+                    throw new Exception("Seller not found in DB");
 
-            _context.Orders.Add(order);
-            await _context.SaveChangesAsync();
+                // ✅ seller-specific total
+                var subtotal = group.Sum(x => x.ProductVariant.Price * x.Quantity);
 
-            foreach (var item in carts)
-            {
-                _context.OrderItems.Add(new OrderItemModel
+                var order = new OrderModel
                 {
-                    OrderId = order.OrderId,
-                    ProductId = item.ProductId,
-                    ProductName = item.Product.Name,
-                    Quantity = item.Quantity,
-                    Price = item.Product.Price
-                });
+                    UserId = userId,
+                    SellerId = group.Key.Value,
+
+                    FullName = address.FullName,
+                    PhoneNumber = address.PhoneNumber,
+                    Address = address.Address,
+                    City = address.City,
+                    Pincode = address.Pincode,
+
+                    SubTotal = subtotal,
+                    GST = subtotal * 0.18m,
+                    GrandTotal = subtotal * 1.18m,
+
+                    PaymentStatus = "Pending",
+                    OrderStatus = "Confirmed",
+                    OrderDate = DateTime.UtcNow
+                };
+
+                _context.Orders.Add(order);
+                await _context.SaveChangesAsync();
+
+                foreach (var item in group)
+                {
+                    _context.OrderItems.Add(new OrderItemModel
+                    {
+                        OrderId = order.OrderId,
+                        ProductId = item.ProductId,
+                        ProductName = item.Product.Name,
+                        Quantity = item.Quantity,
+                        Price = item.ProductVariant.Price,
+                        SellerId = item.SellerId, // 🔥 ADD THIS
+                    });
+                }
+
+                await _context.SaveChangesAsync();
             }
 
-            await _context.SaveChangesAsync();
-
+            // ✅ return AFTER loop
             _context.Carts.RemoveRange(carts);
             await _context.SaveChangesAsync();
 
@@ -130,23 +147,9 @@ namespace VivekMedicalProducts.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateOrder([FromBody] CheckoutViewModel model)
         {
-            OrderModel? order = null;
-
             try
             {
                 var userId = _userContext.GetUserId();
-                var guestId = string.IsNullOrEmpty(userId) ? GetOrCreateGuestId() : null;
-                var coupon = HttpContext.Session.GetString("CouponCode");
-
-                if (model == null ||
-                    string.IsNullOrWhiteSpace(model.FullName) ||
-                    string.IsNullOrWhiteSpace(model.PhoneNumber) ||
-                    string.IsNullOrWhiteSpace(model.Address) ||
-                    string.IsNullOrWhiteSpace(model.City) ||
-                    string.IsNullOrWhiteSpace(model.Pincode))
-                {
-                    return Json(new { success = false, message = "Please fill all address fields" });
-                }
 
                 var carts = await _context.Carts
                     .Include(c => c.Product)
@@ -154,93 +157,101 @@ namespace VivekMedicalProducts.Controllers
                     .ToListAsync();
 
                 if (!carts.Any())
-                    return Json(new { success = false, message = "Cart is empty" });
+                    return Json(new { success = false });
 
-                // ✅ USE CALC SERVICE ONLY
-                var totals = await _calc.CalculateAsync(userId, guestId, coupon);
-                var amountInPaise = (int)(totals.GrandTotal * 100);
+                var grouped = carts.GroupBy(c => c.Product.SellerId);
 
-                order = new OrderModel
+                var createdOrders = new List<OrderModel>();
+
+                foreach (var group in grouped)
                 {
-                    UserId = userId,
-                    OrderNumber = "ORD-" + DateTime.UtcNow.Ticks,
-                    OrderDate = DateTime.UtcNow,
+                    if (group.Key == null || group.Key == 0)
+                        continue; // skip invalid
 
-                    FullName = model.FullName,
-                    PhoneNumber = model.PhoneNumber,
-                    Address = model.Address,
-                    City = model.City,
-                    Pincode = model.Pincode,
+                    var sellerExists = _context.Sellers.Any(s => s.SellerId == group.Key);
 
-                    SubTotal = totals.Subtotal,
-                    GST = totals.GST,
-                    GrandTotal = totals.GrandTotal,
+                    if (!sellerExists)
+                        throw new Exception("Seller not found in DB");
 
-                    PaymentStatus = "Initiated",
-                    OrderStatus = "Pending",
-                    IsPaymentVerified = false,
 
-                    CreatedBy = userId
-                };
+                    var subtotal = group.Sum(x => x.ProductVariant.Price * x.Quantity);
+                    var grandTotal = subtotal * 1.18m;
 
-                _context.Orders.Add(order);
-                await _context.SaveChangesAsync();
 
-                // ✅ SAVE ITEMS (NO CALCULATION LOGIC HERE)
-                foreach (var item in carts)
-                {
-                    _context.OrderItems.Add(new OrderItemModel
+                    var order = new OrderModel
                     {
-                        OrderId = order.OrderId,
-                        ProductId = item.ProductId,
-                        ProductName = item.Product.Name,
-                        Quantity = item.Quantity,
-                        Price = item.Product.Price,   // raw price only
-                        ItemStatus = "Pending"
-                    });
+                        UserId = userId,
+                        SellerId = group.Key.Value,
+
+                        OrderNumber = "ORD-" + DateTime.UtcNow.Ticks,
+                        OrderDate = DateTime.UtcNow,
+
+                        FullName = model.FullName,
+                        PhoneNumber = model.PhoneNumber,
+                        Address = model.Address,
+                        City = model.City,
+                        Pincode = model.Pincode,
+
+                        SubTotal = subtotal,
+                        GST = subtotal * 0.18m,
+                        GrandTotal = grandTotal,
+
+                        PaymentStatus = "Initiated",
+                        OrderStatus = "Pending"
+                    };
+
+                    _context.Orders.Add(order);
+                    await _context.SaveChangesAsync();
+
+                    foreach (var item in group)
+                    {
+                        _context.OrderItems.Add(new OrderItemModel
+                        {
+                            OrderId = order.OrderId,
+                            ProductVariantId = item.ProductVariantId,
+                            ProductName = item.Product.Name,
+                            Quantity = item.Quantity,
+                            Price = item.ProductVariant.Price,
+                            SellerId = item.Product.SellerId   // 🔥 ADD THIS
+                        });
+                    }
+
+                    await _context.SaveChangesAsync();
+
+                    createdOrders.Add(order);
                 }
 
-                await _context.SaveChangesAsync();
+                // 🔥 create Razorpay for FIRST order (or combine later)
+                var firstOrder = createdOrders.First();
 
-                // ✅ RAZORPAY ORDER
                 var client = new RazorpayClient(
                     _config["Razorpay:Key"],
                     _config["Razorpay:Secret"]
                 );
 
-                var options = new Dictionary<string, object>
+                var amountInPaise = (int)(firstOrder.GrandTotal * 100);
+
+                var razorOrder = client.Order.Create(new Dictionary<string, object>
         {
             { "amount", amountInPaise },
             { "currency", "INR" },
-            { "receipt", order.OrderNumber }
-        };
+            { "receipt", firstOrder.OrderNumber }
+        });
 
-                var razorOrder = client.Order.Create(options);
-
-                order.RazorpayOrderId = razorOrder["id"].ToString();
-                order.UpdatedAt = DateTime.UtcNow;
-
+                firstOrder.RazorpayOrderId = razorOrder["id"].ToString();
                 await _context.SaveChangesAsync();
 
                 return Json(new
                 {
                     success = true,
-                    orderId = order.OrderId,
-                    razorpayOrderId = order.RazorpayOrderId,
+                    orderId = firstOrder.OrderId,
+                    razorpayOrderId = firstOrder.RazorpayOrderId,
                     amount = amountInPaise
                 });
             }
             catch (Exception ex)
             {
-                if (order != null)
-                {
-                    order.PaymentStatus = "Failed";
-                    order.OrderStatus = "Failed";
-                    order.FailureReason = ex.Message;
-                    await _context.SaveChangesAsync();
-                }
-
-                return Json(new { success = false, message = "Order creation failed" });
+                return Json(new { success = false, message = ex.Message });
             }
         }
 
@@ -602,6 +613,211 @@ namespace VivekMedicalProducts.Controllers
                 "application/pdf",
                 $"Invoice-{order.OrderNumber}.pdf"
             );
+        }
+
+        public static string GetDisplayName(ApplicationUser user)
+        {
+            if (user == null) return "Unknown";
+
+            return !string.IsNullOrEmpty(user.CustomerName)
+                ? user.CustomerName
+                : user.UserName;
+        }
+
+        public async Task<IActionResult> AdminOrders(string search = "")
+        {
+            var isAdmin = User.IsInRole("Admin");
+
+            int sellerId = 0;
+
+            if (!isAdmin)
+            {
+                var userId = _userContext.GetUserId();
+
+                var seller = _context.Sellers
+                    .FirstOrDefault(s => s.UserId == userId);
+
+                if (seller == null)
+                    return RedirectToAction("SellerLogin", "Seller");
+
+                // 🔥 SUBSCRIPTION CHECK
+                if (seller.SubscriptionEndDate == null ||
+                    seller.SubscriptionEndDate < DateTime.UtcNow)
+                {
+                    TempData["ErrorMessage"] = "Your subscription expired. Please upgrade.";
+                    return RedirectToAction("Index", "Subscription");
+                }
+
+                sellerId = seller.SellerId;
+
+                // 🔥 for layout
+                ViewBag.sellerName = seller.BusinessName;
+                ViewBag.IsSubscribed = true;
+            }
+            else
+            {
+                ViewBag.sellerName = "Admin";
+                ViewBag.IsSubscribed = true;
+            }
+
+            var query = from i in _context.OrderItems
+                        join o in _context.Orders on i.OrderId equals o.OrderId
+                        join p in _context.Products on i.ProductId equals p.Id
+                        join u in _context.Users on o.UserId equals u.Id
+                        where isAdmin || i.SellerId == sellerId
+                        select new AdminOrderModel
+                        {
+                            OrderId = o.OrderId,
+                            OrderItemId = i.OrderItemId,
+                            OrderDate = o.OrderDate,
+                            Customer = !string.IsNullOrEmpty(u.CustomerName)
+                                        ? u.CustomerName
+                                        : u.UserName,
+                            ProductName = p.Name,
+                            Quantity = i.Quantity,
+                            GrandTotal = o.GrandTotal,
+                            RazorpayPaymentId = o.RazorpayPaymentId ?? "-",
+                            PaymentStatus = o.PaymentStatus ?? "Pending",
+                            OrderStatus = o.OrderStatus
+                        };
+
+            if (!string.IsNullOrEmpty(search))
+            {
+                search = search.ToLower();
+
+                query = query.Where(x =>
+                    x.ProductName.ToLower().Contains(search) ||
+                    x.Customer.ToLower().Contains(search) ||
+                    x.OrderId.ToString().Contains(search)
+                );
+            }
+
+            var orders = await query
+                .OrderByDescending(x => x.OrderDate)
+                .ToListAsync();
+
+            ViewBag.TotalOrders = orders.Count;
+            ViewBag.Completed = orders.Count(x => x.PaymentStatus == "Completed");
+            ViewBag.Pending = orders.Count(x => x.PaymentStatus == "Pending");
+
+            return View(orders);
+        }
+
+        // =========================
+        // UPDATE ORDER
+        // =========================
+
+        [HttpPost]
+        public async Task<IActionResult> UpdateOrder([FromBody] OrderModel model)
+        {
+            if (model == null || model.OrderId == 0)
+                return Json(new { success = false, message = "Invalid request" });
+
+            try
+            {
+                var isAdmin = User.IsInRole("Admin");
+
+                var userId = _userContext.GetUserId();
+                var seller = _context.Sellers.FirstOrDefault(s => s.UserId == userId);
+
+                if (seller == null)
+                    return Unauthorized();
+
+                int sellerId = seller.SellerId;
+
+                var order = await _context.Orders
+                    .FirstOrDefaultAsync(x => x.OrderId == model.OrderId);
+
+                if (order == null)
+                    return Json(new { success = false, message = "Order not found" });
+
+                // 🔥 SELLER SECURITY CHECK
+                if (!isAdmin)
+                {
+                    var hasAccess = await _context.OrderItems
+                        .AnyAsync(x => x.OrderId == model.OrderId && x.SellerId == sellerId);
+
+                    if (!hasAccess)
+                        return Unauthorized();
+                }
+
+                if (order.OrderStatus == model.OrderStatus)
+                {
+                    return Json(new { success = true, message = "No changes" });
+                }
+
+                order.OrderStatus = model.OrderStatus;
+                order.OrderModifiedDate = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Json(new
+                {
+                    success = true,
+                    message = "Order status updated successfully"
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = ex.Message
+                });
+            }
+        }
+
+
+        // =========================
+        // ORDER DETAILS (MODAL)
+        // =========================
+        [HttpGet]
+        public async Task<IActionResult> GetOrderDetails(int id)
+        {
+            var isAdmin = User.IsInRole("Admin");
+
+            var userId = _userContext.GetUserId();
+            var seller = _context.Sellers.FirstOrDefault(s => s.UserId == userId);
+
+            if (seller == null)
+                return Unauthorized();
+
+            int sellerId = seller.SellerId;
+
+            // 🔥 SECURITY CHECK
+            if (!isAdmin)
+            {
+                var hasAccess = await _context.OrderItems
+                    .AnyAsync(x => x.OrderId == id && x.SellerId == sellerId);
+
+                if (!hasAccess)
+                    return Unauthorized();
+            }
+
+            var order = await (
+                from o in _context.Orders
+                join oi in _context.OrderItems
+                    on o.OrderId equals oi.OrderId into orderItems
+                from oi in orderItems.DefaultIfEmpty()
+                where o.OrderId == id
+                select new
+                {
+                    o.OrderId,
+                    o.OrderDate,
+                    o.FullName,
+                    o.PhoneNumber,
+                    o.Address,
+                    o.City,
+                    o.Pincode,
+                    Quantity = oi != null ? oi.Quantity : 0,
+                    ItemStatus = oi != null ? oi.ItemStatus : "Pending"
+                }
+            ).FirstOrDefaultAsync();
+
+            if (order == null)
+                return Json(new { success = false });
+
+            return Json(new { success = true, data = order });
         }
 
     }

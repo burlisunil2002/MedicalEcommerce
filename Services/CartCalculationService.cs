@@ -33,7 +33,7 @@ namespace VivekMedicalProducts.Services
 
             foreach (var c in carts)
             {
-                decimal original = c.Product.Price;
+                decimal original = c.ProductVariant.Price;
 
                 // 🔥 HOT DEAL
                 decimal final = c.Product.IsHotDeal && c.Product.DiscountPercentage > 0

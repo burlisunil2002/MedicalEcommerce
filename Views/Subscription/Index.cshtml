@@ -1,0 +1,300 @@
+﻿@{
+    Layout = "~/Views/Shared/_SellerLayout.cshtml";
+}
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="bg-green-500 text-white p-3 rounded mb-4">
+        @TempData["SuccessMessage"]
+    </div>
+}
+
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="bg-green-500 text-white p-3 rounded mb-4">
+        @TempData["ErrorMessage"]
+    </div>
+}
+
+<div class="max-w-7xl mx-auto mt-10 px-4">
+
+    <h2 class="text-4xl font-bold text-center text-white mb-2">
+        Choose your plan
+    </h2>
+    <p class="text-center text-gray-300 mb-10">
+        Unlock your business growth 🚀
+    </p>
+
+    <!-- 🔥 PRODUCT SELECT -->
+    <div class="text-center mb-10">
+        <select id="range" class="px-4 py-2 rounded-xl border bg-white">
+            <option value="1-5">1-5 Products</option>
+            <option value="6-10">6-10 Products</option>
+            <option value="11-15">11-15 Products</option>
+            <option value="16-20">16-20 Products</option>
+            <option value="20+">20+ Products</option>
+        </select>
+    </div>
+
+    <!-- 🔥 CARDS -->
+    <div class="grid md:grid-cols-3 gap-6">
+
+        <!-- BASIC -->
+        <div class="card bg-blue-600">
+            <h3>Basic (1 Year)</h3>
+            <p class="desc">Starter plan</p>
+
+            <h2 class="price">₹ <span id="basicPrice">27</span></h2>
+
+            <p class="saved hidden" id="basicSave"></p>
+
+            <button onclick="payNow('basic')" class="btn">Buy Now</button>
+        </div>
+
+        <!-- POPULAR -->
+        <div class="card bg-purple-600 scale-105 border-4 border-pink-400 relative">
+            <span class="badge">MOST POPULAR</span>
+
+            <h3 class="title">Startup (2 Years)</h3>
+            <p class="desc">Best for growing sellers</p>
+
+            <h2 class="price">₹ <span id="proPrice">40</span></h2>
+
+            <p class="saved hidden" id="proSave"></p>
+
+            <button onclick="payNow('pro')" class="btn">Buy Now</button>
+        </div>
+
+        <!-- ENTERPRISE -->
+        <div class="card bg-green-600">
+            <h3 class="title">Enterprise (3 Years)</h3>
+            <p class="desc">Scale your business</p>
+
+            <h2 class="price">₹ <span id="entPrice">78</span></h2>
+
+            <p class="saved hidden" id="entSave"></p>
+
+            <button onclick="payNow('ent')" class="btn">Buy Now</button>
+        </div>
+
+    </div>
+
+</div>
+
+<div id="loader" class="fixed inset-0 hidden items-center justify-center z-50 bg-black/30">
+    <div class="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+</div>
+
+<style>
+    body {
+        background: linear-gradient(135deg, #0f172a, #1e293b);
+    }
+
+    .card {
+        padding: 30px;
+        border-radius: 20px;
+        color: white;
+        text-align: center;
+        transition: 0.3s;
+        position: relative;
+        cursor: pointer;
+    }
+
+        .card:hover {
+            transform: translateY(-10px) scale(1.02);
+        }
+
+        .card.active {
+            box-shadow: 0 0 25px rgba(255,255,255,0.4);
+            transform: scale(1.05);
+        }
+
+    .price {
+        font-size: 36px;
+        font-weight: bold;
+    }
+
+    .btn {
+        margin-top: 15px;
+        width: 100%;
+        padding: 12px;
+        border-radius: 10px;
+        background: white;
+        color: black;
+        font-weight: bold;
+        transition: 0.3s;
+    }
+
+        .btn:hover {
+            background: black;
+            color: white;
+        }
+
+    .badge {
+        position: absolute;
+        top: -12px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: gold;
+        color: black;
+        font-size: 12px;
+        padding: 4px 12px;
+        border-radius: 12px;
+    }
+
+    .saved {
+        color: #fde047;
+        font-size: 14px;
+        margin-top: 5px;
+    }
+</style>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+
+<script>
+
+        function showLoader() {
+        document.getElementById("loader").classList.remove("hidden");
+        document.getElementById("loader").classList.add("flex");
+    }
+
+    function hideLoader() {
+        document.getElementById("loader").classList.add("hidden");
+        document.getElementById("loader").classList.remove("flex");
+    }
+
+    const pricing = {
+        "1-5": { basic:10, pro:19, ent:27 },
+        "6-10": { basic:15, pro:28, ent:40 },
+        "11-15": { basic:20, pro:37, ent:52 },
+        "16-20": { basic:25, pro:46, ent:65 },
+        "20+": { basic:30, pro:55, ent:78 }
+    };
+
+    // years mapping
+    const yearsMap = {
+        basic: 1,
+        pro: 2,
+        ent: 3
+    };
+
+    function updateUI() {
+
+        let range = document.getElementById("range").value;
+        let data = pricing[range];
+
+        document.getElementById("basicPrice").innerText = data.basic;
+        document.getElementById("proPrice").innerText = data.pro;
+        document.getElementById("entPrice").innerText = data.ent;
+
+        updateSave("basic", data.basic, range);
+        updateSave("pro", data.pro, range);
+        updateSave("ent", data.ent, range);
+    }
+
+    function updateSave(type, price, range) {
+
+        let base = pricing[range].basic;
+        let years = yearsMap[type];
+
+        let original = base * years;
+        let saved = original - price;
+
+        let el = document.getElementById(type + "Save");
+
+        if (saved > 0) {
+            el.innerText = "Save ₹ " + saved;
+            el.classList.remove("hidden");
+        } else {
+            el.classList.add("hidden");
+        }
+    }
+
+    document.getElementById("range").onchange = updateUI;
+
+    updateUI();
+
+    // 🔥 highlight selected card
+    document.querySelectorAll(".card").forEach(card => {
+        card.addEventListener("click", function () {
+            document.querySelectorAll(".card").forEach(c => c.classList.remove("active"));
+            this.classList.add("active");
+        });
+    });
+
+    async function payNow(plan) {
+
+            showLoader(); // 🔥 spinner start
+
+        let range = document.getElementById("range").value;
+
+        const createRes = await fetch('/Subscription/CreateSubscription', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                plan: plan,
+                productRange: range
+            })
+        });
+
+        const data = await createRes.json();
+
+        hideLoader(); // 🔥 stop before Razorpay opens 
+
+
+        if (!data.success) {
+            Swal.fire("Error", data.message, "error");
+            return;
+        }
+
+        const options = {
+            key: "@ViewBag.RazorpayKey",
+            amount: data.amount,
+            currency: "INR",
+            order_id: data.razorpayOrderId,
+
+            handler: function (response) {
+
+                fetch('/Subscription/VerifyPayment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        razorpay_order_id: response.razorpay_order_id,
+                        razorpay_payment_id: response.razorpay_payment_id,
+                        razorpay_signature: response.razorpay_signature
+                    })
+                });
+
+                startPolling(data.subscriptionId);
+            }
+        };
+
+        new Razorpay(options).open();
+
+        function startPolling(subscriptionId) {
+            let attempts = 0;
+
+            let interval = setInterval(async () => {
+
+                attempts++;
+
+                const res = await fetch('/Subscription/CheckPaymentStatus?subscriptionId=' + subscriptionId);
+                const result = await res.json();
+
+                if (result.success) {
+                    clearInterval(interval);
+                    Swal.fire("Success", "Subscription Activated 🎉", "success")
+                        .then(() => window.location.href = "/Seller/SellerLanding");
+                }
+
+                if (attempts >= 10) {
+                    clearInterval(interval);
+                    Swal.fire("Info", "Processing delay. Check dashboard.", "info");
+                }
+
+            }, 3000);
+        }
+    }
+</script>

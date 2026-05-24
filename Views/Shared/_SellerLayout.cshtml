@@ -1,0 +1,90 @@
+﻿@{
+    var sellerName = ViewBag.sellerName as string ?? "Seller";
+    var isSubscribed = ViewBag.IsSubscribed as bool? ?? false;
+
+    var subClass = isSubscribed
+        ? "bg-green-100 text-green-600"
+        : "bg-red-100 text-red-500";
+
+    var subText = isSubscribed ? "Active Plan" : "No Subscription";
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Seller Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gradient-to-br from-blue-50 via-blue-100 to-indigo-100 min-h-screen">
+
+    <!-- 🔷 HEADER -->
+    <header class="fixed top-0 left-0 right-0 h-16 bg-white shadow flex justify-between items-center px-6 z-50">
+
+        <h1 class="text-lg font-bold text-blue-600">
+            💼 Seller Dashboard
+        </h1>
+
+        <div class="flex items-center gap-4">
+
+            <span class="px-3 py-1 text-xs rounded-full @subClass">
+                @subText
+            </span>
+
+            <span class="text-gray-700 font-medium">
+                👤 @sellerName
+            </span>
+
+            <a href="/Seller/Logout"
+               class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">
+                Logout
+            </a>
+
+        </div>
+    </header>
+
+    <div class="flex pt-16">
+
+        <!-- 🔷 SIDEBAR -->
+        <aside class="w-64 h-screen fixed top-16 left-0 bg-white shadow-lg p-5">
+
+            <h2 class="text-sm font-semibold text-blue-600 mb-6">
+                Navigation
+            </h2>
+
+            <nav class="space-y-2">
+
+                <a href="/Seller/SellerLanding" class="menu">🏠 Dashboard</a>
+                <a href="/Subscription/Index" class="menu">💎 Subscription</a>
+                <a href="/Products/ProductManagement" class="menu">📦 Product Management</a>
+                <a href="/Order/AdminOrders" class="menu">🧾 Order Management</a>
+                <a href="/Seller/Reports" class="menu">📊 Reports</a>
+
+            </nav>
+        </aside>
+
+        <!-- CONTENT -->
+        <main class="ml-64 p-6 w-full">
+            @RenderBody()
+        </main>
+
+    </div>
+
+    <style>
+        .menu {
+            display: block;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: 500;
+            color: #2563eb;
+            transition: 0.3s;
+        }
+
+            .menu:hover {
+                background: #2563eb;
+                color: white;
+            }
+    </style>
+
+</body>
+</html>

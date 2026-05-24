@@ -4,9 +4,14 @@ namespace VivekMedicalProducts.Models
 {
     public class SellerModel
     {
-        public int Id { get; set; }
+        [Key]
+        public int SellerId { get; set; }
 
-        // 🔹 BASIC DETAILS
+        // 🔥 LOGIN LINK
+        [Required]
+        public string UserId { get; set; }
+
+        // 🔹 BASIC
         [Required]
         public string BusinessName { get; set; }
 
@@ -14,46 +19,65 @@ namespace VivekMedicalProducts.Models
         public string OwnerName { get; set; }
 
         [Required]
+        public string ProductType { get; set; }
+
+        public string? Brand { get; set; }
+
+        [Required]
         public string Email { get; set; }
 
+        [Required]
         public string Phone { get; set; }
 
-        // 🔐 AUTH
+        // 🔹 GST / PAN (MANDATORY)
         [Required]
-        public string PasswordHash { get; set; }
+        public string GSTNumber { get; set; } = "";
 
-        // 🔹 GST DETAILS
-        public string GSTNumber { get; set; }
-        public bool IsGSTVerified { get; set; } = false;
-        public string? GSTFilePath { get; set; }
+        public bool IsGSTVerified { get; set; }
 
-        // 🔹 PAN DETAILS
-        public string PAN { get; set; }
-        public bool IsPANVerified { get; set; } = false;
-        public string? PANFilePath { get; set; }
+        [Required]
+        public string PAN { get; set; } = "";
 
-        // 🔹 SHIPPING ADDRESS
+        public bool IsPANVerified { get; set; }
+
+        // 🔹 ADDRESS
+        [Required]
         public string AddressLine1 { get; set; }
-        public string? AddressLine2 { get; set; }
 
+        [Required]
         public string City { get; set; }
+
+        [Required]
         public string State { get; set; }
+
+        [Required]
         public string Pincode { get; set; }
 
-        // 🔹 BANK DETAILS (FOR PAYOUT)
+        // 🔹 BANK
+        [Required]
         public string AccountHolderName { get; set; }
+
+        [Required]
         public string AccountNumber { get; set; }
+
+        [Required]
         public string IFSCCode { get; set; }
+
+        [Required]
         public string BankName { get; set; }
 
-        // 🔹 STATUS CONTROL
+        // 🔥 SUBSCRIPTION CONTROL
+        public DateTime? SubscriptionEndDate { get; set; }
+
         public bool IsActive { get; set; } = false;
 
-        // 🔹 SUBSCRIPTION LINK (optional shortcut)
-        public DateTime? SubscriptionEndDate { get; set; }
+        public string Status { get; set; } = "Inactive";
 
         // 🔹 AUDIT
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
         public DateTime? UpdatedAt { get; set; }
+
+        public ICollection<ProductModel>? Products { get; set; }
     }
 }

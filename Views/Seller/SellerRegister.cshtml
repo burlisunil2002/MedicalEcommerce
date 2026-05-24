@@ -11,6 +11,8 @@
 
 <body class="bg-gradient-to-br from-blue-50 to-blue-100 min-h-screen flex items-center justify-center">
 
+    <div id="errorDiv" class="alert alert-danger"></div>
+
     <div class="w-full max-w-4xl bg-white rounded-2xl shadow-xl p-8">
 
         <h2 class="text-2xl font-bold text-blue-600 mb-6 text-center">
@@ -28,10 +30,21 @@
             <input name="BusinessName" placeholder="Business Name" class="input" required />
             <input name="OwnerName" placeholder="Owner Name" class="input" required />
 
+            <select name="ProductType" class="input" required>
+                <option value="">Select Product Type</option>
+                <option>Disposables & Consumables</option>
+                <option>Medical Equipment</option>
+                <option>Surgical Instruments</option>
+                <option>Laboratory Products & Diagnostics</option>
+                <option>Medical Furniture</option>
+            </select>
+
+            <input name="Brand" placeholder="Brand (e.g., Medline, Philips)" class="input" />
+
             <input name="Email" type="email" placeholder="Email" class="input" required />
             <input name="Phone" placeholder="Phone (10 digits)" class="input" required pattern="[6-9]{1}[0-9]{9}" />
 
-            <input name="Password" type="password" placeholder="Password (min 6 chars)" class="input col-span-2" required minlength="6" />
+            <input name="Password" type="password" placeholder="Password (min 8 chars)" class="input col-span-2" required minlength="6" />
 
             <!-- GST / PAN -->
             <input name="GSTNumber" placeholder="GST Number (15 chars)" class="input" required maxlength="15" />
@@ -74,55 +87,70 @@
     </style>
 
     <script>
-        const form = document.getElementById("registerForm");
 
-        // 🔥 AUTO UPPERCASE
-        ["GSTNumber", "PAN", "IFSCCode"].forEach(name => {
-            document.querySelector(`[name="${name}"]`).addEventListener("input", function () {
-                this.value = this.value.toUpperCase();
-            });
-        });
+    const form = document.getElementById("registerForm");
 
-        // 🚀 SUBMIT
-        form.addEventListener("submit", async function(e) {
-            e.preventDefault();
+    // 🔥 AUTO UPPERCASE
+    ["GSTNumber", "PAN", "IFSCCode"].forEach(name => {
+    document.querySelector(`[name="${name}"]`).addEventListener("input", function () {
+    this.value = this.value.toUpperCase();
+    });
+    });
 
-            const formData = new FormData(form);
-            const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+    // 🚀 SUBMIT
+    form.addEventListener("submit", async function (e) {
+    e.preventDefault();
 
-            const res = await fetch('/Seller/SellerRegister', {
-                method: 'POST',
-                headers: {
-                    'RequestVerificationToken': token
-                },
-                body: formData
-            });
+    try {
+    const formData = new FormData(form);
+    const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
 
-            const data = await res.json();
+    const res = await fetch('/Seller/SellerRegister', {
+    method: 'POST',
+    headers: {
+    'RequestVerificationToken': token
+    },
+    body: formData
+    });
 
-            const box = document.getElementById("messageBox");
-            box.classList.remove("hidden");
+    const data = await res.json();
 
-            if (data.success) {
-                box.className = "mb-4 p-3 rounded text-sm bg-green-100 text-green-700";
-                box.innerText = data.message;
+    console.log("Response:", data); // 🔍 DEBUG
 
-                form.reset();
+    const box = document.getElementById("messageBox");
+    box.classList.remove("hidden");
 
-                setTimeout(() => {
-                    window.location.href = data.redirectUrl;
-                }, 1500);
-            } else {
-                box.className = "mb-4 p-3 rounded text-sm bg-red-100 text-red-700";
+    if (data.success) {
+    box.className = "mb-4 p-3 rounded text-sm bg-green-100 text-green-700";
+    box.innerText = data.message;
 
-                // 🔥 Show detailed errors if exist
-                if (data.errors) {
-                    box.innerText = data.errors.map(e => e.field + ": " + e.errors.join(", ")).join("\n");
-                } else {
-                    box.innerText = data.message;
-                }
-            }
-        });
+    form.reset();
+
+    setTimeout(() => {
+    window.location.href = data.redirectUrl;
+    }, 1500);
+    } else {
+    box.className = "mb-4 p-3 rounded text-sm bg-red-100 text-red-700";
+
+    if (data.errors && data.errors.length > 0) {
+    box.innerHTML = data.errors.map(e =>
+    `
+    <div><b>${e.field}</b>: ${e.errors.join(", ")}</div>`
+    ).join("");
+    } else {
+    box.innerText = data.message;
+    }
+    }
+    } catch (err) {
+    console.error("ERROR:", err);
+
+    const box = document.getElementById("messageBox");
+    box.classList.remove("hidden");
+    box.className = "mb-4 p-3 rounded text-sm bg-red-100 text-red-700";
+    box.innerText = "Something went wrong. Check console.";
+    }
+    });
+
     </script>
 
 </body>

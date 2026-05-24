@@ -21,29 +21,23 @@ builder.Services.AddScoped<ProductService>();
 builder.Services.AddSession();
 
 // Authentication
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
-    {
-        options.LoginPath = "/Account/Login";
-        options.ExpireTimeSpan = TimeSpan.FromDays(7);
-    });
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddDefaultTokenProviders();
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.Cookie.HttpOnly = true;
 
-    // ?? FIX
-    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-
-    // ?? FIX
-    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // ?? MUST
+    options.Cookie.SameSite = SameSiteMode.None;             // ?? MUST
 
     options.LoginPath = "/Account/Login";
 });
 
 builder.Services.Configure<CookiePolicyOptions>(options =>
 {
-    options.MinimumSameSitePolicy = SameSiteMode.Lax;
+    options.MinimumSameSitePolicy = SameSiteMode.None;
 });
 
 builder.Services.AddAuthorization();
@@ -51,21 +45,6 @@ builder.Services.AddAuthorization();
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
-{
-    options.User.RequireUniqueEmail = true;
-
-    options.Password.RequiredLength = 8;
-    options.Password.RequireUppercase = true;
-    options.Password.RequireLowercase = true;
-    options.Password.RequireDigit = true;
-    options.Password.RequireNonAlphanumeric = true;
-
-    options.Lockout.MaxFailedAccessAttempts = 5;
-    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
-})
-.AddEntityFrameworkStores<ApplicationDbContext>()
-.AddDefaultTokenProviders();
 
 // Email Service
 builder.Services.Configure<EmailSettings>(
@@ -86,6 +65,22 @@ builder.Services.AddScoped<IFileStorageService, SupabaseService>();
 
 builder.Services.AddScoped<ICartCalculationService, CartCalculationService>();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("ReactPolicy", policy =>
+    {
+        policy.WithOrigins(
+                "http://localhost:3000",   // React dev
+                "https://localhost:3000"   // if using https
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials(); // ?? REQUIRED for cookies
+    });
+});
+
+
+
 
 var app = builder.Build();
 
@@ -93,6 +88,8 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
+    await DbSeeder.SeedAdminUser(services);
+
 
     try
     {
@@ -101,7 +98,7 @@ using (var scope = app.Services.CreateScope())
 
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
 
-        string[] roles = { "Admin", "Customer" };
+        string[] roles = { "Admin", "Customer", "Seller" };
 
         foreach (var role in roles)
         {
@@ -127,18 +124,32 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 
+
 app.UseRouting();
+
+app.UseCors("ReactPolicy");
 
 app.UseSession();
 
 app.UseCookiePolicy();
 
-app.UseAuthentication();       // MUST come before Authorization
-app.UseAuthorization();        // Only once!
+app.UseAuthentication();
+app.UseAuthorization();
 
-// Default route
+
+// ? MVC ROUTES (VERY IMPORTANT)
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Products}/{action=Index}/{id?}");
+    pattern: "{controller=Home}/{action=Index}/{id?}");
+
+
+// ? API ROUTES
+app.MapControllers();
+
+
+// ? REACT FALLBACK (ONLY AFTER MVC FAILS)
+app.MapFallbackToFile("react/index.html");
 
 app.Run();
+
+
