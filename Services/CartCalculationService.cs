@@ -21,11 +21,12 @@ namespace VivekMedicalProducts.Services
         public async Task<CartTotalsDto> CalculateAsync(string userId, string guestId, string couponCode)
         {
             var carts = await _context.Carts
-                .Include(c => c.Product)
-                .Where(c =>
-                    (userId != null && c.UserId == userId) ||
-                    (userId == null && c.GuestId == guestId))
-                .ToListAsync();
+    .Include(c => c.Product)
+    .Include(c => c.ProductVariant)
+    .Where(c =>
+        (userId != null && c.UserId == userId) ||
+        (userId == null && c.GuestId == guestId))
+    .ToListAsync();
 
             decimal subtotal = 0;
             decimal gst = 0;
@@ -33,17 +34,30 @@ namespace VivekMedicalProducts.Services
 
             foreach (var c in carts)
             {
-                decimal original = c.ProductVariant.Price;
+                if (c.Product == null)
+                    continue;
 
-                // 🔥 HOT DEAL
-                decimal final = c.Product.IsHotDeal && c.Product.DiscountPercentage > 0
-                    ? original - (original * c.Product.DiscountPercentage.Value / 100)
-                    : original;
+                decimal original =
+                    c.ProductVariant?.Price ?? 0;
+
+                decimal discountPercentage =
+    c.Product?.DiscountPercentage ?? 0;
+
+                decimal final =
+                    c.Product?.IsHotDeal == true &&
+                    discountPercentage > 0
+                        ? original - (original * discountPercentage / 100)
+                        : original;
 
                 decimal saved = original - final;
 
                 decimal net = final * c.Quantity;
-                decimal gstAmount = net * (c.Product.GSTPercentage / 100m);
+
+                decimal gstPercent =
+     c.Product?.GSTPercentage ?? 0;
+
+                decimal gstAmount =
+                    net * (gstPercent / 100m);
 
                 subtotal += net;
                 gst += gstAmount;
@@ -72,10 +86,10 @@ namespace VivekMedicalProducts.Services
             {
                 Subtotal = subtotal,
                 GST = gst,
-                Discount = discount,
                 CouponDiscount = couponDiscount,
                 Delivery = delivery,
-                GrandTotal = Math.Round(total, 2)
+                Saved = discount,
+                Total = Math.Round(total, 2)
             };
         }
     }

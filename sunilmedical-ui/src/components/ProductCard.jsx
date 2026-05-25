@@ -93,6 +93,8 @@ export default function ProductCard({ p }) {
 
                 <img
                     src={data.imageUrl || "/images/no-image.png"}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-contain transition group-hover:scale-105"
                 />
             </div>

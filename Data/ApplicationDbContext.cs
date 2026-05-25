@@ -41,6 +41,8 @@ public class ApplicationDbContext
     public DbSet<PincodeServiceabilityModel> PincodeServiceability { get; set; }
 
     public DbSet<SubscriptionModel> Subscriptions { get; set; }
+
+    public DbSet<UserAddress> UserAddresses { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
 

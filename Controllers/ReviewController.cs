@@ -93,14 +93,14 @@ public class ReviewController : Controller
         ViewBag.Carts = carts;
         ViewBag.Subtotal = totals.Subtotal;
         ViewBag.GST = totals.GST;
-        ViewBag.Discount = totals.Discount;
+        ViewBag.Discount = totals.Saved;
 
         // 🔥 FIX: coupon directly from service
         ViewBag.CouponDiscount = totals.CouponDiscount;
         ViewBag.Coupon = coupon;
 
         ViewBag.Delivery = totals.Delivery;
-        ViewBag.Total = totals.GrandTotal;
+        ViewBag.Total = totals.Total;
 
         ViewBag.RazorpayKey = _config["Razorpay:Key"];
         ViewBag.Address = address;

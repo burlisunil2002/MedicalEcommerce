@@ -10,6 +10,9 @@ import SearchResult from "./pages/SearchResult";
 import ProductDetails from "./pages/ProductDetails";
 import WishlistPage from "./pages/WishlistPage";
 import CartPage from "./pages/CartPage";
+import CheckoutPage from "./pages/CheckoutPage";
+import ReviewPage from "./pages/ReviewPage";
+import MyOrdersPage from "./pages/MyOrdersPage";
 
 // Layout
 import MainLayout from "./layouts/MainLayout";
@@ -53,6 +56,19 @@ function App() {
 
                         {/* ?? CART */}
                         <Route path="cart" element={<CartPage />} />
+
+                        {/* ?? CART */}
+                        <Route path="checkout" element={<CheckoutPage />} />
+
+                        <Route
+                            path="review"
+                            element={<ReviewPage />}
+                        />
+
+                        <Route
+                            path="my-orders"
+                            element={<MyOrdersPage />}
+                        />
 
                         {/* ?? WISHLIST */}
                         <Route path="wishlist" element={<WishlistPage />} />

@@ -246,7 +246,8 @@ namespace VivekMedicalProducts.Controllers
                     success = true,
                     orderId = firstOrder.OrderId,
                     razorpayOrderId = firstOrder.RazorpayOrderId,
-                    amount = amountInPaise
+                    amount = amountInPaise,
+                    razorpayKey = _config["Razorpay:Key"]
                 });
             }
             catch (Exception ex)
@@ -426,17 +427,23 @@ namespace VivekMedicalProducts.Controllers
         [HttpGet]
         public IActionResult CheckPaymentStatus(int orderId)
         {
-            var order = _context.Orders.Find(orderId);
+            var order = _context.Orders
+                .FirstOrDefault(x => x.OrderId == orderId);
 
             if (order == null)
-                return Json(new { success = false });
-
-            if (order.IsPaymentVerified)
             {
-                return Json(new { success = true });
+                return Json(new
+                {
+                    success = false
+                });
             }
 
-            return Json(new { success = false });
+            return Json(new
+            {
+                success = order.IsPaymentVerified,
+                paymentStatus = order.PaymentStatus,
+                orderStatus = order.OrderStatus
+            });
         }
 
         // ================= HELPERS =================
