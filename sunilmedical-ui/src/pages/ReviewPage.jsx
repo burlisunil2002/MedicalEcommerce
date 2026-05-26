@@ -120,6 +120,18 @@ export default function ReviewPage() {
                     body: JSON.stringify(selectedAddress),
                 });
 
+                // handle login redirect HTML response
+                const contentType =
+                    res.headers.get("content-type");
+
+                if (
+                    contentType &&
+                    contentType.includes("text/html")
+                ) {
+                    navigate("/login");
+                    return;
+                }
+
                 const result = await res.json();
 
                 if (result.redirect) {
@@ -130,7 +142,10 @@ export default function ReviewPage() {
                 if (result.success) {
                     navigate("/my-orders");
                 } else {
-                    alert(result.message || "Unable to place order");
+                    alert(
+                        result.message ||
+                        "Unable to place order"
+                    );
                 }
 
                 return;
@@ -146,6 +161,17 @@ export default function ReviewPage() {
                 },
                 body: JSON.stringify(selectedAddress),
             });
+
+            const contentType =
+                orderRes.headers.get("content-type");
+
+            if (
+                contentType &&
+                contentType.includes("text/html")
+            ) {
+                navigate("/login");
+                return;
+            }
 
             const order = await orderRes.json();
 

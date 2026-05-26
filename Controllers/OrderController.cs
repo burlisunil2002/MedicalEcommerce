@@ -76,7 +76,8 @@ namespace VivekMedicalProducts.Controllers
                     return Json(new
                     {
                         success = false,
-                        redirect = "/login"
+                        redirect = "/login",
+                        message = "Please login first"
                     });
                 }
 
@@ -234,6 +235,16 @@ namespace VivekMedicalProducts.Controllers
             {
                 var userId = _userContext.GetUserId();
 
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        redirect = "/login",
+                        message = "Please login first"
+                    });
+                }
+
                 var carts = await _context.Carts
      .Include(c => c.Product)
      .Include(c => c.ProductVariant)
@@ -332,6 +343,15 @@ namespace VivekMedicalProducts.Controllers
                 }
 
                 // 🔥 create Razorpay for FIRST order (or combine later)
+                if (!createdOrders.Any())
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "No valid orders could be created from cart"
+                    });
+                }
+
                 var firstOrder = createdOrders.First();
 
                 var client = new RazorpayClient(

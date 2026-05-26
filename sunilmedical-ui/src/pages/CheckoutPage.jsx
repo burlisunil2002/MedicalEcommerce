@@ -150,7 +150,7 @@ export default function CheckoutPage() {
                 <SummaryCard
                     summary={checkout?.summary || {}}
                     showCoupon={false}
-                    buttonText="Proceed To Payment"
+                    buttonText="Proceed To Review"
                     onButtonClick={() => {
                         if (!selectedAddress) {
                             alert("Please select delivery address");
