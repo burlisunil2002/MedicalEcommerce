@@ -2,6 +2,7 @@
 import { useNavigate } from "react-router-dom";
 import { getCheckout } from "../services/checkoutService";
 import SummaryCard from "../components/SummaryCard";
+import API from "../services/api";
 
 export default function ReviewPage() {
     const navigate = useNavigate();
@@ -75,11 +76,10 @@ export default function ReviewPage() {
             attempts++;
 
             try {
-                const res = await fetch(
-                    `/Order/CheckPaymentStatus?orderId=${orderId}`
-                );
-
-                const result = await res.json();
+                const { data: result } =
+                    await API.get(
+                        `/Order/CheckPaymentStatus?orderId=${orderId}`
+                    );
 
                 if (result.success) {
                     clearInterval(interval);
@@ -93,6 +93,11 @@ export default function ReviewPage() {
                 }
 
             } catch (err) {
+                console.error(
+                    "Polling error:",
+                    err
+                );
+
                 clearInterval(interval);
                 navigate("/my-orders");
             }
@@ -110,32 +115,14 @@ export default function ReviewPage() {
 
             // COD
             if (paymentMethod === "COD") {
-                const res = await fetch("/Order/PlaceCOD", {
-                    method: "POST",
-                    credentials: "include",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Accept: "application/json",
-                    },
-                    body: JSON.stringify(selectedAddress),
-                });
-
-                // handle login redirect HTML response
-                const contentType =
-                    res.headers.get("content-type");
-
-                if (
-                    contentType &&
-                    contentType.includes("text/html")
-                ) {
-                    navigate("/login");
-                    return;
-                }
-
-                const result = await res.json();
+                const { data: result } =
+                    await API.post(
+                        "/Order/PlaceCOD",
+                        selectedAddress
+                    );
 
                 if (result.redirect) {
-                    navigate(result.redirect);
+                    navigate("/login");
                     return;
                 }
 
@@ -151,37 +138,23 @@ export default function ReviewPage() {
                 return;
             }
 
-            // Razorpay
-            const orderRes = await fetch("/Order/CreateOrder", {
-                method: "POST",
-                credentials: "include",
-                headers: {
-                    "Content-Type": "application/json",
-                    Accept: "application/json",
-                },
-                body: JSON.stringify(selectedAddress),
-            });
+            // ONLINE PAYMENT
+            const { data: order } =
+                await API.post(
+                    "/Order/CreateOrder",
+                    selectedAddress
+                );
 
-            const contentType =
-                orderRes.headers.get("content-type");
-
-            if (
-                contentType &&
-                contentType.includes("text/html")
-            ) {
+            if (order.redirect) {
                 navigate("/login");
                 return;
             }
 
-            const order = await orderRes.json();
-
-            if (order.redirect) {
-                navigate(order.redirect);
-                return;
-            }
-
             if (!order.success) {
-                alert(order.message || "Payment initiation failed");
+                alert(
+                    order.message ||
+                    "Payment initiation failed"
+                );
                 return;
             }
 
@@ -193,30 +166,26 @@ export default function ReviewPage() {
                 description: "Order Payment",
                 order_id: order.razorpayOrderId,
 
-                handler: async function (response) {
-                    const verifyRes = await fetch(
-                        "/Order/VerifyPayment",
-                        {
-                            method: "POST",
-                            credentials: "include",
-                            headers: {
-                                "Content-Type":
-                                    "application/json",
-                            },
-                            body: JSON.stringify({
-                                orderId: order.orderId,
+                handler: async function (
+                    response
+                ) {
+                    const { data: verify } =
+                        await API.post(
+                            "/Order/VerifyPayment",
+                            {
+                                orderId:
+                                    order.orderId,
+
                                 razorpay_payment_id:
                                     response.razorpay_payment_id,
+
                                 razorpay_order_id:
                                     response.razorpay_order_id,
+
                                 razorpay_signature:
                                     response.razorpay_signature,
-                            }),
-                        }
-                    );
-
-                    const verify =
-                        await verifyRes.json();
+                            }
+                        );
 
                     if (verify.success) {
                         startPolling(
@@ -252,6 +221,7 @@ export default function ReviewPage() {
             );
 
             alert(
+                err?.response?.data?.message ||
                 err.message ||
                 "Something went wrong"
             );
@@ -259,6 +229,7 @@ export default function ReviewPage() {
             setLoading(false);
         }
     };
+    
 
     if (!checkout) {
         return (
