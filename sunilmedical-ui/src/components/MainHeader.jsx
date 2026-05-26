@@ -202,7 +202,7 @@ export default function MainHeader() {
                                 <div className="absolute right-0 mt-2 w-56 bg-white shadow-xl rounded-lg overflow-hidden">
 
                                     <button onClick={() => navigate("/profile")} className="menu-item">👤 Profile</button>
-                                    <button onClick={() => navigate("/orders")} className="menu-item">📦 Orders</button>
+                                    <button onClick={() => navigate("/my-orders")} className="menu-item">📦 Orders</button>
                                     <button onClick={() => navigate("/kyc/register")} className="menu-item">🧾 KYC</button>
 
                                     <button onClick={handleLogout} className="menu-item text-red-500">

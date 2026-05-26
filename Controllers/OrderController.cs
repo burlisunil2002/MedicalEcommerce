@@ -62,83 +62,166 @@ namespace VivekMedicalProducts.Controllers
 
 
         [HttpPost]
-        public async Task<IActionResult> PlaceCOD()
+        public async Task<IActionResult> PlaceCOD([FromBody] CheckoutViewModel model)
         {
-            var userId = _userContext.GetUserId();
+            using var transaction =
+                await _context.Database.BeginTransactionAsync();
 
-            if (string.IsNullOrEmpty(userId))
-                return Json(new { success = false, redirect = "/Account/Login" });
-
-            var carts = await _context.Carts
-                .Include(c => c.ProductVariant)
-                .Where(c => c.UserId == userId)
-                .ToListAsync();
-
-            if (!carts.Any())
-                return Json(new { success = false });
-
-            var address = JsonConvert.DeserializeObject<CheckoutViewModel>(
-                HttpContext.Session.GetString("Address"));
-
-            var grouped = carts.GroupBy(c => c.Product.SellerId);
-
-            foreach (var group in grouped)
+            try
             {
-                if (group.Key == null || group.Key == 0)
-                    continue; // skip invalid
+                var userId = _userContext.GetUserId();
 
-                var sellerExists = _context.Sellers.Any(s => s.SellerId == group.Key);
-
-                if (!sellerExists)
-                    throw new Exception("Seller not found in DB");
-
-                // ✅ seller-specific total
-                var subtotal = group.Sum(x => x.ProductVariant.Price * x.Quantity);
-
-                var order = new OrderModel
+                if (string.IsNullOrEmpty(userId))
                 {
-                    UserId = userId,
-                    SellerId = group.Key.Value,
-
-                    FullName = address.FullName,
-                    PhoneNumber = address.PhoneNumber,
-                    Address = address.Address,
-                    City = address.City,
-                    Pincode = address.Pincode,
-
-                    SubTotal = subtotal,
-                    GST = subtotal * 0.18m,
-                    GrandTotal = subtotal * 1.18m,
-
-                    PaymentStatus = "Pending",
-                    OrderStatus = "Confirmed",
-                    OrderDate = DateTime.UtcNow
-                };
-
-                _context.Orders.Add(order);
-                await _context.SaveChangesAsync();
-
-                foreach (var item in group)
-                {
-                    _context.OrderItems.Add(new OrderItemModel
+                    return Json(new
                     {
-                        OrderId = order.OrderId,
-                        ProductId = item.ProductId,
-                        ProductName = item.Product.Name,
-                        Quantity = item.Quantity,
-                        Price = item.ProductVariant.Price,
-                        SellerId = item.SellerId, // 🔥 ADD THIS
+                        success = false,
+                        redirect = "/login"
                     });
                 }
 
+                var carts = await _context.Carts
+                    .Include(c => c.Product)
+                    .Include(c => c.ProductVariant)
+                    .Where(c => c.UserId == userId)
+                    .ToListAsync();
+
+                if (!carts.Any())
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "Cart is empty"
+                    });
+                }
+
+                var grouped = carts
+    .Where(x =>
+        x.Product != null &&
+        x.Product.SellerId.HasValue &&
+        _context.Sellers.Any(s =>
+            s.SellerId == x.Product.SellerId.Value)
+    )
+    .GroupBy(c => c.Product.SellerId);
+
+                foreach (var group in grouped)
+                {
+                    var validItems = group
+                        .Where(x =>
+                            x.Product != null &&
+                            x.ProductVariant != null
+                        )
+                        .ToList();
+
+                    if (!validItems.Any())
+                        continue;
+
+                    var subtotal = validItems.Sum(x =>
+                        (x.ProductVariant.Price) *
+                        x.Quantity
+                    );
+
+                    if (!group.Key.HasValue)
+                        continue;
+
+                    var sellerExists =
+                        await _context.Sellers.AnyAsync(s =>
+                            s.SellerId == group.Key.Value);
+
+                    if (!sellerExists)
+                        continue;
+
+                    var order = new OrderModel
+                    {
+                        UserId = userId,
+                        SellerId = group.Key.Value,
+                        FullName = model.FullName,
+                        PhoneNumber = model.PhoneNumber,
+                        Address = model.Address,
+                        City = model.City,
+                        Pincode = model.Pincode,
+
+                        SubTotal = subtotal,
+                        GST = subtotal * 0.18m,
+                        GrandTotal = subtotal * 1.18m,
+
+                        PaymentStatus = "Pending",
+                        OrderStatus = "Confirmed",
+                        OrderDate = DateTime.UtcNow
+                    };
+
+                    _context.Orders.Add(order);
+                    await _context.SaveChangesAsync();
+
+                    foreach (var item in validItems)
+                    {
+                        var orderItem =
+                            new OrderItemModel
+                            {
+                                OrderId = order.OrderId,
+
+                                ProductId =
+                                    item.Product.Id,
+
+                                ProductVariantId =
+                                    item.ProductVariantId,
+
+                                ProductName =
+                                    item.Product.Name ?? "",
+
+                                Quantity =
+                                    item.Quantity,
+
+                                Price =
+                                    item.ProductVariant.Price,
+
+                                GSTPercentage =
+                                    item.Product.GSTPercentage,
+
+                                LineTotal =
+                                    item.ProductVariant.Price *
+                                    item.Quantity,
+
+                                SellerId =
+                                    item.SellerId,
+
+                                ItemStatus =
+                                    "Pending",
+
+                                ItemOrderModifiedDate =
+                                    DateTime.UtcNow
+                            };
+
+                        _context.OrderItems.Add(
+                            orderItem
+                        );
+                    }
+
+                    await _context.SaveChangesAsync();
+                }
+
+                _context.Carts.RemoveRange(carts);
                 await _context.SaveChangesAsync();
+
+                await transaction.CommitAsync();
+
+                return Json(new
+                {
+                    success = true
+                });
             }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
 
-            // ✅ return AFTER loop
-            _context.Carts.RemoveRange(carts);
-            await _context.SaveChangesAsync();
-
-            return Json(new { success = true, redirect = "/Order/MyOrders" });
+                return Json(new
+                {
+                    success = false,
+                    message =
+                        ex.InnerException?.Message ??
+                        ex.Message
+                });
+            }
         }
 
 
@@ -152,9 +235,10 @@ namespace VivekMedicalProducts.Controllers
                 var userId = _userContext.GetUserId();
 
                 var carts = await _context.Carts
-                    .Include(c => c.Product)
-                    .Where(c => c.UserId == userId)
-                    .ToListAsync();
+     .Include(c => c.Product)
+     .Include(c => c.ProductVariant)
+     .Where(c => c.UserId == userId)
+     .ToListAsync();
 
                 if (!carts.Any())
                     return Json(new { success = false });
@@ -174,7 +258,9 @@ namespace VivekMedicalProducts.Controllers
                         throw new Exception("Seller not found in DB");
 
 
-                    var subtotal = group.Sum(x => x.ProductVariant.Price * x.Quantity);
+                    var subtotal = group.Sum(x =>
+                        (x.ProductVariant?.Price ?? 0) * x.Quantity
+                    );
                     var grandTotal = subtotal * 1.18m;
 
 
@@ -205,14 +291,38 @@ namespace VivekMedicalProducts.Controllers
 
                     foreach (var item in group)
                     {
+                        if (item.Product == null)
+                            continue;
+
+                        if (item.ProductVariant == null)
+                            continue;
+
                         _context.OrderItems.Add(new OrderItemModel
                         {
                             OrderId = order.OrderId,
+
+                            ProductId = item.Product.Id,
+
                             ProductVariantId = item.ProductVariantId,
-                            ProductName = item.Product.Name,
+
+                            ProductName = item.Product.Name ?? "",
+
                             Quantity = item.Quantity,
+
                             Price = item.ProductVariant.Price,
-                            SellerId = item.Product.SellerId   // 🔥 ADD THIS
+
+                            GSTPercentage = item.Product.GSTPercentage,
+
+                            LineTotal =
+                                item.ProductVariant.Price *
+                                item.Quantity,
+
+                            SellerId = item.SellerId,
+
+                            ItemStatus = "Pending",
+
+                            ItemOrderModifiedDate =
+                                DateTime.UtcNow
                         });
                     }
 
@@ -252,7 +362,11 @@ namespace VivekMedicalProducts.Controllers
             }
             catch (Exception ex)
             {
-                return Json(new { success = false, message = ex.Message });
+                return Json(new
+                {
+                    success = false,
+                    message = ex.InnerException?.Message ?? ex.Message
+                });
             }
         }
 
@@ -285,7 +399,7 @@ namespace VivekMedicalProducts.Controllers
 
                 // 🛡️ prevent duplicate verification
                 if (order.IsPaymentVerified)
-                    return Json(new { success = true, redirect = "/MyOrders" });
+                    return Json(new { success = true, redirect = "/MyOrdersPage" });
 
                 var secret = _config["Razorpay:Secret"];
 
@@ -330,7 +444,7 @@ namespace VivekMedicalProducts.Controllers
                 return Json(new
                 {
                     success = true,
-                    redirect = "/Order/MyOrders"
+                    redirect = "/my-orders"
                 });
             }
             catch (Exception ex)
@@ -456,43 +570,42 @@ namespace VivekMedicalProducts.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> MyOrders()
+        public async Task<IActionResult> GetMyOrders()
         {
             var userId = _userContext.GetUserId();
 
-            Console.WriteLine("USER ID: " + userId);
+            if (string.IsNullOrEmpty(userId))
+                return Json(new List<object>());
 
             var orders = await _context.OrderItems
                 .Include(i => i.Order)
                 .Include(i => i.Product)
                 .Where(i => i.Order.UserId == userId)
                 .OrderByDescending(i => i.Order.OrderDate)
-                .Select(i => new MyOrderViewModel
+                .Select(i => new
                 {
-                    OrderId = i.OrderId,
-                    OrderDate = i.Order.OrderDate,
-                    ProductId = i.ProductId,
+                    orderId = i.OrderId,
+                    orderDate = i.Order.OrderDate,
 
-                    ProductName = i.Product.Name,
+                    productId = i.ProductId,
+                    productName = i.ProductName,
 
-                    // 🔥 FIX: Use Cloudinary URL
-                    ProductImage = string.IsNullOrEmpty(i.Product.ImageUrl)
-                        ? "/images/no-image.png"   // fallback (optional)
-                        : i.Product.ImageUrl,
+                    productImage =
+                        i.Product != null &&
+                        !string.IsNullOrEmpty(i.Product.ImageUrl)
+                            ? i.Product.ImageUrl
+                            : "/images/no-image.png",
 
-                    Quantity = i.Quantity,
+                    quantity = i.Quantity,
 
-                    Total = i.Order.GrandTotal,
+                    total = i.LineTotal,
 
-                    // ✅ statuses
-                    OrderStatus = i.Order.OrderStatus,
-                    PaymentStatus = i.Order.PaymentStatus
+                    orderStatus = i.Order.OrderStatus,
+                    paymentStatus = i.Order.PaymentStatus
                 })
                 .ToListAsync();
 
-            Console.WriteLine("ORDERS COUNT: " + orders.Count);
-
-            return View(orders);
+            return Json(orders);
         }
 
         public IActionResult Invoice(int id)
@@ -811,11 +924,6 @@ namespace VivekMedicalProducts.Controllers
                 {
                     o.OrderId,
                     o.OrderDate,
-                    o.FullName,
-                    o.PhoneNumber,
-                    o.Address,
-                    o.City,
-                    o.Pincode,
                     Quantity = oi != null ? oi.Quantity : 0,
                     ItemStatus = oi != null ? oi.ItemStatus : "Pending"
                 }

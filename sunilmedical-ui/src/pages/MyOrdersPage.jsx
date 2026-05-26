@@ -25,10 +25,7 @@ export default function MyOrdersPage() {
     };
 
     const openInvoice = (orderId) => {
-        window.open(
-            `/Order/Invoice?id=${orderId}`,
-            "_blank"
-        );
+        window.open(`/Order/DownloadInvoice/${orderId}`, "_blank");
     };
 
     const reorder = (productId) => {
