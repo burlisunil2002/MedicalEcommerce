@@ -18,7 +18,6 @@ using VivekMedicalProducts.ViewModels;
 
 namespace VivekMedicalProducts.Controllers
 {
-    [Authorize]
     public class OrderController : Controller
     {
         private readonly IConfiguration _config;
@@ -628,6 +627,7 @@ namespace VivekMedicalProducts.Controllers
             return Json(orders);
         }
 
+        [Authorize]
         public IActionResult Invoice(int id)
         {
             var userId = _userContext.GetUserId();
@@ -670,6 +670,7 @@ namespace VivekMedicalProducts.Controllers
             );
         }
 
+        [Authorize]
         public async Task<byte[]> GenerateInvoicePdf(OrderInvoiceViewModel model, ControllerContext context)
         {
             model.IsPdf = true; // 👈 important
@@ -679,6 +680,7 @@ namespace VivekMedicalProducts.Controllers
             return await pdf.BuildFile(context);
         }
 
+        [Authorize]
         private OrderInvoiceViewModel BuildInvoiceModel(OrderModel order)
         {
             return new OrderInvoiceViewModel
@@ -725,6 +727,7 @@ namespace VivekMedicalProducts.Controllers
             };
         }
 
+        [Authorize]
         public async Task<IActionResult> DownloadInvoice(int id)
         {
             var userId = _userContext.GetUserId();
@@ -764,6 +767,7 @@ namespace VivekMedicalProducts.Controllers
                 : user.UserName;
         }
 
+        [Authorize]
         public async Task<IActionResult> AdminOrders(string search = "")
         {
             var isAdmin = User.IsInRole("Admin");
@@ -911,6 +915,7 @@ namespace VivekMedicalProducts.Controllers
         // =========================
         // ORDER DETAILS (MODAL)
         // =========================
+        [Authorize]
         [HttpGet]
         public async Task<IActionResult> GetOrderDetails(int id)
         {

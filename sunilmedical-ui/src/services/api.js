@@ -2,10 +2,9 @@
 
 const API = axios.create({
     baseURL:
-        window.location.hostname === "localhost"
-            ? "https://localhost:7030"
-            : window.location.origin,
-    withCredentials: true
+        process.env.REACT_APP_API_URL ||
+        "https://localhost:7030",
+    withCredentials: true,
 });
 
 export default API;

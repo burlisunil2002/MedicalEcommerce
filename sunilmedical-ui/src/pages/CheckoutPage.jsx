@@ -147,6 +147,8 @@ export default function CheckoutPage() {
 
                 </div>
 
+                <div className="self-start lg:sticky lg:top-24 h-fit">
+
                 <SummaryCard
                     summary={checkout?.summary || {}}
                     showCoupon={false}
@@ -159,7 +161,8 @@ export default function CheckoutPage() {
 
                         navigate("/review");
                     }}
-                />
+                    />
+                </div>
 
             </div>
         </div>

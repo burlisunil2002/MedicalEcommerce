@@ -29,7 +29,10 @@ builder.Services.ConfigureApplicationCookie(options =>
 {
     options.Cookie.HttpOnly = true;
 
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // ?? MUST
+    options.Cookie.SecurePolicy =
+        builder.Environment.IsDevelopment()
+            ? CookieSecurePolicy.SameAsRequest
+            : CookieSecurePolicy.Always;
     options.Cookie.SameSite = SameSiteMode.None;             // ?? MUST
 
     options.LoginPath = "/Account/Login";
@@ -69,16 +72,17 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("ReactPolicy", policy =>
     {
-        policy.WithOrigins(
-                "http://localhost:3000",   // React dev
-                "https://localhost:3000"   // if using https
+        policy
+            .WithOrigins(
+                "http://localhost:3000",
+                "https://localhost:3000",
+                "https://sunilmedicalproducts.online"
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .AllowCredentials(); // ?? REQUIRED for cookies
+            .AllowCredentials();
     });
 });
-
 
 
 
