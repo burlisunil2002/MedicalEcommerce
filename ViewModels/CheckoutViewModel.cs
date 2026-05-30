@@ -6,6 +6,10 @@ namespace VivekMedicalProducts.ViewModels
     {
         public List<CartModel> CartItems { get; set; } = new List<CartModel>();
 
+        public int AddressId { get; set; }
+
+        public string? CouponCode { get; set; }
+
         public decimal SubTotal { get; set; }
 
         public decimal GST { get; set; }

@@ -29,14 +29,27 @@ export default function AddToCartButton({
     };
 
     // 🔥 ADD TO CART
-    const handleAdd = async () => {
-        try {
-            setLoading(true);
-            await addToCart(productId, variantId, getInitialQty());
-        } finally {
-            setLoading(false);
-        }
-    };
+const handleAdd = async () => {
+    if (loading) return;
+
+    setLoading(true);
+
+    try {
+        await addToCart(
+            productId,
+            variantId,
+            getInitialQty()
+        );
+    } catch (err) {
+        console.error(
+            "Add to cart failed:",
+            err
+        );
+    } finally {
+        setLoading(false);
+    }
+};
+
 
     // 🔥 INCREASE (STEP BASED)
     const increase = () => {

@@ -1,4 +1,4 @@
-﻿import { useParams } from "react-router-dom";
+﻿import { useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState, useMemo } from "react";
 import API from "../services/api";
 import AddToCartButton from "../components/AddToCartButton";
@@ -6,6 +6,8 @@ import { useWishlist } from "../context/WishlistContext";
 import RecommendedProducts from "../components/RecommendedProducts";
 
 export default function ProductDetails() {
+
+    const navigate = useNavigate();
 
     const { id } = useParams();
 
@@ -31,6 +33,26 @@ export default function ProductDetails() {
             });
     }, [id]);
 
+    const handleBuyNow = async () => {
+        try {
+            await API.post("/api/cart/add", {
+                productId: data.id,
+                variantId:
+                    selectedVariant?.productVariantId ||
+                    selectedVariant?.id,
+                quantity: 1
+            });
+
+            window.dispatchEvent(
+                new Event("cartUpdated")
+            );
+
+            navigate("/cart");
+        } catch {
+            alert("Unable to add item to cart");
+        }
+    };
+
     const data = useMemo(() => {
 
         if (!product) return {};
@@ -42,7 +64,8 @@ export default function ProductDetails() {
                 ? product.variants[0]
                 : null);
 
-        const id = product?.id ?? product?.Id;
+        const productId =
+            product?.id ?? product?.Id;
         const name = product?.name ?? product?.Name;
         const brand = product?.brand ?? product?.Brand;
 
@@ -81,7 +104,7 @@ export default function ProductDetails() {
         const isRFQ = !isNormal;
 
         return {
-            id,
+            id: productId, 
             name,
             brand,
             imageUrl,
@@ -161,10 +184,12 @@ export default function ProductDetails() {
                         <button
                             onClick={() =>
                                 toggleWishlist({
-    ...product,
-    variantId: selectedVariant?.productVariantId ?? selectedVariant?.id,
-    selectedVariant: selectedVariant
-})
+                                    ...product,
+                                    variantId:
+                                        selectedVariant?.productVariantId ||
+                                        selectedVariant?.id,
+                                    selectedVariant
+                                })
                             }
                             className="text-xl"
                         >
@@ -242,20 +267,39 @@ export default function ProductDetails() {
                     )}
 
                     {/* ADD TO CART */}
-                    <div className="mt-6 max-w-xs">
+                    <div className="mt-6 max-w-xs space-y-3">
 
                         {data.isRFQ ? (
                             <button className="w-full h-10 bg-black text-white rounded-lg text-sm">
                                 Request Quote
                             </button>
                         ) : (
-                            <AddToCartButton
-                                productId={data.id}
-                                variantId={data.defaultVariant?.productVariantId ?? data.defaultVariant?.id}
-                                minQty={data.defaultVariant?.minQuantity || 1}
-                                maxQty={data.defaultVariant?.maxQuantity}
-                                stepQty={data.defaultVariant?.stepQuantity || 1}
-                            />
+                            <>
+                                <AddToCartButton
+                                    productId={data.id}
+                                    variantId={
+                                        selectedVariant?.productVariantId ||
+                                        selectedVariant?.id
+                                    }
+                                    minQty={
+                                        selectedVariant?.minQuantity || 1
+                                    }
+                                    maxQty={
+                                        selectedVariant?.maxQuantity
+                                    }
+                                    stepQty={
+                                        selectedVariant?.stepQuantity || 1
+                                    }
+                                />
+
+                                <button
+                                    type="button"
+                                    onClick={handleBuyNow}
+                                    className="w-full h-11 bg-green-600 text-white rounded-lg font-medium"
+                                >
+                                    Buy Now
+                                </button>
+                            </>
                         )}
 
                     </div>
@@ -273,21 +317,26 @@ export default function ProductDetails() {
                         {showSpecs && (
                             <div className="mt-3 border rounded-xl">
 
-                                {selectedVariant?.specifications?.length === 0 && (
-                                    <p className="text-xs text-gray-400 px-4 py-2">
-                                        Showing default specifications
+                                {specifications?.length > 0 ? (
+                                    specifications.map((s, i) => (
+                                        <div
+                                            key={i}
+                                            className="flex justify-between px-4 py-3 border-b text-sm"
+                                        >
+                                            <span className="text-gray-500">
+                                                {s.key || s.specificationKey}
+                                            </span>
+
+                                            <span>
+                                                {s.value || s.specificationValue}
+                                            </span>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="px-4 py-4 text-sm text-gray-400">
+                                        No specifications available
                                     </p>
                                 )}
-
-                                {specifications.map((s, i) => (
-                                    <div
-                                        key={i}
-                                        className="flex justify-between px-4 py-2 border-b text-sm"
-                                    >
-                                        <span className="text-gray-500">{s.key}</span>
-                                        <span>{s.value}</span>
-                                    </div>
-                                ))}
 
                             </div>
                         )}

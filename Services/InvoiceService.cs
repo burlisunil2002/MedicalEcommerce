@@ -4,44 +4,124 @@ namespace VivekMedicalProducts.Services
 {
     public class InvoiceService
     {
-        public string GenerateInvoiceHtml(OrderModel order)
+        public string GenerateInvoiceHtml(
+            OrderModel order)
         {
-            var html = File.ReadAllText("/Order/Invoice.html");
+            var path = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "wwwroot",
+                "Order",
+                "Invoice.html"
+            );
+
+            var html =
+                File.ReadAllText(path);
+
+            var address =
+                order.UserAddress;
 
             string itemsHtml = "";
+
             int i = 1;
 
-            foreach (var item in order.OrderItems ?? new List<OrderItemModel>())
+            decimal subtotal = 0;
+            decimal gstTotal = 0;
+
+            foreach (
+                var item in
+                order.OrderItems ??
+                new List<OrderItemModel>())
             {
-                decimal gstAmount = item.LineTotal - (item.Price * item.Quantity);
+                decimal itemSubtotal =
+                    item.Price *
+                    item.Quantity;
+
+                decimal gstAmount =
+                    item.LineTotal *
+                    item.GSTPercentage /
+                    100m;
+
+                subtotal +=
+                    itemSubtotal;
+
+                gstTotal +=
+                    gstAmount;
 
                 itemsHtml += $@"
-            <tr>
-                <td>{i++}</td>
-                <td>{item.ProductName}</td>
-                <td>{item.Quantity}</td>
-                <td>{item.Price}</td>
-                <td>{item.GSTPercentage}%</td>
-                <td>{gstAmount}</td>
-                <td>{item.LineTotal}</td>
-            </tr>";
+                <tr>
+                    <td>{i++}</td>
+                    <td>{item.ProductName}</td>
+                    <td>{item.Quantity}</td>
+                    <td>{item.Price:0.00}</td>
+                    <td>{item.GSTPercentage}%</td>
+                    <td>{gstAmount:0.00}</td>
+                    <td>{item.FinalPaidAmount:0.00}</td>
+                </tr>";
             }
 
-            // 🔁 Replace placeholders
-            html = html.Replace("{{InvoiceNumber}}", $"INV-{order.OrderNumber}");
-            html = html.Replace("{{Date}}", order.OrderDate.ToString("dd-MM-yyyy"));
+            html = html.Replace(
+                "{{InvoiceNumber}}",
+                $"INV-{order.OrderNumber}");
 
-            html = html.Replace("{{CustomerName}}", order.FullName);
-            html = html.Replace("{{Address}}", order.Address);
-            html = html.Replace("{{City}}", order.City);
-            html = html.Replace("{{Pincode}}", order.Pincode);
-            html = html.Replace("{{Email}}", order.Email);
+            html = html.Replace(
+                "{{Date}}",
+                order.OrderDate
+                    .ToString("dd-MM-yyyy"));
 
-            html = html.Replace("{{SubTotal}}", order.SubTotal.ToString("0.00"));
-            html = html.Replace("{{GSTTotal}}", order.GST.ToString("0.00"));
-            html = html.Replace("{{GrandTotal}}", order.GrandTotal.ToString("0.00"));
+            // CUSTOMER
+            html = html.Replace(
+                "{{CustomerName}}",
+                address?.FullName ?? "");
 
-            html = html.Replace("{{Items}}", itemsHtml);
+            html = html.Replace(
+                "{{Address}}",
+                string.Join(", ",
+                    new[]
+                    {
+                        address?.AddressLine1,
+                        address?.AddressLine2
+                    }
+                    .Where(x =>
+                        !string.IsNullOrWhiteSpace(x))
+                ));
+
+            html = html.Replace(
+                "{{City}}",
+                address?.City ?? "");
+
+            html = html.Replace(
+                "{{State}}",
+                address?.State ?? "");
+
+            html = html.Replace(
+                "{{Pincode}}",
+                address?.Pincode ?? "");
+
+            html = html.Replace(
+                "{{Phone}}",
+                address?.MobileNumber ?? "");
+
+            html = html.Replace(
+                "{{Email}}",
+                order.User?.Email ?? "");
+
+            // TOTALS
+            html = html.Replace(
+                "{{SubTotal}}",
+                subtotal.ToString("0.00"));
+
+            html = html.Replace(
+                "{{GSTTotal}}",
+                gstTotal.ToString("0.00"));
+
+            html = html.Replace(
+                "{{GrandTotal}}",
+                order.GrandTotal
+                    .ToString("0.00"));
+
+            html = html.Replace(
+                "{{Items}}",
+                itemsHtml);
 
             return html;
         }

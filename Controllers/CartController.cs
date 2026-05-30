@@ -1,29 +1,35 @@
-﻿using DocumentFormat.OpenXml.Office2010.Excel;
+﻿using DocumentFormat.OpenXml.Spreadsheet;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Razorpay.Api;
 using System.Security.Claims;
 using VivekMedicalProducts.Data;
 using VivekMedicalProducts.DTOs;
 using VivekMedicalProducts.Models;
+using VivekMedicalProducts.Services;
 
 namespace VivekMedicalProducts.Controllers
 {
     [ApiController]
     [Route("api/cart")]
-    public class CartController : Controller
+    public class CartController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly ICartCalculationService _cartCalculation;
+        private readonly ICouponService _couponService;
 
-        public CartController(ApplicationDbContext context)
+        public CartController(
+            ApplicationDbContext context,
+            ICartCalculationService cartCalculation,
+            ICouponService couponService)
         {
             _context = context;
+            _cartCalculation = cartCalculation;
+            _couponService = couponService;
         }
 
-        // ================= GET USER / GUEST =================
         private (string userId, string guestId) GetIdentity()
         {
-            var userId = User.Identity.IsAuthenticated
+            var userId = User.Identity?.IsAuthenticated == true
                 ? User.FindFirstValue(ClaimTypes.NameIdentifier)
                 : null;
 
@@ -31,8 +37,6 @@ namespace VivekMedicalProducts.Controllers
                 || string.IsNullOrEmpty(guestId))
             {
                 guestId = Guid.NewGuid().ToString();
-
-                var isHttps = Request.IsHttps;
 
                 Response.Cookies.Append("guest_id", guestId, new CookieOptions
                 {
@@ -48,37 +52,58 @@ namespace VivekMedicalProducts.Controllers
             return (userId, guestId);
         }
 
-        // ================= ADD =================
         [HttpPost("add")]
-        public async Task<IActionResult> AddToCart([FromBody] AddCartItemDto dto)
+        public async Task<IActionResult> AddToCart(
+            [FromBody] AddCartItemDto dto)
         {
             var (userId, guestId) = GetIdentity();
 
-            var item = await _context.Carts.FirstOrDefaultAsync(x =>
-                x.ProductVariantId == dto.VariantId &&
-                (
-                    (!string.IsNullOrEmpty(userId) && x.UserId == userId) ||
-                    (string.IsNullOrEmpty(userId) && x.GuestId == guestId)
-                ));
-
-            var variant = await _context.ProductVariants
-     .FirstOrDefaultAsync(v => v.ProductVariantId == dto.VariantId);
+            var variant =
+                await _context.ProductVariants
+                    .FirstOrDefaultAsync(x =>
+                        x.ProductVariantId ==
+                        dto.VariantId);
 
             if (variant == null)
-                return BadRequest("Invalid variant");
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Invalid variant"
+                });
 
-            // 🔥 APPLY RULES
             int qty = dto.Quantity;
 
-            qty = Math.Max(variant.MinQuantity, qty);
+            qty = Math.Max(
+                variant.MinQuantity,
+                qty
+            );
 
             if (variant.MaxQuantity.HasValue)
-                qty = Math.Min(qty, variant.MaxQuantity.Value);
+            {
+                qty = Math.Min(
+                    qty,
+                    variant.MaxQuantity.Value
+                );
+            }
 
             if (qty % variant.StepQuantity != 0)
             {
-                qty = ((qty / variant.StepQuantity) + 1) * variant.StepQuantity;
+                qty =
+                    ((qty / variant.StepQuantity) + 1)
+                    * variant.StepQuantity;
             }
+
+            var item =
+                await _context.Carts
+                    .FirstOrDefaultAsync(x =>
+                        x.ProductVariantId == dto.VariantId &&
+                        (
+                            (!string.IsNullOrEmpty(userId) &&
+                             x.UserId == userId)
+                            ||
+                            (string.IsNullOrEmpty(userId) &&
+                             x.GuestId == guestId)
+                        ));
 
             if (item != null)
             {
@@ -92,29 +117,41 @@ namespace VivekMedicalProducts.Controllers
                     ProductVariantId = dto.VariantId,
                     Quantity = qty,
                     UserId = userId,
-                    GuestId = userId == null ? guestId : null
+                    GuestId =
+                        string.IsNullOrEmpty(userId)
+                            ? guestId
+                            : null
                 });
             }
 
             await _context.SaveChangesAsync();
 
-            return Ok(new { success = true });
+            return Ok(new
+            {
+                success = true
+            });
         }
 
-        // ================= UPDATE =================
         [HttpPost("update")]
-        public async Task<IActionResult> UpdateQuantity([FromBody] AddCartItemDto dto)
+        public async Task<IActionResult> UpdateQuantity(
+            [FromBody] AddCartItemDto dto)
         {
             var (userId, guestId) = GetIdentity();
 
-            var item = await _context.Carts.FirstOrDefaultAsync(x =>
-                x.ProductVariantId == dto.VariantId &&
-                (
-                    (!string.IsNullOrEmpty(userId) && x.UserId == userId) ||
-                    (string.IsNullOrEmpty(userId) && x.GuestId == guestId)
-                ));
+            var item =
+                await _context.Carts
+                    .FirstOrDefaultAsync(x =>
+                        x.ProductVariantId == dto.VariantId &&
+                        (
+                            (!string.IsNullOrEmpty(userId) &&
+                             x.UserId == userId)
+                            ||
+                            (string.IsNullOrEmpty(userId) &&
+                             x.GuestId == guestId)
+                        ));
 
-            if (item == null) return BadRequest();
+            if (item == null)
+                return NotFound();
 
             if (dto.Quantity <= 0)
             {
@@ -122,283 +159,335 @@ namespace VivekMedicalProducts.Controllers
             }
             else
             {
-                var variant = await _context.ProductVariants
-    .FirstOrDefaultAsync(v => v.ProductVariantId == dto.VariantId);
-
-                if (variant == null)
-                    return BadRequest("Invalid variant");
-
-                int qty = dto.Quantity;
-
-                qty = Math.Max(variant.MinQuantity, qty);
-
-                if (variant.MaxQuantity.HasValue)
-                    qty = Math.Min(qty, variant.MaxQuantity.Value);
-
-                if (qty % variant.StepQuantity != 0)
-                {
-                    qty = ((qty / variant.StepQuantity) + 1) * variant.StepQuantity;
-                }
-
-                item.Quantity = qty;
+                item.Quantity = dto.Quantity;
             }
 
             await _context.SaveChangesAsync();
 
-            return Ok(new { success = true });
+            return Ok(new
+            {
+                success = true
+            });
         }
 
-        // ================= GET CART =================
         [HttpGet("")]
         public async Task<IActionResult> GetCart()
         {
             var (userId, guestId) = GetIdentity();
 
-            var query = _context.Carts
-                .Include(c => c.Product)
-                .Include(c => c.ProductVariant)
-                .AsQueryable();
+            var query =
+                _context.Carts
+                    .Include(c => c.Product)
+                    .Include(c => c.ProductVariant)
+                    .AsQueryable();
 
-            if (!string.IsNullOrEmpty(userId))
-                query = query.Where(c => c.UserId == userId);
-            else
-                query = query.Where(c => c.GuestId == guestId);
+            query =
+                !string.IsNullOrEmpty(userId)
+                    ? query.Where(x =>
+                        x.UserId == userId)
+                    : query.Where(x =>
+                        x.GuestId == guestId);
 
-            var items = await query.Select(c => new
-            {
-                variantId = c.ProductVariantId,
-                productId = c.ProductId,
+            var items =
+                await query
+                    .Select(c => new
+                    {
+                        variantId =
+                            c.ProductVariantId,
 
-                name = c.Product.Name,
-                image = c.Product.ImageUrl,
+                        productId =
+                            c.ProductId,
 
-                variantName = c.ProductVariant.Model,
-                price = c.ProductVariant.Price,
+                        name =
+                            c.Product.Name,
 
-                quantity = c.Quantity
-            }).ToListAsync();
+                        image =
+                            c.Product.ImageUrl,
+
+                        variantName =
+                            c.ProductVariant.Model,
+
+                        price =
+                            c.ProductVariant.Price,
+
+                        quantity =
+                            c.Quantity
+                    })
+                    .ToListAsync();
 
             return Ok(items);
         }
 
-        // ================= COUNT =================
         [HttpGet("count")]
         public async Task<IActionResult> GetCartCount()
         {
             var (userId, guestId) = GetIdentity();
 
-            var count = await _context.Carts
-                .Where(c =>
-                    (!string.IsNullOrEmpty(userId) && c.UserId == userId) ||
-                    (string.IsNullOrEmpty(userId) && c.GuestId == guestId))
-                .SumAsync(c => (int?)c.Quantity) ?? 0;
+            var count =
+                await _context.Carts
+                    .Where(c =>
+                        (!string.IsNullOrEmpty(userId) &&
+                         c.UserId == userId)
+                        ||
+                        (string.IsNullOrEmpty(userId) &&
+                         c.GuestId == guestId))
+                    .SumAsync(c =>
+                        (int?)c.Quantity) ?? 0;
 
             return Ok(count);
         }
 
-        // ================= SUMMARY =================
         [HttpGet("summary")]
         public async Task<IActionResult> GetSummary()
         {
             var (userId, guestId) = GetIdentity();
 
-            var carts = await _context.Carts
-                .Include(c => c.Product)
-                .Include(c => c.ProductVariant)
-                .Where(c =>
-                    (!string.IsNullOrEmpty(userId) && c.UserId == userId) ||
-                    (string.IsNullOrEmpty(userId) && c.GuestId == guestId))
-                .ToListAsync();
+            var couponCode =
+                HttpContext.Session.GetString(
+                    "CouponCode"
+                );
 
-            decimal subtotal = 0;
-            decimal saved = 0;
+            var totals =
+                await _cartCalculation
+                    .CalculateAsync(
+                        userId,
+                        guestId,
+                        couponCode
+                    );
 
-            foreach (var c in carts)
-            {
-                var original = c.ProductVariant.Price;
-
-                var final = c.Product.IsHotDeal && c.Product.DiscountPercentage > 0
-                    ? original - (original * c.Product.DiscountPercentage.Value / 100)
-                    : original;
-
-                subtotal += final * c.Quantity;
-                saved += (original - final) * c.Quantity;
-            }
-
-            decimal delivery = subtotal > 500 ? 0 : 80;
-            decimal gst = subtotal * 0.18m;
-
-            var coupon = HttpContext.Session.GetString("CouponCode");
-            decimal couponDiscount = coupon == "FIRST20" ? subtotal * 0.2m : 0;
-
-            decimal total = subtotal + gst + delivery - couponDiscount;
-
-            return Ok(new
-            {
-                subtotal,
-                gst,
-                delivery,
-                saved,
-                couponDiscount,
-                total
-            });
+            return Ok(totals);
         }
 
-        // ================= REMOVE =================
-        public class RemoveCartDto
-        {
-            public int VariantId { get; set; }
-        }
-
-        [HttpPost("remove")]
-        public async Task<IActionResult> Remove([FromBody] RemoveCartDto dto)
+[HttpPost("apply-coupon")]
+public async Task<IActionResult> ApplyCoupon(
+    [FromBody] CouponDto dto)
         {
             var (userId, guestId) = GetIdentity();
 
-            var item = await _context.Carts.FirstOrDefaultAsync(x =>
-                x.ProductVariantId == dto.VariantId &&
-                (
-                    (!string.IsNullOrEmpty(userId) && x.UserId == userId) ||
-                    (string.IsNullOrEmpty(userId) && x.GuestId == guestId)
-                ));
+            if (string.IsNullOrWhiteSpace(dto.Code))
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Please enter coupon code"
+                });
+            }
 
-            if (item == null) return NotFound();
+            var code =
+                dto.Code
+                    .Trim()
+                    .ToUpper();
 
-            _context.Carts.Remove(item);
-            await _context.SaveChangesAsync();
+            if (!_couponService.IsValidCoupon(code))
+            {
+                return Ok(new
+                {
+                    success = false,
+                    message = "Invalid coupon code",
+                    couponDiscount = 0
+                });
+            }
 
-            return Ok(new { success = true });
+            HttpContext.Session.SetString(
+                "CouponCode",
+                code
+            );
+
+            var totals =
+                await _cartCalculation.CalculateAsync(
+                    userId,
+                    guestId,
+                    code
+                );
+
+            return Ok(new
+            {
+                success = true,
+                message = "Coupon applied successfully",
+                couponDiscount = totals.CouponDiscount,
+                summary = totals
+            });
         }
 
-        // ================= SYNC (GUEST → USER) =================
+
+        [HttpPost("remove")]
+        public async Task<IActionResult> Remove(
+            [FromBody] RemoveCartDto dto)
+        {
+            var (userId, guestId) = GetIdentity();
+
+            var item =
+                await _context.Carts
+                    .FirstOrDefaultAsync(x =>
+                        x.ProductVariantId ==
+                        dto.VariantId &&
+                        (
+                            (!string.IsNullOrEmpty(userId) &&
+                             x.UserId == userId)
+                            ||
+                            (string.IsNullOrEmpty(userId) &&
+                             x.GuestId == guestId)
+                        ));
+
+            if (item == null)
+                return NotFound();
+
+            _context.Carts.Remove(item);
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                success = true
+            });
+        }
+
         [HttpPost("sync")]
         public async Task<IActionResult> Sync()
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var userId =
+                User.FindFirstValue(
+                    ClaimTypes.NameIdentifier
+                );
+
             if (string.IsNullOrEmpty(userId))
                 return Unauthorized();
 
-            var (_, guestId) = GetIdentity();
+            var (_, guestId) =
+                GetIdentity();
 
-            var guestItems = await _context.Carts
-                .Where(x => x.GuestId == guestId)
-                .ToListAsync();
+            var guestItems =
+                await _context.Carts
+                    .Where(x =>
+                        x.GuestId ==
+                        guestId)
+                    .ToListAsync();
 
             foreach (var guestItem in guestItems)
             {
-                var existing = await _context.Carts.FirstOrDefaultAsync(x =>
-                    x.UserId == userId &&
-                    x.ProductVariantId == guestItem.ProductVariantId);
-
-                if (existing != null)
-                {
-                    existing.Quantity += guestItem.Quantity;
-                    _context.Carts.Remove(guestItem);
-                }
-                else
-                {
-                    guestItem.UserId = userId;
-                    guestItem.GuestId = null;
-                }
+                guestItem.UserId = userId;
+                guestItem.GuestId = null;
             }
 
             await _context.SaveChangesAsync();
 
             Response.Cookies.Delete("guest_id");
 
-            return Ok(new { success = true });
-        }
-
-        [HttpPost("apply-coupon")]
-        public IActionResult ApplyCoupon([FromBody] CouponDto dto)
-        {
-            if (string.IsNullOrEmpty(dto.Code))
-                return BadRequest();
-
-            HttpContext.Session.SetString("CouponCode", dto.Code);
-
-            return Ok(new { success = true });
-        }
-
-        [HttpGet("full")]
-        public async Task<IActionResult> GetFullCart()
-        {
-            var (userId, guestId) = GetIdentity();
-
-            var carts = await _context.Carts
-                .Include(c => c.Product)
-                .Include(c => c.ProductVariant)
-                .Include(c => c.Product.Variants)
-                .Where(c =>
-                    (!string.IsNullOrEmpty(userId) && c.UserId == userId) ||
-                    (string.IsNullOrEmpty(userId) && c.GuestId == guestId))
-                .ToListAsync();
-
-            var items = carts.Select(c =>
-            {
-                var variant = c.ProductVariant
-                    ?? c.Product?.Variants?.OrderBy(v => v.ProductVariantId).FirstOrDefault();
-
-                if (variant == null || c.Product == null)
-                    return null;
-
-                var original = variant.Price;
-
-                var final = c.Product.IsHotDeal && c.Product.DiscountPercentage > 0
-                    ? original - (original * c.Product.DiscountPercentage.Value / 100)
-                    : original;
-
-                return new
-                {
-                    variantId = variant.ProductVariantId,
-                    productId = c.ProductId,
-                    name = c.Product.Name ?? "",
-                    image = variant.ImageUrl ?? c.Product.ImageUrl ?? "",
-                    variantName = variant.Model ?? "",
-                    price = original,
-                    finalPrice = final,
-                    quantity = c.Quantity,
-                    gstPercentage = c.Product.GSTPercentage,
-
-                    // 🔥 ADD THESE
-                    stepQuantity = variant.StepQuantity,
-                    minQuantity = variant.MinQuantity,
-                    maxQuantity = variant.MaxQuantity
-                };
-            })
-            .Where(x => x != null)
-            .ToList();
-
-            decimal subtotal = items.Sum(i => i.finalPrice * i.quantity);
-            decimal saved = items.Sum(i => (i.price - i.finalPrice) * i.quantity);
-            decimal gst = items.Sum(i => i.finalPrice * i.quantity * i.gstPercentage / 100m);
-            decimal delivery = subtotal > 500 ? 0 : 80;
-
-            var coupon = HttpContext.Session.GetString("CouponCode");
-
-            decimal couponDiscount = coupon switch
-            {
-                "FIRST20" => subtotal * 0.2m,
-                "SAVE10" => subtotal * 0.1m,
-                "FLAT100" => 100,
-                _ => 0
-            };
-
-            decimal total = subtotal + gst + delivery - couponDiscount;
-
             return Ok(new
             {
-                items,
-                summary = new
-                {
-                    subtotal,
-                    gst,
-                    delivery,
-                    saved,
-                    couponDiscount,
-                    total
-                }
+                success = true
             });
+        }
+
+[HttpGet("full")]
+public async Task<IActionResult> GetFullCart()
+        {
+            try
+            {
+                var (userId, guestId) = GetIdentity();
+
+                var carts = await _context.Carts
+                    .Include(x => x.Product)
+                    .Include(x => x.ProductVariant)
+                    .Where(x =>
+                        (!string.IsNullOrEmpty(userId) &&
+                         x.UserId == userId)
+                        ||
+                        (string.IsNullOrEmpty(userId) &&
+                         x.GuestId == guestId))
+                    .ToListAsync();
+
+                var couponCode =
+                    HttpContext.Session.GetString("CouponCode");
+
+                var totals =
+                    await _cartCalculation.CalculateAsync(
+                        userId,
+                        guestId,
+                        couponCode
+                    );
+
+                var items = carts.Select(c =>
+                {
+                    var variant = c.ProductVariant;
+                    var product = c.Product;
+
+                    decimal originalPrice =
+                        variant?.Price ?? 0;
+
+                    decimal discountPercent =
+                        product?.DiscountPercentage ?? 0;
+
+                    decimal finalPrice =
+                        product?.IsHotDeal == true &&
+                        discountPercent > 0
+                            ? originalPrice -
+                              (originalPrice * discountPercent / 100m)
+                            : originalPrice;
+
+                    return new
+                    {
+                        variantId = c.ProductVariantId,
+                        productId = c.ProductId,
+
+                        name =
+                            product?.Name ?? "",
+
+                        image =
+                            variant?.ImageUrl ??
+                            product?.ImageUrl ??
+                            "/images/no-image.png",
+
+                        variantName =
+                            variant?.Model ?? "",
+
+                        price = originalPrice,
+
+                        finalPrice = finalPrice,
+
+                        discountPercentage = discountPercent,
+
+                        quantity = c.Quantity,
+
+                        lineTotal =
+                            finalPrice * c.Quantity,
+
+                        gstPercentage =
+                            product?.GSTPercentage ?? 0,
+
+                        stepQuantity =
+                            variant?.StepQuantity ?? 1,
+
+                        minQuantity =
+                            variant?.MinQuantity ?? 1,
+
+                        maxQuantity =
+                            variant?.MaxQuantity
+                    };
+                }).ToList();
+
+                return Ok(new
+                {
+                    items,
+                    summary = totals
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = ex.Message,
+                    inner = ex.InnerException?.Message
+                });
+            }
+        }
+
+
+        public class RemoveCartDto
+        {
+            public int VariantId { get; set; }
         }
     }
 }
+

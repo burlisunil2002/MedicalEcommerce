@@ -7,58 +7,59 @@ import API from "../services/api";
 export default function ReviewPage() {
     const navigate = useNavigate();
 
-    const [checkout, setCheckout] =
-        useState(null);
+    const [checkout, setCheckout] = useState(null);
+    const [selectedAddress, setSelectedAddress] = useState(null);
+    const [paymentMethod, setPaymentMethod] = useState("ONLINE");
 
-    const [selectedAddress, setSelectedAddress] =
-        useState(null);
+    const [pageLoading, setPageLoading] = useState(true);
+    const [processing, setProcessing] = useState(false);
 
-    const [paymentMethod, setPaymentMethod] =
-        useState("ONLINE");
-
-    const [loading, setLoading] =
-        useState(false);
+    const [message, setMessage] = useState("");
+    const [messageType, setMessageType] = useState("");
 
     useEffect(() => {
         loadReview();
     }, []);
 
+    const showToast = (text, type = "success") => {
+        setMessage(text);
+        setMessageType(type);
+
+        setTimeout(() => {
+            setMessage("");
+            setMessageType("");
+        }, 3000);
+    };
+
     const loadReview = async () => {
         try {
-            const res = await getCheckout();
+            setPageLoading(true);
 
-            setCheckout(res.data);
+            const { data } = await getCheckout();
+
+            setCheckout(data);
 
             const addresses =
-                res.data.savedAddresses ||
-                res.data.addresses ||
+                data.savedAddresses ||
+                data.addresses ||
                 [];
 
             if (addresses.length > 0) {
                 const selected =
-                    addresses.find(
-                        x =>
-                            x.isDefault ||
-                            x.selected
-                    ) || addresses[0];
+                    addresses.find(x => x.isDefault)
+                    || addresses[0];
 
                 setSelectedAddress({
+                    id: selected.id,
+
                     fullName:
-                        selected.fullName ||
-                        selected.name ||
-                        "",
+                        selected.fullName || "",
 
                     phoneNumber:
-                        selected.phoneNumber ||
-                        selected.mobileNumber ||
-                        selected.phone ||
-                        "",
+                        selected.mobileNumber || "",
 
                     address:
-                        selected.address ||
-                        selected.addressLine1 ||
-                        selected.street ||
-                        "",
+                        `${selected.addressLine1 || ""} ${selected.addressLine2 || ""}`.trim(),
 
                     city:
                         selected.city || "",
@@ -67,9 +68,7 @@ export default function ReviewPage() {
                         selected.state || "",
 
                     pincode:
-                        selected.pincode ||
-                        selected.zipCode ||
-                        "",
+                        selected.pincode || ""
                 });
             }
         } catch (err) {
@@ -77,13 +76,9 @@ export default function ReviewPage() {
                 err?.response?.status === 401
             ) {
                 navigate("/login");
-                return;
             }
-
-            console.error(
-                "Load Review Error:",
-                err
-            );
+        } finally {
+            setPageLoading(false);
         }
     };
 
@@ -95,427 +90,351 @@ export default function ReviewPage() {
                 attempts++;
 
                 try {
-                    const {
-                        data: result,
-                    } = await API.get(
-                        `/Order/CheckPaymentStatus?orderId=${orderId}`
-                    );
+                    const { data } =
+                        await API.get(
+                            `/api/order/check-payment-status/${orderId}`
+                        );
 
-                    if (
-                        result.success
-                    ) {
-                        clearInterval(
-                            interval
-                        );
-                        navigate(
-                            "/my-orders"
-                        );
+                    if (data.success) {
+                        clearInterval(interval);
+
+                        setProcessing(false);
+
+                        navigate("/my-orders", {
+                            state: {
+                                successMessage:
+                                    "🎉 Payment successful"
+                            }
+                        });
+
                         return;
                     }
 
-                    if (
-                        attempts >= 10
-                    ) {
-                        clearInterval(
-                            interval
-                        );
-                        navigate(
-                            "/my-orders"
+                    if (attempts >= 10) {
+                        clearInterval(interval);
+
+                        setProcessing(false);
+
+                        showToast(
+                            "Verification taking longer than expected",
+                            "error"
                         );
                     }
-                } catch {
-                    clearInterval(
-                        interval
-                    );
-                    navigate(
-                        "/my-orders"
+                } catch (err) {
+                    clearInterval(interval);
+
+                    setProcessing(false);
+
+                    showToast(
+                        "Unable to verify payment",
+                        "error"
                     );
                 }
             },
-            3000
+            2500
         );
     };
 
     const handlePlaceOrder = async () => {
         if (!selectedAddress) {
-            alert(
-                "Please select delivery address"
+            showToast(
+                "Please select delivery address",
+                "error"
             );
             return;
         }
 
-        const orderPayload = {
-            fullName:
-                selectedAddress.fullName,
-
-            phoneNumber:
-                selectedAddress.phoneNumber,
-
-            address:
-                selectedAddress.address,
-
-            city:
-                selectedAddress.city,
-
-            state:
-                selectedAddress.state,
-
-            pincode:
-                selectedAddress.pincode,
+        const payload = {
+            addressId: selectedAddress.id,
+            fullName: selectedAddress.fullName,
+            phoneNumber: selectedAddress.phoneNumber,
+            address: selectedAddress.address,
+            city: selectedAddress.city,
+            state: selectedAddress.state,
+            pincode: selectedAddress.pincode
         };
 
         try {
-            setLoading(true);
+            setProcessing(true);
 
             // COD
-            if (
-                paymentMethod === "COD"
-            ) {
-                const {
-                    data: result,
-                } = await API.post(
-                    "/Order/PlaceCOD",
-                    orderPayload
+            if (paymentMethod === "COD") {
+                const { data } = await API.post(
+                    "/api/order/place-cod",
+                    payload
                 );
 
-                if (
-                    result?.redirect ===
-                    "/login"
-                ) {
-                    navigate("/login");
-                    return;
-                }
+                if (data.success) {
+                    localStorage.removeItem("cart");
 
-                if (
-                    result.success
-                ) {
-                    navigate(
-                        "/my-orders"
+                    setCheckout(prev => ({
+                        ...prev,
+                        cartItems: []
+                    }));
+
+                    window.dispatchEvent(
+                        new Event("cartUpdated")
                     );
+
+                    navigate("/my-orders", {
+                        state: {
+                            successMessage:
+                                "🎉 Order placed successfully"
+                        }
+                    });
                 } else {
-                    alert(
-                        result.message ||
-                        "Unable to place order"
+                    showToast(
+                        data.message ||
+                        "Order failed",
+                        "error"
                     );
                 }
 
+                setProcessing(false);
                 return;
             }
 
-            // ONLINE PAYMENT
-            const {
-                data: order,
-            } = await API.post(
-                "/Order/CreateOrder",
-                orderPayload
-            );
-
-            if (
-                order?.redirect ===
-                "/login"
-            ) {
-                navigate("/login");
-                return;
-            }
-
-            if (
-                !order.success
-            ) {
-                alert(
-                    order.message ||
-                    "Payment initiation failed"
+            // ONLINE
+            const { data: order } =
+                await API.post(
+                    "/api/order/create",
+                    payload
                 );
+
+            if (!order.success) {
+                setProcessing(false);
+
+                showToast(
+                    order.message ||
+                    "Payment failed",
+                    "error"
+                );
+
                 return;
             }
 
-            const options = {
-                key:
-                    order.razorpayKey,
+            setProcessing(false);
 
-                amount:
-                    order.amount,
+            const razorpay =
+                new window.Razorpay({
+                    key: order.razorpayKey,
+                    amount: order.amount,
+                    currency: "INR",
+                    order_id: order.razorpayOrderId,
 
-                currency:
-                    "INR",
-
-                name:
-                    "Sunil Medical Products",
-
-                description:
-                    "Order Payment",
-
-                order_id:
-                    order.razorpayOrderId,
-
-                handler:
-                    async function (
+                    handler: async function (
                         response
                     ) {
                         try {
-                            setLoading(
-                                true
-                            );
+                            setProcessing(true);
 
                             const {
-                                data: verify,
-                            } =
-                                await API.post(
-                                    "/Order/VerifyPayment",
-                                    {
-                                        orderId:
-                                            order.orderId,
+                                data: verify
+                            } = await API.post(
+                                "/api/order/verify-payment",
+                                {
+                                    orderId:
+                                        order.orderId,
+                                    razorpay_payment_id:
+                                        response.razorpay_payment_id,
+                                    razorpay_order_id:
+                                        response.razorpay_order_id,
+                                    razorpay_signature:
+                                        response.razorpay_signature
+                                }
+                            );
 
-                                        razorpay_payment_id:
-                                            response.razorpay_payment_id,
+                            if (verify.success) {
+                                localStorage.removeItem("cart");
 
-                                        razorpay_order_id:
-                                            response.razorpay_order_id,
+                                setCheckout(prev => ({
+                                    ...prev,
+                                    cartItems: []
+                                }));
 
-                                        razorpay_signature:
-                                            response.razorpay_signature,
-                                    }
+                                window.dispatchEvent(
+                                    new Event("cartUpdated")
                                 );
 
-                            if (
-                                verify?.redirect ===
-                                "/login"
-                            ) {
-                                navigate(
-                                    "/login"
-                                );
-                                return;
-                            }
-
-                            if (
-                                verify.success
-                            ) {
                                 startPolling(
                                     order.orderId
                                 );
                             } else {
-                                alert(
-                                    verify.message ||
-                                    "Payment verification failed"
-                                );
-                            }
-                        } catch (err) {
-                            if (
-                                err
-                                    ?.response
-                                    ?.status ===
-                                401
-                            ) {
-                                navigate(
-                                    "/login"
-                                );
-                                return;
-                            }
+                                setProcessing(false);
 
-                            alert(
-                                "Payment verification failed"
-                            );
-                        } finally {
-                            setLoading(
-                                false
+                                showToast(
+                                    verify.message ||
+                                    "Payment verification failed",
+                                    "error"
+                                );
+                            }
+                        } catch {
+                            setProcessing(false);
+
+                            showToast(
+                                "Payment verification failed",
+                                "error"
                             );
                         }
                     },
 
-                modal: {
-                    ondismiss:
-                        function () {
-                            setLoading(
-                                false
-                            );
-                        },
-                },
-
-                theme: {
-                    color:
-                        "#16a34a",
-                },
-            };
-
-            const razorpay =
-                new window.Razorpay(
-                    options
-                );
+                    modal: {
+                        ondismiss: () => {
+                            setProcessing(false);
+                        }
+                    }
+                });
 
             razorpay.open();
+        }
+        catch (err) {
+            setProcessing(false);
 
-            setLoading(false);
-        } catch (err) {
-            if (
-                err?.response?.status === 401 ||
-                err?.response?.data
-                    ?.redirect ===
-                "/login"
-            ) {
-                navigate("/login");
-                return;
-            }
-
-            alert(
-                err?.response?.data
-                    ?.message ||
-                err.message ||
-                "Something went wrong"
+            showToast(
+                err?.response?.data?.message ||
+                "Something went wrong",
+                "error"
             );
-
-            setLoading(false);
         }
     };
 
-    if (!checkout) {
+
+    if (pageLoading) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                Loading...
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="w-14 h-14 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
         );
     }
 
     return (
-        <div className="bg-gray-50 min-h-screen py-6 md:py-10 px-4">
-            <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        <>
+            {processing && (
+                <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center">
 
-                <div className="lg:col-span-2 space-y-6">
+                    <div className="bg-white rounded-3xl px-10 py-8 text-center shadow-2xl">
+                        <div className="w-12 h-12 mx-auto border-4 border-green-600 border-t-transparent rounded-full animate-spin"></div>
 
-                    {/* Address */}
-                    <div className="bg-white rounded-3xl shadow-sm p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-2xl font-semibold">
+                        <p className="mt-4 font-semibold">
+                            Processing your order...
+                        </p>
+                    </div>
+
+                </div>
+            )}
+
+            {message && (
+                <div
+                    className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-2xl text-white shadow-xl animate-bounce ${messageType === "success"
+                            ? "bg-green-600"
+                            : "bg-red-500"
+                        }`}
+                >
+                    {message}
+                </div>
+            )}
+
+            <div className="bg-gray-50 min-h-screen py-8 px-4">
+
+                <div className="max-w-7xl mx-auto grid lg:grid-cols-3 gap-6">
+
+                    <div className="lg:col-span-2 space-y-6">
+
+                        <div className="bg-white rounded-3xl p-6 shadow-sm">
+                            <h2 className="text-2xl font-semibold mb-5">
                                 Delivery Address
                             </h2>
 
-                            <button
-                                onClick={() =>
-                                    navigate(
-                                        "/checkout"
-                                    )
-                                }
-                                className="text-green-600 hover:underline font-medium"
-                            >
-                                ← Back to Checkout
-                            </button>
+                            {selectedAddress && (
+                                <div className="bg-green-50 border border-green-200 rounded-2xl p-5 leading-7">
+
+                                    <p className="font-semibold text-lg">
+                                        {selectedAddress?.fullName}
+                                    </p>
+
+                                    <p className="text-gray-700 whitespace-pre-line break-words">
+                                        {selectedAddress?.address}
+                                    </p>
+
+                                    <p>
+                                        {selectedAddress?.city} ,
+                                        {selectedAddress?.state} -
+                                        {selectedAddress?.pincode}
+                                    </p>
+
+                                    <p>
+                                        📞 {selectedAddress?.phoneNumber}
+                                    </p>
+
+                                </div>
+                            )}
                         </div>
 
-                        {selectedAddress ? (
-                            <div className="rounded-2xl border border-green-200 bg-green-50 p-6">
-                                <p className="text-xl font-semibold mb-3">
-                                    {
-                                        selectedAddress.fullName
-                                    }
-                                </p>
+                        <div className="bg-white rounded-3xl p-6 shadow-sm">
+                            <h2 className="text-2xl font-semibold mb-5">
+                                Payment Method
+                            </h2>
 
-                                <p className="mb-2">
-                                    {
-                                        selectedAddress.address
-                                    }
-                                </p>
+                            <div className="space-y-4">
 
-                                <p className="mb-2">
-                                    {
-                                        selectedAddress.city
-                                    }
-                                    {selectedAddress.state &&
-                                        `, ${selectedAddress.state}`}
-                                </p>
-
-                                <p className="mb-2">
-                                    {
-                                        selectedAddress.pincode
-                                    }
-                                </p>
-
-                                <p>
-                                    {
-                                        selectedAddress.phoneNumber
-                                    }
-                                </p>
-                            </div>
-                        ) : (
-                            <p>
-                                No address selected
-                            </p>
-                        )}
-                    </div>
-
-                    {/* Payment */}
-                    <div className="bg-white rounded-3xl shadow-sm p-6">
-                        <h2 className="text-2xl font-semibold mb-5">
-                            Payment Method
-                        </h2>
-
-                        <div className="space-y-4">
-                            <label className={`flex items-center gap-4 p-5 rounded-2xl border cursor-pointer transition ${paymentMethod === "ONLINE"
-                                ? "border-green-600 bg-green-50"
-                                : "border-gray-200"
-                                }`}>
-                                <input
-                                    type="radio"
-                                    checked={
-                                        paymentMethod ===
-                                        "ONLINE"
-                                    }
-                                    onChange={() =>
-                                        setPaymentMethod(
+                                <label className="flex gap-3 border rounded-2xl p-4 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        checked={
+                                            paymentMethod ===
                                             "ONLINE"
-                                        )
-                                    }
-                                />
+                                        }
+                                        onChange={() =>
+                                            setPaymentMethod(
+                                                "ONLINE"
+                                            )
+                                        }
+                                    />
+                                    Online Payment
+                                </label>
 
-                                <div>
-                                    <p className="font-medium">
-                                        Online Payment
-                                    </p>
-                                    <p className="text-sm text-gray-500">
-                                        UPI / Card / Wallet / Net Banking
-                                    </p>
-                                </div>
-                            </label>
-
-                            <label className={`flex items-center gap-4 p-5 rounded-2xl border cursor-pointer transition ${paymentMethod === "COD"
-                                ? "border-green-600 bg-green-50"
-                                : "border-gray-200"
-                                }`}>
-                                <input
-                                    type="radio"
-                                    checked={
-                                        paymentMethod ===
-                                        "COD"
-                                    }
-                                    onChange={() =>
-                                        setPaymentMethod(
+                                <label className="flex gap-3 border rounded-2xl p-4 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        checked={
+                                            paymentMethod ===
                                             "COD"
-                                        )
-                                    }
-                                />
+                                        }
+                                        onChange={() =>
+                                            setPaymentMethod(
+                                                "COD"
+                                            )
+                                        }
+                                    />
+                                    Cash on Delivery
+                                </label>
 
-                                <div>
-                                    <p className="font-medium">
-                                        Cash on Delivery
-                                    </p>
-                                </div>
-                            </label>
+                            </div>
+
                         </div>
-                    </div>
-                </div>
 
-                {/* Summary */}
-                <div className="self-start lg:sticky lg:top-24 h-fit">
-                    <SummaryCard
-                        summary={
-                            checkout.summary
-                        }
-                        showCoupon={false}
-                        loading={loading}
-                        buttonText="Place Order"
-                        onButtonClick={
-                            handlePlaceOrder
-                        }
-                    />
+                    </div>
+
+                    <div className="lg:sticky lg:top-24 h-fit">
+                        <SummaryCard
+                            summary={
+                                checkout.summary
+                            }
+                            showCoupon={false}
+                            loading={processing}
+                            buttonText={
+                                processing
+                                    ? "Processing..."
+                                    : "Place Order"
+                            }
+                            onButtonClick={
+                                handlePlaceOrder
+                            }
+                        />
+                    </div>
+
                 </div>
             </div>
-        </div>
+        </>
     );
 }

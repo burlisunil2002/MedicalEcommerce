@@ -7,45 +7,56 @@ public class OrderItemModel
     [Key]
     public int OrderItemId { get; set; }
 
-    [Required]
     public int OrderId { get; set; }
 
-    public int? SellerId { get; set; }
-
-    public SellerModel Seller { get; set; }
-
-    [Required]
     public int ProductId { get; set; }
 
     public int ProductVariantId { get; set; }
 
+    public int? SellerId { get; set; }
 
-    public ProductVariant ProductVariant { get; set; } // navigation
+    public string ProductName { get; set; } = "";
 
-    [Required]
-    public string ProductName { get; set; } // 🔥 snapshot (important)
-
-    [Required]
-    [Range(1, 1000)]
     public int Quantity { get; set; }
 
-    [Column(TypeName = "decimal(5,2)")]
-    public decimal GSTPercentage { get; set; }
+    // Original unit price
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal Price { get; set; }
+
+    // Product discount
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal DiscountAmount { get; set; }
+
+    // Coupon allocation
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal CouponDiscountAmount { get; set; }
+
+    // Final paid by customer
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal FinalPaidAmount { get; set; }
 
     [Column(TypeName = "decimal(18,2)")]
     public decimal LineTotal { get; set; }
 
-    public decimal Price { get; set; }
-
+    [Column(TypeName = "decimal(5,2)")]
+    public decimal GSTPercentage { get; set; }
 
     public string ItemStatus { get; set; } = "Pending";
 
-    // Navigation
-    [ForeignKey("OrderId")]
-    public OrderModel Order { get; set; }
+    // audit
+    public DateTime CreatedAt { get; set; }
+        = DateTime.UtcNow;
 
-    [ForeignKey("ProductId")]
-    public ProductModel Product { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+
+    public DateTime? CancelledAt { get; set; }
+
+    public string? CancelledReason { get; set; }
 
     public DateTime? ItemOrderModifiedDate { get; set; }
+
+    // navigation
+    public OrderModel? Order { get; set; }
+
+    public ProductModel? Product { get; set; }
 }

@@ -6,90 +6,129 @@ namespace VivekMedicalProducts.Services
 {
     public interface ICartCalculationService
     {
-        Task<CartTotalsDto> CalculateAsync(string userId, string guestId, string couponCode);
+        Task<CartTotalsDto> CalculateAsync(
+            string? userId,
+            string? guestId,
+            string? couponCode
+        );
     }
 
-    public class CartCalculationService : ICartCalculationService
+    public class CartCalculationService
+        : ICartCalculationService
     {
         private readonly ApplicationDbContext _context;
+        private readonly ICouponService _couponService;
 
-        public CartCalculationService(ApplicationDbContext context)
+        public CartCalculationService(
+            ApplicationDbContext context,
+            ICouponService couponService)
         {
             _context = context;
+            _couponService = couponService;
         }
 
-        public async Task<CartTotalsDto> CalculateAsync(string userId, string guestId, string couponCode)
+        public async Task<CartTotalsDto> CalculateAsync(
+            string? userId,
+            string? guestId,
+            string? couponCode)
         {
-            var carts = await _context.Carts
-    .Include(c => c.Product)
-    .Include(c => c.ProductVariant)
-    .Where(c =>
-        (userId != null && c.UserId == userId) ||
-        (userId == null && c.GuestId == guestId))
-    .ToListAsync();
+            var carts =
+                await _context.Carts
+                    .Include(c => c.Product)
+                    .Include(c => c.ProductVariant)
+                    .Where(c =>
+                        (!string.IsNullOrEmpty(userId) &&
+                         c.UserId == userId)
+                        ||
+                        (string.IsNullOrEmpty(userId) &&
+                         c.GuestId == guestId))
+                    .ToListAsync();
 
             decimal subtotal = 0;
             decimal gst = 0;
-            decimal discount = 0;
+            decimal saved = 0;
 
             foreach (var c in carts)
             {
-                if (c.Product == null)
+                if (
+                    c.Product == null ||
+                    c.ProductVariant == null
+                )
                     continue;
 
-                decimal original =
-                    c.ProductVariant?.Price ?? 0;
+                decimal originalPrice =
+                    c.ProductVariant.Price;
 
-                decimal discountPercentage =
-    c.Product?.DiscountPercentage ?? 0;
+                decimal discountPercent =
+                    c.Product?.DiscountPercentage ?? 0;
 
-                decimal final =
+                decimal finalPrice =
                     c.Product?.IsHotDeal == true &&
-                    discountPercentage > 0
-                        ? original - (original * discountPercentage / 100)
-                        : original;
+                    discountPercent > 0
+                        ? originalPrice -
+                          (
+                              originalPrice *
+                              discountPercent / 100m
+                          )
+                        : originalPrice;
 
-                decimal saved = original - final;
+                decimal itemSaved =
+                    originalPrice - finalPrice;
 
-                decimal net = final * c.Quantity;
+                decimal lineTotal =
+                    finalPrice * c.Quantity;
 
                 decimal gstPercent =
-     c.Product?.GSTPercentage ?? 0;
+                    c.Product?.GSTPercentage ?? 0;
 
                 decimal gstAmount =
-                    net * (gstPercent / 100m);
+                    lineTotal *
+                    gstPercent / 100m;
 
-                subtotal += net;
+                subtotal += lineTotal;
                 gst += gstAmount;
-                discount += saved * c.Quantity;
+                saved += itemSaved * c.Quantity;
             }
 
-            // 🎟️ COUPON
-            decimal couponDiscount = 0;
+            decimal couponDiscount =
+                _couponService.CalculateDiscount(
+                    couponCode,
+                    subtotal
+                );
 
-            if (!string.IsNullOrEmpty(couponCode))
-            {
-                if (couponCode == "SAVE10")
-                    couponDiscount = subtotal * 0.10m;
+            decimal delivery =
+                subtotal >= 500
+                    ? 0
+                    : 80;
 
-                else if (couponCode == "SAVE20")
-                    couponDiscount = subtotal * 0.20m;
+            decimal total =
+                subtotal +
+                gst +
+                delivery -
+                couponDiscount;
 
-            }
-
-            // 🚚 DELIVERY
-            decimal delivery = subtotal > 0 && subtotal < 20 ? 5 : 0;
-
-            decimal total = subtotal + gst + delivery - couponDiscount;
+            if (total < 0)
+                total = 0;
 
             return new CartTotalsDto
             {
-                Subtotal = subtotal,
-                GST = gst,
-                CouponDiscount = couponDiscount,
-                Delivery = delivery,
-                Saved = discount,
-                Total = Math.Round(total, 2)
+                Subtotal =
+                    Math.Round(subtotal, 2),
+
+                GST =
+                    Math.Round(gst, 2),
+
+                CouponDiscount =
+                    Math.Round(couponDiscount, 2),
+
+                Delivery =
+                    Math.Round(delivery, 2),
+
+                Saved =
+                    Math.Round(saved, 2),
+
+                Total =
+                    Math.Round(total, 2)
             };
         }
     }

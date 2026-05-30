@@ -287,6 +287,24 @@ namespace VivekMedicalProducts.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("OrderItemId"));
 
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CancelledReason")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("CouponDiscountAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("FinalPaidAmount")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<decimal>("GSTPercentage")
                         .HasColumnType("decimal(5,2)");
 
@@ -304,7 +322,7 @@ namespace VivekMedicalProducts.Migrations
                         .HasColumnType("integer");
 
                     b.Property<decimal>("Price")
-                        .HasColumnType("numeric");
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("ProductId")
                         .HasColumnType("integer");
@@ -322,15 +340,14 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<int?>("SellerId")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("OrderItemId");
 
                     b.HasIndex("OrderId");
 
                     b.HasIndex("ProductId");
-
-                    b.HasIndex("ProductVariantId");
-
-                    b.HasIndex("SellerId");
 
                     b.ToTable("OrderItems");
                 });
@@ -399,8 +416,20 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<decimal>("DiscountAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("FinalPrice")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("GuestId")
                         .HasColumnType("text");
+
+                    b.Property<decimal>("LineTotal")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("ProductId")
                         .HasColumnType("integer");
@@ -525,46 +554,24 @@ namespace VivekMedicalProducts.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("OrderId"));
 
-                    b.Property<string>("Address")
-                        .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("City")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                    b.Property<string>("CancelledBy")
+                        .HasColumnType("text");
 
                     b.Property<string>("CreatedBy")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("Currency")
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<decimal>("Discount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("FailureCode")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("FailureReason")
-                        .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<string>("FullName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<decimal>("GST")
-                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("GrandTotal")
                         .HasColumnType("decimal(18,2)");
@@ -573,7 +580,6 @@ namespace VivekMedicalProducts.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("IpAddress")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<bool>("IsDeleted")
@@ -585,7 +591,7 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<DateTime>("OrderDate")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime>("OrderModifiedDate")
+                    b.Property<DateTime?>("OrderModifiedDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("OrderNumber")
@@ -603,70 +609,42 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<DateTime?>("PaymentVerifiedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("PhoneNumber")
-                        .IsRequired()
-                        .HasMaxLength(15)
-                        .HasColumnType("character varying(15)");
-
-                    b.Property<string>("Pincode")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
-
                     b.Property<string>("RazorpayOrderId")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("RazorpayPaymentId")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("RazorpaySignature")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<decimal?>("RefundAmount")
-                        .HasColumnType("numeric");
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("RefundId")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("RefundStatus")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<int>("SellerId")
                         .HasColumnType("integer");
 
-                    b.Property<decimal>("ShippingCharge")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("State")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<decimal>("SubTotal")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<string>("UpdatedBy")
-                        .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int?>("UserAddressId")
+                        .HasColumnType("integer");
 
                     b.Property<string>("UserAgent")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("UserId")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.HasKey("OrderId");
 
-                    b.HasIndex("SellerId");
+                    b.HasIndex("UserAddressId");
 
                     b.HasIndex("UserId");
 
@@ -753,8 +731,7 @@ namespace VivekMedicalProducts.Migrations
 
                     b.HasKey("PaymentId");
 
-                    b.HasIndex("OrderId")
-                        .IsUnique();
+                    b.HasIndex("OrderId");
 
                     b.HasIndex("UTRNumber")
                         .IsUnique();
@@ -1273,23 +1250,9 @@ namespace VivekMedicalProducts.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("VivekMedicalProducts.Models.ProductVariant", "ProductVariant")
-                        .WithMany()
-                        .HasForeignKey("ProductVariantId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("VivekMedicalProducts.Models.SellerModel", "Seller")
-                        .WithMany()
-                        .HasForeignKey("SellerId");
-
                     b.Navigation("Order");
 
                     b.Navigation("Product");
-
-                    b.Navigation("ProductVariant");
-
-                    b.Navigation("Seller");
                 });
 
             modelBuilder.Entity("VivekMedicalProducts.Models.CartModel", b =>
@@ -1330,28 +1293,24 @@ namespace VivekMedicalProducts.Migrations
 
             modelBuilder.Entity("VivekMedicalProducts.Models.OrderModel", b =>
                 {
-                    b.HasOne("VivekMedicalProducts.Models.SellerModel", "Seller")
+                    b.HasOne("VivekMedicalProducts.Models.UserAddress", "UserAddress")
                         .WithMany()
-                        .HasForeignKey("SellerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("UserAddressId");
 
                     b.HasOne("ApplicationUser", "User")
                         .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Seller");
+                        .HasForeignKey("UserId");
 
                     b.Navigation("User");
+
+                    b.Navigation("UserAddress");
                 });
 
             modelBuilder.Entity("VivekMedicalProducts.Models.PaymentModel", b =>
                 {
                     b.HasOne("VivekMedicalProducts.Models.OrderModel", "Order")
-                        .WithOne("Payment")
-                        .HasForeignKey("VivekMedicalProducts.Models.PaymentModel", "OrderId")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -1416,8 +1375,6 @@ namespace VivekMedicalProducts.Migrations
             modelBuilder.Entity("VivekMedicalProducts.Models.OrderModel", b =>
                 {
                     b.Navigation("OrderItems");
-
-                    b.Navigation("Payment");
                 });
 
             modelBuilder.Entity("VivekMedicalProducts.Models.ProductModel", b =>

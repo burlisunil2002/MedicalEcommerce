@@ -1,103 +1,218 @@
 ﻿import { useCart } from "../context/CartContext";
 
 export default function CartItem({ item }) {
+    const {
+        updateCart,
+        removeFromCart,
+        getQty
+    } = useCart();
 
-    const { updateCart, removeFromCart, getQty } = useCart();
-    const qty = getQty(item.variantId);
+    const qty =
+        getQty(item.variantId);
 
-    // ✅ get rules from item (coming from backend)
-    const step = Number(item.stepQuantity) || 1;
-    const min = Number(item.minQuantity) || 1;
-    const max = item.maxQuantity ?? null;
+    const step =
+        Number(item.stepQuantity) || 1;
 
-    const final = item.finalPrice || item.price;
-    const subtotal = final * qty;
-    const gst = subtotal * item.gstPercentage / 100;
+    const min =
+        Number(item.minQuantity) || 1;
 
-    // 🔥 INCREASE
+    const max =
+        item.maxQuantity ?? null;
+
+    const price =
+        Number(item.price || 0);
+
+    const finalPrice =
+        Number(
+            item.finalPrice ||
+            item.price ||
+            0
+        );
+
+    const discount =
+        Number(
+            item.discountPercentage ||
+            0
+        );
+
+    const gst =
+        (finalPrice * qty) *
+        (
+            Number(item.gstPercentage || 0) /
+            100
+        );
+
+    const subtotal =
+        ((finalPrice * qty) + gst);
+
     const increase = () => {
-        let nextQty;
+        let nextQty =
+            qty < min
+                ? min
+                : qty + step;
 
-        if (qty < min) {
-            nextQty = min;
-        } else {
-            nextQty = qty + step;
-        }
+        if (
+            max &&
+            nextQty > max
+        )
+            return;
 
-        if (max && nextQty > max) return;
-
-        updateCart(item.variantId, nextQty);
+        updateCart(
+            item.variantId,
+            nextQty
+        );
     };
 
-    // 🔥 DECREASE
     const decrease = () => {
-        let nextQty = qty - step;
+        let nextQty =
+            qty - step;
 
         if (nextQty < min) {
-            removeFromCart(item.variantId);
+            removeFromCart(
+                item.variantId
+            );
             return;
         }
 
-        updateCart(item.variantId, nextQty);
+        updateCart(
+            item.variantId,
+            nextQty
+        );
     };
 
     return (
-        <div className="flex gap-4 bg-white p-4 rounded-2xl shadow hover:shadow-xl transition-all duration-300">
-
+        <div
+            className="
+                flex
+                flex-col
+                sm:flex-row
+                gap-4
+                bg-white
+                rounded-2xl
+                p-4
+                shadow-sm
+                hover:shadow-md
+                transition
+            "
+        >
             <img
-                src={item.image}
-                className="w-28 h-28 object-contain bg-gray-50 rounded-xl"
+                src={
+                    item.image ||
+                    "/images/no-image.png"
+                }
+                alt={item.name}
+                loading="lazy"
+                className="
+                    w-24
+                    h-24
+                    sm:w-28
+                    sm:h-28
+                    object-contain
+                    rounded-xl
+                    bg-gray-50
+                "
             />
 
-            <div className="flex flex-col flex-grow">
+            <div className="flex-1">
 
-                <h3 className="font-semibold text-lg">{item.name}</h3>
+                <h3 className="font-semibold text-gray-900 text-base sm:text-lg">
+                    {item.name}
+                </h3>
 
-                <p className="text-sm text-gray-500">{item.variantName}</p>
+                <p className="text-sm text-gray-500 mt-1">
+                    {item.variantName}
+                </p>
 
-                <div className="text-pink-600 font-bold text-lg">
-                    ₹{final}
+                <div className="mt-3 flex items-center gap-3 flex-wrap">
+
+                    <span className="text-lg font-bold text-pink-600">
+                        ₹
+                        {finalPrice.toFixed(2)}
+                    </span>
+
+                    {discount > 0 && (
+                        <>
+                            <span className="text-sm text-gray-400 line-through">
+                                ₹
+                                {price.toFixed(2)}
+                            </span>
+
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                                {discount}% OFF
+                            </span>
+                        </>
+                    )}
+
                 </div>
 
-                <div className="text-xs text-gray-500">
-                    GST ({item.gstPercentage}%): ₹{gst.toFixed(2)}
+                <div className="mt-2 text-sm text-gray-600 space-y-1">
+                    <p>
+                        GST ({item.gstPercentage}%):
+                        ₹{gst.toFixed(2)}
+                    </p>
+
+                    <p className="font-medium text-gray-800">
+                        Subtotal:
+                        ₹{subtotal.toFixed(2)}
+                    </p>
                 </div>
 
-                <div className="text-sm text-gray-600">
-                    Subtotal: ₹{subtotal.toFixed(2)}
-                </div>
-
-                {/* QTY */}
-                <div className="flex items-center gap-3 mt-3">
+                <div className="flex items-center gap-3 mt-4">
 
                     <button
                         onClick={decrease}
-                        className="w-8 h-8 bg-gray-200 rounded-lg hover:bg-red-200"
+                        className="
+                            w-9
+                            h-9
+                            rounded-lg
+                            border
+                            hover:bg-red-50
+                        "
                     >
                         −
                     </button>
 
-                    <span className="font-semibold">{qty}</span>
+                    <span className="min-w-[32px] text-center font-semibold">
+                        {qty}
+                    </span>
 
                     <button
                         onClick={increase}
-                        disabled={max && qty + step > max}
-                        className="w-8 h-8 bg-gray-200 rounded-lg hover:bg-green-200 disabled:opacity-40"
+                        disabled={
+                            max &&
+                            qty + step > max
+                        }
+                        className="
+                            w-9
+                            h-9
+                            rounded-lg
+                            border
+                            hover:bg-green-50
+                            disabled:opacity-40
+                        "
                     >
                         +
+                    </button>
+
+                    <button
+                        onClick={() =>
+                            removeFromCart(
+                                item.variantId
+                            )
+                        }
+                        className="
+                            ml-auto
+                            text-red-500
+                            text-sm
+                            font-medium
+                        "
+                    >
+                        Remove
                     </button>
 
                 </div>
 
             </div>
-
-            <button
-                onClick={() => removeFromCart(item.variantId)}
-                className="text-red-500 text-xl"
-            >
-                ✕
-            </button>
-
         </div>
     );
 }

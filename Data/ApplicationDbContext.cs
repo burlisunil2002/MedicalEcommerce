@@ -74,12 +74,6 @@ public class ApplicationDbContext
             .ToTable("Enquiry");
 
         modelBuilder.Entity<OrderModel>()
-        .HasOne(o => o.Payment)
-        .WithOne(p => p.Order)
-        .HasForeignKey<PaymentModel>(p => p.OrderId)
-        .OnDelete(DeleteBehavior.Cascade);
-
-        modelBuilder.Entity<OrderModel>()
             .HasMany(o => o.OrderItems)
             .WithOne(i => i.Order)
             .HasForeignKey(i => i.OrderId);

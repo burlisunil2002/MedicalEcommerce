@@ -1,8 +1,14 @@
 ﻿import { useRef } from "react";
+import { useNavigate } from "react-router-dom";
+
 
 export default function HotDeals({ products = [], addToCart }) {
 
     const scrollRef = useRef();
+
+const navigate = useNavigate();
+
+
 
     if (!products.length) return null;
 
@@ -95,8 +101,19 @@ export default function HotDeals({ products = [], addToCart }) {
                                             <img
                                                 src={image}
                                                 alt={name}
-                                                className="max-h-full object-contain group-hover:scale-110 transition duration-300"
+                                                onClick={() =>
+                                                    navigate(`/product/${id}`)
+                                                }
+                                                className="
+        max-h-full
+        object-contain
+        group-hover:scale-110
+        transition
+        duration-300
+        cursor-pointer
+    "
                                             />
+
 
                                         </div>
 
@@ -109,9 +126,23 @@ export default function HotDeals({ products = [], addToCart }) {
                                             </p>
 
                                             {/* NAME */}
-                                            <p className="text-sm font-semibold text-gray-800 line-clamp-2 group-hover:text-pink-500 transition">
+                                            <p
+                                                onClick={() =>
+                                                    navigate(`/product/${id}`)
+                                                }
+                                                className="
+        text-sm
+        font-semibold
+        text-gray-800
+        line-clamp-2
+        group-hover:text-pink-500
+        transition
+        cursor-pointer
+    "
+                                            >
                                                 {name}
                                             </p>
+
 
                                             {/* PRICE */}
                                             <div className="mt-2">
@@ -138,7 +169,9 @@ export default function HotDeals({ products = [], addToCart }) {
 
                                             {/* CTA */}
                                             <button
-                                                onClick={() => addToCart(id)}
+                                            onClick={() =>
+                                                navigate(`/product/${id}`)
+                                            }
                                                 className="
                                                     w-full mt-3 py-2 rounded-lg text-sm font-semibold text-white
                                                     bg-gradient-to-r from-pink-500 to-orange-400

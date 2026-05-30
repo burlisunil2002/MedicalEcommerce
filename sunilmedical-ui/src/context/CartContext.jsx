@@ -29,13 +29,39 @@ export const CartProvider = ({ children }) => {
 
             const res = await API.get("/api/cart/full");
 
-            setItems((res?.data?.items || []).map(i => ({
-                ...i,
-                variantId: i.variantId ?? i.VariantId,
-                stepQuantity: Number(i.stepQuantity) || 1,
-                minQuantity: Number(i.minQuantity) || 1,
-                maxQuantity: i.maxQuantity
-            })));
+setItems(
+  (res?.data?.items || []).map(i => ({
+    ...i,
+
+    variantId:
+      i.variantId ?? i.VariantId,
+
+    price:
+      Number(i.price ?? 0),
+
+    finalPrice:
+      Number(i.finalPrice ?? 0),
+
+    discountPercentage:
+      Number(i.discountPercentage ?? 0),
+
+    quantity:
+      Number(i.quantity ?? 1),
+
+    gstPercentage:
+      Number(i.gstPercentage ?? 0),
+
+    stepQuantity:
+      Number(i.stepQuantity ?? 1),
+
+    minQuantity:
+      Number(i.minQuantity ?? 1),
+
+    maxQuantity:
+      i.maxQuantity
+  }))
+);
+
             setSummary(res?.data?.summary || {});
 
         } catch (e) {
@@ -46,20 +72,65 @@ export const CartProvider = ({ children }) => {
     };
 
     // 🔥 ADD TO CART (FULL REFRESH REQUIRED)
-    const addToCart = async (productId, variantId, qty) => {
-        try {
-            await API.post("/api/cart/add", {
-                ProductId: productId,
-                VariantId: variantId,
-                Quantity: qty
-            });
+const addToCart = async (
+    productId,
+    variantId,
+    quantity = 1
+) => {
+    const existing =
+        items.find(
+            x =>
+                x.variantId ===
+                variantId
+        );
 
-            await loadCart(); // 🔥 ensures qty updates immediately
+    // Instant UI update
+    if (existing) {
+        setItems(prev =>
+            prev.map(i =>
+                i.variantId === variantId
+                    ? {
+                          ...i,
+                          quantity:
+                              i.quantity +
+                              quantity
+                      }
+                    : i
+            )
+        );
+    } else {
+        setItems(prev => [
+            ...prev,
+            {
+                productId,
+                variantId,
+                quantity
+            }
+        ]);
+    }
 
-        } catch (e) {
-            console.error("Add failed", e);
-        }
-    };
+    try {
+        await API.post(
+            "/api/cart/add",
+            {
+                productId,
+                variantId,
+                quantity
+            }
+        );
+
+        await loadCart();
+    }
+    catch (err) {
+        console.error(
+            "Add cart error",
+            err
+        );
+
+        loadCart();
+    }
+};
+
 
     // 🔥 UPDATE QUANTITY (OPTIMISTIC + SUMMARY REFRESH)
     const updateCart = async (variantId, qty) => {
@@ -110,17 +181,49 @@ export const CartProvider = ({ children }) => {
     };
 
     // 🔥 APPLY COUPON
-    const applyCoupon = async (code) => {
-        try {
-            await API.post("/api/cart/apply-coupon", { code });
+const applyCoupon = async (code) => {
+    try {
+        const res = await API.post(
+            "/api/cart/apply-coupon",
+            { code }
+        );
 
-            const res = await API.get("/api/cart/full");
-            setSummary(res?.data?.summary || {});
+        // refresh cart summary immediately
+        const fullCart =
+            await API.get(
+                "/api/cart/full"
+            );
 
-        } catch (e) {
-            console.error("Coupon failed:", e);
-        }
-    };
+setItems(
+  (fullCart.data.items || []).map(i => ({
+    ...i,
+    variantId: i.variantId ?? i.VariantId
+  }))
+);
+
+
+        setSummary(
+            fullCart.data.summary || {}
+        );
+
+        // IMPORTANT
+        return res.data;
+
+    } catch (err) {
+        console.error(
+            "Coupon error:",
+            err
+        );
+
+        return {
+            success: false,
+            message:
+                "Invalid coupon code"
+        };
+    }
+};
+
+
 
     const getQty = (variantId) => {
         if (!items || items.length === 0) return 0;

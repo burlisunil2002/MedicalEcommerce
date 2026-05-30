@@ -39,8 +39,8 @@ namespace VivekMedicalProducts.Controllers
             var vm = new PaymentViewModel
             {
                 OrderId = order.OrderId,
-                SubTotal = order.SubTotal,
-                GST = order.GST,
+                //SubTotal = order.SubTotal,
+                //GST = order.GST,
                 GrandTotal = order.GrandTotal
             };
 
