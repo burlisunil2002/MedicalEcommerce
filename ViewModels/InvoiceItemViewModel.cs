@@ -1,17 +1,22 @@
-﻿namespace VivekMedicalProducts.ViewModels
+﻿public class InvoiceItemViewModel
 {
-    public class InvoiceItemViewModel
-    {
-        public string ProductName { get; set; }
+    public string ProductName { get; set; }
 
-        public int Quantity { get; set; }
+    public string VariantName { get; set; }
 
-        public decimal Price { get; set; }
+    public int Quantity { get; set; }
 
-        public decimal GSTPercentage { get; set; }
+    public decimal Price { get; set; }
 
-        public decimal GSTAmount { get; set; }
+    public decimal DiscountAmount { get; set; }
 
-        public decimal Total { get; set; }
-    }
+    public decimal CouponDiscountAmount { get; set; }
+
+    public decimal FinalPaidAmount { get; set; }
+
+    public decimal GSTPercentage { get; set; }
+
+    public decimal GSTAmount { get; set; }
+
+    public decimal Total { get; set; }
 }

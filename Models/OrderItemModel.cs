@@ -56,7 +56,13 @@ public class OrderItemModel
     public DateTime? ItemOrderModifiedDate { get; set; }
 
     // navigation
+    [ForeignKey(nameof(OrderId))]
     public OrderModel? Order { get; set; }
 
+    [ForeignKey(nameof(ProductId))]
     public ProductModel? Product { get; set; }
+
+    [ForeignKey(nameof(ProductVariantId))]
+    public ProductVariant? ProductVariant { get; set; }
+
 }

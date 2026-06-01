@@ -1,5 +1,5 @@
 ﻿import { useCart } from "../context/CartContext";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function AddToCartButton({
     productId,
@@ -8,112 +8,144 @@ export default function AddToCartButton({
     maxQty = null,
     stepQty = 1
 }) {
-    const { addToCart, updateCart, removeFromCart, getQty, items } = useCart();
+    const {
+        addToCart,
+        updateCart,
+        removeFromCart,
+        getQty
+    } = useCart();
 
-    const qty = getQty(variantId);
-    const [loading, setLoading] = useState(false);
+    const productKey = Number(productId);
+    const variantKey = Number(variantId);
 
-    // ✅ get item from cart (VERY IMPORTANT)
-    const item = items.find(i => i.variantId === variantId);
+    const cartQty = getQty(
+        productKey,
+        variantKey
+    );
 
-    // ✅ FINAL VALUES (priority: cart → props → default)
-    const step = Number(item?.stepQuantity ?? stepQty) || 1;
-    const min = Number(item?.minQuantity ?? minQty) || 1;
-    const max = item?.maxQuantity ?? maxQty ?? null;
+    const [uiQty, setUiQty] =
+        useState(cartQty);
 
-    const effectiveMax = max ?? Infinity;
+    const [loading, setLoading] =
+        useState(false);
 
-    // ✅ INITIAL QTY
-    const getInitialQty = () => {
-        return min > 1 ? min : 1;
-    };
+    useEffect(() => {
+        setUiQty(cartQty);
+    }, [cartQty]);
 
-    // 🔥 ADD TO CART
-const handleAdd = async () => {
-    if (loading) return;
+    const min =
+        Number(minQty) || 1;
 
-    setLoading(true);
+    const step =
+        Number(stepQty) || 1;
 
-    try {
-        await addToCart(
-            productId,
-            variantId,
-            getInitialQty()
-        );
-    } catch (err) {
-        console.error(
-            "Add to cart failed:",
-            err
-        );
-    } finally {
-        setLoading(false);
-    }
-};
+    const max =
+        maxQty != null
+            ? Number(maxQty)
+            : Infinity;
 
+    const handleAdd = async e => {
+        e.preventDefault();
+        e.stopPropagation();
 
-    // 🔥 INCREASE (STEP BASED)
-    const increase = () => {
-        let nextQty;
+        if (loading) return;
 
-        if (qty < min) {
-            nextQty = min;
-        } else {
-            nextQty = qty + step;
+        setLoading(true);
+
+        setUiQty(min);
+
+        const success =
+            await addToCart(
+                productKey,
+                variantKey,
+                min
+            );
+
+        if (!success) {
+            setUiQty(cartQty);
         }
 
-        if (nextQty > effectiveMax) return;
-
-        updateCart(variantId, nextQty);
+        setLoading(false);
     };
 
-    // 🔥 DECREASE (STEP BASED)
-    const decrease = () => {
-        let nextQty = qty - step;
+    const increase = async e => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const nextQty =
+            uiQty + step;
+
+        if (nextQty > max) return;
+
+        setUiQty(nextQty);
+
+        await updateCart(
+            productKey,
+            variantKey,
+            nextQty
+        );
+    };
+
+    const decrease = async e => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const nextQty =
+            uiQty - step;
 
         if (nextQty < min) {
-            removeFromCart(variantId);
+            setUiQty(0);
+
+            await removeFromCart(
+                productKey,
+                variantKey
+            );
+
             return;
         }
 
-        updateCart(variantId, nextQty);
+        setUiQty(nextQty);
+
+        await updateCart(
+            productKey,
+            variantKey,
+            nextQty
+        );
     };
 
     return (
-        <div className="w-full max-w-sm">
-
-            {qty === 0 ? (
+        <div className="w-full">
+            {uiQty <= 0 ? (
                 <button
+                    type="button"
                     onClick={handleAdd}
                     disabled={loading}
-                    className="w-full h-12 rounded-xl font-semibold text-white 
-                    bg-gradient-to-r from-pink-500 to-red-500
-                    shadow-md hover:shadow-lg hover:scale-[1.02]
-                    active:scale-[0.98] transition-all duration-200
-                    disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="w-full h-12 rounded-xl font-semibold text-white bg-gradient-to-r from-pink-500 to-red-500 hover:shadow-md transition-all"
                 >
-                    {loading ? "Adding..." : "🛒 Add to Cart"}
+                    {loading
+                        ? "Adding..."
+                        : "🛒 Add To Cart"}
                 </button>
             ) : (
-                <div className="flex items-center justify-between h-12 rounded-xl border border-gray-300 bg-white shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between h-12 rounded-xl border bg-white overflow-hidden">
 
-                    {/* ➖ */}
                     <button
+                        type="button"
                         onClick={decrease}
-                        className="w-12 h-full flex items-center justify-center text-lg hover:bg-gray-100"
+                        className="w-12 h-full text-lg"
                     >
                         −
                     </button>
 
-                    {/* QTY */}
-                    <span className="flex-1 text-center font-semibold text-gray-800">
-                        {qty}
+                    <span className="flex-1 text-center font-semibold">
+                        {uiQty}
                     </span>
 
-                    {/* ➕ */}
                     <button
+                        type="button"
                         onClick={increase}
-                        disabled={qty + step > effectiveMax}
-                        className="w-12 h-full flex items-center justify-center text-lg hover:bg-gray-100 disabled:opacity-40"
+                        disabled={uiQty >= max}
+                        className="w-12 h-full text-lg disabled:opacity-40"
                     >
                         +
                     </button>

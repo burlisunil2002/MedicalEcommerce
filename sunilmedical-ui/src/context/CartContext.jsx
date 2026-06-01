@@ -29,38 +29,48 @@ export const CartProvider = ({ children }) => {
 
             const res = await API.get("/api/cart/full");
 
-setItems(
-  (res?.data?.items || []).map(i => ({
-    ...i,
+            setItems(
+                (res?.data?.items || []).map(i => ({
+                    ...i,
 
-    variantId:
-      i.variantId ?? i.VariantId,
+                    productId: Number(
+                        i.productId ?? i.ProductId ?? 0
+                    ),
 
-    price:
-      Number(i.price ?? 0),
+                    variantId: Number(
+                        i.variantId ??
+                        i.productVariantId ??
+                        i.ProductVariantId ??
+                        0
+                    ),
 
-    finalPrice:
-      Number(i.finalPrice ?? 0),
+                    quantity: Number(i.quantity ?? 1),
 
-    discountPercentage:
-      Number(i.discountPercentage ?? 0),
+                    price: Number(i.price ?? 0),
 
-    quantity:
-      Number(i.quantity ?? 1),
+                    finalPrice: Number(
+                        i.finalPrice ?? i.price ?? 0
+                    ),
 
-    gstPercentage:
-      Number(i.gstPercentage ?? 0),
+                    discountPercentage: Number(
+                        i.discountPercentage ?? 0
+                    ),
 
-    stepQuantity:
-      Number(i.stepQuantity ?? 1),
+                    gstPercentage: Number(
+                        i.gstPercentage ?? 0
+                    ),
 
-    minQuantity:
-      Number(i.minQuantity ?? 1),
+                    stepQuantity: Number(
+                        i.stepQuantity ?? 1
+                    ),
 
-    maxQuantity:
-      i.maxQuantity
-  }))
-);
+                    minQuantity: Number(
+                        i.minQuantity ?? 1
+                    ),
+
+                    maxQuantity: i.maxQuantity ?? null
+                }))
+            );
 
             setSummary(res?.data?.summary || {});
 
@@ -71,112 +81,143 @@ setItems(
         }
     };
 
+    const refreshSummaryOnly = async () => {
+        try {
+            const res =
+                await API.get(
+                    "/api/cart/summary"
+                );
+
+            setSummary(
+                res?.data || {}
+            );
+        }
+        catch (err) {
+            console.error(
+                "Summary refresh error",
+                err
+            );
+        }
+    };
+
     // 🔥 ADD TO CART (FULL REFRESH REQUIRED)
-const addToCart = async (
-    productId,
-    variantId,
-    quantity = 1
-) => {
-    const existing =
-        items.find(
-            x =>
-                x.variantId ===
-                variantId
-        );
+    const addToCart = async (
+        productId,
+        variantId,
+        quantity = 1
+    ) => {
+        const productKey = Number(productId);
+        const variantKey = Number(variantId);
+        const qtyToAdd = Number(quantity) || 1;
 
-    // Instant UI update
-    if (existing) {
-        setItems(prev =>
-            prev.map(i =>
-                i.variantId === variantId
-                    ? {
-                          ...i,
-                          quantity:
-                              i.quantity +
-                              quantity
-                      }
-                    : i
-            )
-        );
-    } else {
-        setItems(prev => [
-            ...prev,
-            {
-                productId,
-                variantId,
-                quantity
+        setItems(prev => {
+            const existing = prev.find(
+                x =>
+                    Number(x.productId) === productKey &&
+                    Number(x.variantId) === variantKey
+            );
+
+            if (existing) {
+                return prev.map(x =>
+                    Number(x.productId) === productKey &&
+                        Number(x.variantId) === variantKey
+                        ? {
+                            ...x,
+                            quantity:
+                                Number(x.quantity || 0) + qtyToAdd
+                        }
+                        : x
+                );
             }
-        ]);
-    }
 
-    try {
-        await API.post(
-            "/api/cart/add",
-            {
-                productId,
-                variantId,
-                quantity
-            }
-        );
+            return [
+                ...prev,
+                {
+                    productId: productKey,
+                    variantId: variantKey,
+                    quantity: qtyToAdd
+                }
+            ];
+        });
 
-        await loadCart();
-    }
-    catch (err) {
-        console.error(
-            "Add cart error",
-            err
-        );
+        refreshSummaryOnly(qtyToAdd);
 
-        loadCart();
-    }
-};
+        try {
+            await API.post("/api/cart/add", {
+                productId: productKey,
+                variantId: variantKey,
+                quantity: qtyToAdd
+            });
 
+            loadCart();
+            return true;
+        } catch (err) {
+            loadCart();
+            return false;
+        }
+    };
 
     // 🔥 UPDATE QUANTITY (OPTIMISTIC + SUMMARY REFRESH)
-    const updateCart = async (variantId, qty) => {
-
-        // optimistic update
+    const updateCart = async (
+        productId,
+        variantId,
+        quantity
+    ) => {
+        // instant UI update
         setItems(prev =>
-            prev.map(i =>
-                i.variantId === variantId
-                    ? { ...i, quantity: qty }
-                    : i
+            prev.map(item =>
+                Number(item.productId) === Number(productId) &&
+                    Number(item.variantId) === Number(variantId)
+                    ? {
+                        ...item,
+                        quantity
+                    }
+                    : item
             )
         );
 
         try {
-            await API.post("/api/cart/update", {
-                VariantId: variantId,
-                Quantity: qty
+            await API.put("/api/cart/update", {
+                productId,
+                variantId,
+                quantity
             });
 
-            // only refresh summary (fast, no flicker)
-            const res = await API.get("/api/cart/full");
-            setSummary(res?.data?.summary || {});
-
-        } catch (e) {
-            console.error("Update failed:", e);
-            await loadCart(); // rollback
+            await refreshSummaryOnly();
+        }
+        catch (err) {
+            console.error(err);
+            loadCart();
         }
     };
 
     // 🔥 REMOVE ITEM
-    const removeFromCart = async (variantId) => {
-
-        // optimistic remove
-        setItems(prev => prev.filter(i => i.variantId !== variantId));
+    const removeFromCart = async (
+        productId,
+        variantId
+    ) => {
+        setItems(prev =>
+            prev.filter(
+                x =>
+                    !(
+                        Number(x.productId) === Number(productId) &&
+                        Number(x.variantId) === Number(variantId)
+                    )
+            )
+        );
 
         try {
-            await API.post("/api/cart/remove", {
-                VariantId: variantId
-            });
+            await API.delete(`/api/cart/remove/${variantId}`), {
+                data: {
+                    productId,
+                    variantId
+                }
+            };
 
-            const res = await API.get("/api/cart/full");
-            setSummary(res?.data?.summary || {});
-
-        } catch (e) {
-            console.error("Remove failed:", e);
-            await loadCart();
+            await refreshSummaryOnly();
+        }
+        catch {
+            loadCart();
         }
     };
 
@@ -224,12 +265,17 @@ setItems(
 };
 
 
+    const getQty = (
+        productId,
+        variantId
+    ) => {
+        const item = items.find(
+            x =>
+                Number(x.productId) === Number(productId) &&
+                Number(x.variantId) === Number(variantId)
+        );
 
-    const getQty = (variantId) => {
-        if (!items || items.length === 0) return 0;
-
-        const item = items.find(i => i.variantId === variantId);
-        return item ? item.quantity : 0;
+        return item?.quantity || 0;
     };
 
     return (

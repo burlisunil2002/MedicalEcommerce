@@ -714,12 +714,11 @@ namespace VivekMedicalProducts.Controllers
             return Convert.ToHexString(hash).ToLowerInvariant();
         }
 
-[Authorize]
-[HttpGet("my-orders")]
-public async Task<IActionResult> GetMyOrders()
+        [Authorize]
+        [HttpGet("my-orders")]
+        public async Task<IActionResult> GetMyOrders()
         {
-            var userId =
-                _userContext.GetUserId();
+            var userId = _userContext.GetUserId();
 
             if (string.IsNullOrEmpty(userId))
             {
@@ -730,51 +729,52 @@ public async Task<IActionResult> GetMyOrders()
                 });
             }
 
-            var orders =
-                await _context.Orders
-                    .Include(o => o.OrderItems)
-                        .ThenInclude(i => i.Product)
-                    .Where(o =>
-                        o.UserId == userId)
-                    .OrderByDescending(o =>
-                        o.OrderDate)
-                    .Select(o => new
+            var orders = await _context.Orders
+                .Include(o => o.OrderItems)
+                    .ThenInclude(i => i.Product)
+                .Include(o => o.OrderItems)
+                    .ThenInclude(i => i.ProductVariant)
+                .Where(o => o.UserId == userId)
+                .OrderByDescending(o => o.OrderDate)
+                .Select(o => new
+                {
+                    orderId = o.OrderId,
+                    orderNumber = o.OrderNumber,
+                    orderDate = o.OrderDate,
+
+                    grandTotal = o.GrandTotal,
+                    orderStatus = o.OrderStatus,
+                    paymentStatus = o.PaymentStatus,
+
+                    items = o.OrderItems.Select(i => new
                     {
-                        orderId = o.OrderId,
-                        orderDate = o.OrderDate,
+                        productId = i.ProductId,
+                        variantId = i.ProductVariantId,
 
-                        orderStatus = o.OrderStatus,
-                        paymentStatus = o.PaymentStatus,
+                        productName = i.ProductName,
 
-                        // final customer paid amount
-                        grandTotal = o.GrandTotal,
+                        variantName =
+                            i.ProductVariant != null
+                                ? i.ProductVariant.Model
+                                : "",
 
-                        items = o.OrderItems
-                            .Select(i => new
-                            {
-                                productId = i.ProductId,
+                        productImage =
+                            !string.IsNullOrEmpty(i.ProductVariant.ImageUrl)
+                                ? i.ProductVariant.ImageUrl
+                                : !string.IsNullOrEmpty(i.Product.ImageUrl)
+                                    ? i.Product.ImageUrl
+                                    : "/images/no-image.png",
 
-                                productName =
-                                    i.ProductName,
+                        quantity = i.Quantity,
 
-                                productImage =
-                                    i.Product != null &&
-                                    !string.IsNullOrEmpty(
-                                        i.Product.ImageUrl
-                                    )
-                                        ? i.Product.ImageUrl
-                                        : "/images/no-image.png",
+                        price = i.Price,
 
-                                quantity =
-                                    i.Quantity,
+                        finalPaidAmount = i.FinalPaidAmount,
 
-                                // discounted line amount
-                                itemTotal =
-                                    i.LineTotal
-                            })
-                            .ToList()
-                    })
-                    .ToListAsync();
+                        itemTotal = i.LineTotal
+                    }).ToList()
+                })
+                .ToListAsync();
 
             return Ok(orders);
         }
@@ -789,13 +789,15 @@ public async Task<IActionResult> GetMyOrders()
                 var userId =
                     _userContext.GetUserId();
 
-                var order =
-                    await _context.Orders
-                        .Include(o => o.OrderItems)
-                        .FirstOrDefaultAsync(o =>
-                            o.OrderId == id &&
-                            o.UserId == userId
-                        );
+                var order = await _context.Orders
+    .Include(o => o.UserAddress)
+    .Include(o => o.OrderItems)
+        .ThenInclude(i => i.Product)
+    .Include(o => o.OrderItems)
+        .ThenInclude(i => i.ProductVariant)
+    .FirstOrDefaultAsync(o =>
+        o.OrderId == id &&
+        o.UserId == userId);
 
                 if (order == null)
                 {
@@ -896,113 +898,117 @@ public async Task SendInvoiceEmailAsync(
             );
         }
 
-private OrderInvoiceViewModel
-    BuildInvoiceModel(
-        OrderModel order)
+        private OrderInvoiceViewModel BuildInvoiceModel(OrderModel order)
         {
-            var address =
-                order.UserAddress;
+            var address = order.UserAddress;
 
-            var subtotal =
-                order.OrderItems?
-                    .Sum(x => x.LineTotal)
-                ?? 0;
+            decimal subtotal =
+                order.OrderItems.Sum(x =>
+                    x.Price * x.Quantity);
 
-            var gstTotal =
-                order.OrderItems?
-                    .Sum(x =>
-                        x.LineTotal *
-                        x.GSTPercentage / 100m)
-                ?? 0;
+            decimal productDiscount =
+                order.OrderItems.Sum(x =>
+                    x.DiscountAmount * x.Quantity);
+
+            decimal couponDiscount =
+                order.OrderItems.Sum(x =>
+                    x.CouponDiscountAmount);
+
+            decimal gstTotal =
+                order.OrderItems.Sum(x =>
+                    (x.FinalPaidAmount * x.Quantity) *
+                    x.GSTPercentage / 100m);
+
+            decimal finalPaid =
+                order.OrderItems.Sum(x =>
+                    x.LineTotal);
 
             return new OrderInvoiceViewModel
             {
-                // BASIC
-                OrderId =
-                    order.OrderId,
+                OrderId = order.OrderId,
 
                 InvoiceNumber =
                     $"INV-{order.OrderNumber}",
 
-                Date =
-                    order.OrderDate,
+                Date = order.OrderDate,
 
-                // CUSTOMER
+                CompanyName = "Sunil Medical Products Pvt Ltd",
+
+                CompanyGST = "37ABCDE1234F1Z5",
+
+                CompanyAddress =
+    "Visakhapatnam, Andhra Pradesh, India",
+
+                CompanyPhone = "9014060858",
+
                 CustomerName =
                     address?.FullName ?? "",
 
                 Address =
-                    string.Join(", ",
-                        new[]
-                        {
-                    address?.AddressLine1,
-                    address?.AddressLine2
-                        }
-                        .Where(x =>
-                            !string.IsNullOrWhiteSpace(x))
-                    ),
+                    $"{address?.AddressLine1}, {address?.AddressLine2}",
 
-                City =
-                    address?.City ?? "",
+                City = address?.City ?? "",
 
-                Pincode =
-                    address?.Pincode ?? "",
+                Pincode = address?.Pincode ?? "",
 
-                Phone =
-                    address?.MobileNumber ?? "",
+                Phone = address?.MobileNumber ?? "",
 
-                // COMPANY
-                CompanyName =
-                    "Sunil Medical Products",
+                SubTotal = subtotal,
 
-                CompanyGST =
-                    "37ABCDE1234F1Z5",
+                DiscountTotal = productDiscount,
 
-                CompanyAddress =
-                    "Visakhapatnam, Andhra Pradesh",
+                CouponDiscount = couponDiscount,
 
-                CompanyPhone =
-                    "9014060858",
+                GSTTotal = gstTotal,
 
-                // TOTALS
-                SubTotal =
-                    subtotal,
+                GrandTotal = order.GrandTotal,
 
-                GSTTotal =
-                    gstTotal,
+                FinalPaidAmount = finalPaid,
 
-                GrandTotal =
-                    order.GrandTotal,
+                Items = order.OrderItems.Select(item =>
+                    new InvoiceItemViewModel
+                    {
+                        ProductName = item.ProductName,
 
-                // ITEMS
-                Items =
-                    order.OrderItems?
-                        .Select(item =>
-                            new InvoiceItemViewModel
-                            {
-                                ProductName =
-                                    item.ProductName,
+                        VariantName =
+                            item.ProductVariant?.Model ?? "",
 
-                                Quantity =
-                                    item.Quantity,
+                        Quantity = item.Quantity,
 
-                                Price =
-                                    item.Price,
+                        Price =
+    item.Price - item.DiscountAmount,
 
-                                GSTPercentage =
-                                    item.GSTPercentage,
+                        DiscountAmount =
+                            item.DiscountAmount,
 
-                                GSTAmount =
-                                    item.LineTotal *
-                                    item.GSTPercentage / 100m,
+                        CouponDiscountAmount =
+                            item.CouponDiscountAmount,
 
-                                Total =
-                                    item.FinalPaidAmount
-                            })
-                        .ToList()
+                        FinalPaidAmount =
+                            item.FinalPaidAmount,
 
-                    ?? new List<
-                        InvoiceItemViewModel>()
+                        GSTPercentage =
+                            item.GSTPercentage,
+
+                        GSTAmount =
+    ((item.Price - item.DiscountAmount)
+    * item.Quantity)
+    * item.GSTPercentage / 100m,
+
+
+                        Total =
+(
+    (item.Price - item.DiscountAmount)
+    * item.Quantity
+)
++
+(
+    ((item.Price - item.DiscountAmount)
+    * item.Quantity)
+    * item.GSTPercentage / 100m
+)
+
+                    }).ToList()
             };
         }
 
@@ -1016,13 +1022,15 @@ private OrderInvoiceViewModel
                 var userId =
                     _userContext.GetUserId();
 
-                var order =
-                    await _context.Orders
-                        .Include(o => o.OrderItems)
-                        .FirstOrDefaultAsync(o =>
-                            o.OrderId == id &&
-                            o.UserId == userId
-                        );
+                var order = await _context.Orders
+    .Include(o => o.UserAddress)
+    .Include(o => o.OrderItems)
+        .ThenInclude(i => i.Product)
+    .Include(o => o.OrderItems)
+        .ThenInclude(i => i.ProductVariant)
+    .FirstOrDefaultAsync(o =>
+        o.OrderId == id &&
+        o.UserId == userId);
 
                 if (order == null)
                 {
@@ -1041,7 +1049,7 @@ private OrderInvoiceViewModel
                     return BadRequest(new
                     {
                         success = false,
-                        message = "Invoice not available"
+                        message = "Invoice available after successful payment"
                     });
                 }
 

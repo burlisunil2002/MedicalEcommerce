@@ -166,13 +166,31 @@ export default function ProductCard({ p }) {
                             Request Quote
                         </button>
                     ) : defaultVariant && (defaultVariant.productVariantId || defaultVariant.id) ? (
-                        <AddToCartButton
-                            productId={data.id}
-                            variantId={defaultVariant.productVariantId ?? defaultVariant.id}
-                            minQty={defaultVariant.minQuantity || 1}
-                            maxQty={defaultVariant.maxQuantity}
-                            stepQty={defaultVariant.stepQuantity || 1}
-                        />
+                            <AddToCartButton
+                                productId={Number(data.id)}
+                                variantId={Number(
+                                    defaultVariant?.productVariantId ??
+                                    defaultVariant?.id
+                                )}
+
+                                minQty={Number(
+                                    defaultVariant?.minQuantity ??
+                                    defaultVariant?.minQty ??
+                                    1
+                                )}
+
+                                stepQty={Number(
+                                    defaultVariant?.stepQuantity ??
+                                    defaultVariant?.stepQty ??
+                                    1
+                                )}
+
+                                maxQty={
+                                    defaultVariant?.maxQuantity ??
+                                    defaultVariant?.maxQty ??
+                                    null
+                                }
+                            />
                     ) : (
                         <button
                             onClick={() => navigate(`/product/${data.id}`)}

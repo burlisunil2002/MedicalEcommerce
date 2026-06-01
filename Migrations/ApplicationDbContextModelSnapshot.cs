@@ -349,6 +349,8 @@ namespace VivekMedicalProducts.Migrations
 
                     b.HasIndex("ProductId");
 
+                    b.HasIndex("ProductVariantId");
+
                     b.ToTable("OrderItems");
                 });
 
@@ -627,7 +629,7 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<string>("RefundStatus")
                         .HasColumnType("text");
 
-                    b.Property<int>("SellerId")
+                    b.Property<int?>("SellerId")
                         .HasColumnType("integer");
 
                     b.Property<string>("UpdatedBy")
@@ -1250,9 +1252,17 @@ namespace VivekMedicalProducts.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("VivekMedicalProducts.Models.ProductVariant", "ProductVariant")
+                        .WithMany()
+                        .HasForeignKey("ProductVariantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Order");
 
                     b.Navigation("Product");
+
+                    b.Navigation("ProductVariant");
                 });
 
             modelBuilder.Entity("VivekMedicalProducts.Models.CartModel", b =>

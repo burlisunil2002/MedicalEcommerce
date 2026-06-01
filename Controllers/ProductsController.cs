@@ -537,36 +537,40 @@ namespace VivekMedicalProducts.Controllers
                     isHotDeal = p.IsHotDeal,
                     discountPercentage = p.DiscountPercentage,
                     gstPercentage = p.GSTPercentage,
-                    
+
 
                     // 🔥 VARIANTS (WITH IMAGE + SPECS)
                     variants = p.Variants
-                        .Where(v => v.Status == "Active")
-                        .OrderBy(v => v.ProductVariantId)
-                        .Select(v => new
-                        {
-                            id = v.ProductVariantId,
+    .Where(v => v.Status == "Active")
+    .OrderBy(v => v.ProductVariantId)
+    .Select(v => new
+    {
+        id = v.ProductVariantId,
 
-                            model = v.Model,
-                            size = v.Size,
-                            unit = v.Unit,
-                            packSize = v.PackSize,
+        model = v.Model,
+        size = v.Size,
+        unit = v.Unit,
+        packSize = v.PackSize,
 
-                            price = v.Price,
-                            stock = v.StockQuantity,
+        price = v.Price,
+        stock = v.StockQuantity,
 
-                            minQty = v.MinQuantity,
-                            maxQty = v.MaxQuantity,
-                            stepQty = v.StepQuantity,
+        // FIX HERE
+        minQuantity = v.MinQuantity,
+        maxQuantity = v.MaxQuantity,
+        stepQuantity = v.StepQuantity,
 
-                            imageUrl = v.ImageUrl, // 🔥 IMPORTANT
+        imageUrl = v.ImageUrl,
 
-                            specifications = v.Specifications.Select(s => new
-                            {
-                                key = s.Key,
-                                value = s.Value
-                            }).ToList()
-                        }).ToList(),
+        specifications = v.Specifications
+            .Select(s => new
+            {
+                key = s.Key,
+                value = s.Value
+            })
+            .ToList()
+    })
+    .ToList(),
 
                     // 🔥 DEFAULT VARIANT (FIRST)
                     defaultVariantId = p.Variants

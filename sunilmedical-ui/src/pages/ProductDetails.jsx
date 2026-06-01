@@ -4,10 +4,13 @@ import API from "../services/api";
 import AddToCartButton from "../components/AddToCartButton";
 import { useWishlist } from "../context/WishlistContext";
 import RecommendedProducts from "../components/RecommendedProducts";
+import { useCart } from "../context/CartContext";
 
 export default function ProductDetails() {
 
     const navigate = useNavigate();
+
+    const { addToCart } = useCart();
 
     const { id } = useParams();
 
@@ -33,25 +36,31 @@ export default function ProductDetails() {
             });
     }, [id]);
 
-    const handleBuyNow = async () => {
-        try {
-            await API.post("/api/cart/add", {
-                productId: data.id,
-                variantId:
-                    selectedVariant?.productVariantId ||
-                    selectedVariant?.id,
-                quantity: 1
-            });
+const handleBuyNow = async () => {
+  if (!selectedVariant || !product)
+    return;
 
-            window.dispatchEvent(
-                new Event("cartUpdated")
-            );
+  const variantId = Number(
+    selectedVariant.productVariantId ??
+    selectedVariant.id
+  );
 
-            navigate("/cart");
-        } catch {
-            alert("Unable to add item to cart");
-        }
-    };
+  try {
+    await addToCart(
+      Number(product.id),
+      variantId,
+      selectedVariant.minQuantity || 1
+    );
+
+    navigate("/cart");
+  } catch (err) {
+    console.error(
+      "Buy now failed:",
+      err
+    );
+  }
+};
+
 
     const data = useMemo(() => {
 
@@ -133,6 +142,11 @@ export default function ProductDetails() {
             : firstVariant?.specifications?.length > 0
                 ? firstVariant.specifications
                 : product.specifications || [];
+
+    const selectedVariantId =
+        selectedVariant?.productVariantId ??
+        selectedVariant?.id ??
+        null;
 
     return (
         <div className="bg-white min-h-screen select-none">
@@ -242,26 +256,31 @@ export default function ProductDetails() {
                             </p>
 
                             <div className="flex flex-wrap gap-2">
+                                {product?.variants?.map((v) => {
+                                    const vId =
+                                        v.productVariantId ??
+                                        v.id;
 
-                                {product.variants.map(v => {
-                                    const vId = v.productVariantId ?? v.id;
-                                    const selectedId = selectedVariant?.productVariantId ?? selectedVariant?.id;
+                                    const isSelected =
+                                        Number(vId) ===
+                                        Number(selectedVariantId);
 
                                     return (
                                         <button
                                             key={vId}
-                                            onClick={() => setSelectedVariant(v)}
-                                            className={`px-3 py-1 text-sm rounded-full border transition
-                                            ${selectedId === vId
+                                            type="button"
+                                            onClick={() =>
+                                                setSelectedVariant(v)
+                                            }
+                                            className={`px-3 py-2 rounded-full border transition ${isSelected
                                                     ? "bg-black text-white border-black"
-                                                    : "border-gray-300 text-gray-600 hover:bg-gray-100"
+                                                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
                                                 }`}
                                         >
                                             {v.model}
                                         </button>
                                     );
                                 })}
-
                             </div>
                         </div>
                     )}
@@ -275,22 +294,22 @@ export default function ProductDetails() {
                             </button>
                         ) : (
                             <>
-                                <AddToCartButton
-                                    productId={data.id}
-                                    variantId={
-                                        selectedVariant?.productVariantId ||
-                                        selectedVariant?.id
-                                    }
-                                    minQty={
-                                        selectedVariant?.minQuantity || 1
-                                    }
-                                    maxQty={
-                                        selectedVariant?.maxQuantity
-                                    }
-                                    stepQty={
-                                        selectedVariant?.stepQuantity || 1
-                                    }
-                                />
+                                    <AddToCartButton
+                                        productId={Number(product?.id)}
+                                        variantId={Number(
+                                            selectedVariant?.productVariantId ??
+                                            selectedVariant?.id
+                                        )}
+                                        minQty={Number(
+                                            selectedVariant?.minQuantity ?? 1
+                                        )}
+                                        stepQty={Number(
+                                            selectedVariant?.stepQuantity ?? 1
+                                        )}
+                                        maxQty={
+                                            selectedVariant?.maxQuantity ?? null
+                                        }
+                                    />
 
                                 <button
                                     type="button"

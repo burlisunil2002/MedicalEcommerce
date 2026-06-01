@@ -27,112 +27,126 @@ namespace VivekMedicalProducts.Controllers
             _couponService = couponService;
         }
 
-        private (string userId, string guestId) GetIdentity()
+private (string? userId, string guestId) GetIdentity()
         {
-            var userId = User.Identity?.IsAuthenticated == true
-                ? User.FindFirstValue(ClaimTypes.NameIdentifier)
-                : null;
+            var userId =
+                User.Identity?.IsAuthenticated == true
+                    ? User.FindFirstValue(ClaimTypes.NameIdentifier)
+                    : null;
 
-            if (!Request.Cookies.TryGetValue("guest_id", out string guestId)
-                || string.IsNullOrEmpty(guestId))
+            if (
+                Request.Cookies.TryGetValue(
+                    "guest_id",
+                    out string? guestId
+                )
+                &&
+                !string.IsNullOrWhiteSpace(guestId)
+            )
             {
-                guestId = Guid.NewGuid().ToString();
+                return (userId, guestId);
+            }
 
-                Response.Cookies.Append("guest_id", guestId, new CookieOptions
+            guestId = Guid.NewGuid().ToString();
+
+            Response.Cookies.Append(
+                "guest_id",
+                guestId,
+                new CookieOptions
                 {
                     HttpOnly = true,
-                    Secure = true,
-                    SameSite = SameSiteMode.None,
+
+                    Secure =
+                        Request.IsHttps,
+
+                    SameSite =
+                        SameSiteMode.Lax,
+
                     Path = "/",
+
                     IsEssential = true,
-                    Expires = DateTime.UtcNow.AddDays(7)
-                });
-            }
+
+                    Expires =
+                        DateTime.UtcNow.AddDays(30)
+                }
+            );
 
             return (userId, guestId);
         }
 
+
         [HttpPost("add")]
         public async Task<IActionResult> AddToCart(
-            [FromBody] AddCartItemDto dto)
+      [FromBody] AddCartItemDto dto)
         {
-            var (userId, guestId) = GetIdentity();
+            try
+            {
+                var (userId, guestId) = GetIdentity();
 
-            var variant =
-                await _context.ProductVariants
-                    .FirstOrDefaultAsync(x =>
-                        x.ProductVariantId ==
-                        dto.VariantId);
+                CartModel? cartItem = null;
 
-            if (variant == null)
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    cartItem = await _context.Carts
+                        .FirstOrDefaultAsync(x =>
+                            x.UserId == userId &&
+                            x.ProductId == dto.ProductId &&
+                            x.ProductVariantId == dto.VariantId);
+                }
+                else
+                {
+                    cartItem = await _context.Carts
+                        .FirstOrDefaultAsync(x =>
+                            x.GuestId == guestId &&
+                            x.ProductId == dto.ProductId &&
+                            x.ProductVariantId == dto.VariantId);
+                }
+
+                if (cartItem != null)
+                {
+                    cartItem.Quantity += dto.Quantity;
+                }
+                else
+                {
+                    var product = await _context.Products
+                        .FirstOrDefaultAsync(x =>
+                            x.Id == dto.ProductId);
+
+                    _context.Carts.Add(new CartModel
+                    {
+                        ProductId = dto.ProductId,
+                        ProductVariantId = dto.VariantId,
+                        Quantity = dto.Quantity,
+
+                        // IMPORTANT FIX
+                        UserId = userId,
+                        GuestId =
+                            string.IsNullOrEmpty(userId)
+                                ? guestId
+                                : null,
+
+                        SellerId = product?.SellerId,
+                        CreatedDate = DateTime.UtcNow
+                    });
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    success = true
+                });
+            }
+            catch (Exception ex)
+            {
                 return BadRequest(new
                 {
                     success = false,
-                    message = "Invalid variant"
-                });
-
-            int qty = dto.Quantity;
-
-            qty = Math.Max(
-                variant.MinQuantity,
-                qty
-            );
-
-            if (variant.MaxQuantity.HasValue)
-            {
-                qty = Math.Min(
-                    qty,
-                    variant.MaxQuantity.Value
-                );
-            }
-
-            if (qty % variant.StepQuantity != 0)
-            {
-                qty =
-                    ((qty / variant.StepQuantity) + 1)
-                    * variant.StepQuantity;
-            }
-
-            var item =
-                await _context.Carts
-                    .FirstOrDefaultAsync(x =>
-                        x.ProductVariantId == dto.VariantId &&
-                        (
-                            (!string.IsNullOrEmpty(userId) &&
-                             x.UserId == userId)
-                            ||
-                            (string.IsNullOrEmpty(userId) &&
-                             x.GuestId == guestId)
-                        ));
-
-            if (item != null)
-            {
-                item.Quantity += qty;
-            }
-            else
-            {
-                _context.Carts.Add(new CartModel
-                {
-                    ProductId = dto.ProductId,
-                    ProductVariantId = dto.VariantId,
-                    Quantity = qty,
-                    UserId = userId,
-                    GuestId =
-                        string.IsNullOrEmpty(userId)
-                            ? guestId
-                            : null
+                    message = ex.Message
                 });
             }
-
-            await _context.SaveChangesAsync();
-
-            return Ok(new
-            {
-                success = true
-            });
         }
 
-        [HttpPost("update")]
+        [HttpPut("update")]
         public async Task<IActionResult> UpdateQuantity(
             [FromBody] AddCartItemDto dto)
         {
@@ -310,27 +324,29 @@ public async Task<IActionResult> ApplyCoupon(
         }
 
 
-        [HttpPost("remove")]
-        public async Task<IActionResult> Remove(
-            [FromBody] RemoveCartDto dto)
+        [HttpDelete("remove/{variantId}")]
+        public async Task<IActionResult> Remove(int variantId)
         {
             var (userId, guestId) = GetIdentity();
 
-            var item =
-                await _context.Carts
-                    .FirstOrDefaultAsync(x =>
-                        x.ProductVariantId ==
-                        dto.VariantId &&
-                        (
-                            (!string.IsNullOrEmpty(userId) &&
-                             x.UserId == userId)
-                            ||
-                            (string.IsNullOrEmpty(userId) &&
-                             x.GuestId == guestId)
-                        ));
+            var item = await _context.Carts
+                .FirstOrDefaultAsync(x =>
+                    x.ProductVariantId == variantId &&
+                    (
+                        (!string.IsNullOrEmpty(userId) &&
+                         x.UserId == userId)
+                        ||
+                        (string.IsNullOrEmpty(userId) &&
+                         x.GuestId == guestId)
+                    ));
 
             if (item == null)
-                return NotFound();
+            {
+                return NotFound(new
+                {
+                    success = false
+                });
+            }
 
             _context.Carts.Remove(item);
 

@@ -19,8 +19,10 @@ export default function CategoryRow({ activeCategory, products = [] }) {
             }
         });
 
-        return [{ name: "All" }, ...Object.values(map)];
-    }, [products]);
+        return [
+            { name: "All" },
+            ...Object.values(map).slice(0, 8)
+        ];    }, [products]);
 
     return (
         <div className="overflow-visible pt-2">
@@ -52,7 +54,7 @@ export default function CategoryRow({ activeCategory, products = [] }) {
                                 <span
                                     className={`
                                         relative z-10
-                                        w-[64px] h-[64px] sm:w-[72px] sm:h-[72px]
+                                        w-[56px] h-[56px] sm:w-[72px] sm:h-[72px]
                                         rounded-full aspect-square
                                         overflow-hidden
                                         flex items-center justify-center
@@ -73,11 +75,14 @@ export default function CategoryRow({ activeCategory, products = [] }) {
                                             All
                                         </span>
                                     ) : (
-                                        <img
-                                            src={c.image}
-                                            alt={c.name}
-                                            className="w-full h-full object-cover"
-                                        />
+                                            <img
+                                                src={c.image}
+                                                alt={c.name}
+                                                loading="lazy"
+                                                decoding="async"
+                                                fetchPriority="low"
+                                                className="w-full h-full object-cover"
+                                            />
                                     )}
                                 </span>
                             </div>

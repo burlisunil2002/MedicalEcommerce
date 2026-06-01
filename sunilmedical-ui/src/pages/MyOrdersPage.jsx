@@ -3,87 +3,111 @@ import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 
 export default function MyOrdersPage() {
-    const navigate =
-        useNavigate();
+    const navigate = useNavigate();
 
-    const [orders, setOrders] =
-        useState([]);
-
-    const [loading, setLoading] =
-        useState(true);
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         loadOrders();
     }, []);
 
-    const loadOrders =
-        async () => {
-            try {
-                const { data } =
-                    await API.get(
-                        "/api/order/my-orders"
-                    );
+    const loadOrders = async () => {
+        try {
+            const res = await API.get("/api/order/my-orders");
+            setOrders(res.data || []);
+        } catch {
+            navigate("/login");
+        } finally {
+            setLoading(false);
+        }
+    };
 
-                setOrders(data || []);
-            } catch (err) {
-                if (
-                    err?.response?.status === 401
-                ) {
-                    navigate("/login");
-                }
-            } finally {
-                setLoading(false);
-            }
-        };
-
-    const openInvoice = (
-        orderId
-    ) => {
-        window.open(
-            `/ api / order / download - invoice / ${ orderId } `,
-            "_blank"
+    const reorder = (productId, variantId) => {
+        navigate(
+            `/product/${productId}?variant=${variantId}`
         );
     };
 
-    const reorder = (
-        productId
-    ) => {
-        navigate(
-            `/ product / ${ productId } `
+    const openInvoice = (orderId) => {
+        window.open(
+            `/api/order/download-invoice/${orderId}`,
+            "_blank"
         );
     };
 
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center">
-                Loading...
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500"></div>
             </div>
         );
     }
 
+    const downloadInvoice = async (orderId) => {
+        try {
+            const response = await API.get(
+                `/api/order/download-invoice/${orderId}`,
+                {
+                    responseType: "blob"
+                }
+            );
+
+            const file = new Blob(
+                [response.data],
+                { type: "application/pdf" }
+            );
+
+            const fileURL =
+                window.URL.createObjectURL(file);
+
+            const link =
+                document.createElement("a");
+
+            link.href = fileURL;
+
+            link.download =
+                `Invoice-${orderId}.pdf`;
+
+            document.body.appendChild(link);
+
+            link.click();
+
+            link.remove();
+
+            window.URL.revokeObjectURL(fileURL);
+
+        } catch (error) {
+            console.error(
+                "Invoice download failed",
+                error
+            );
+        }
+    };
+
     return (
-        <div className="min-h-screen bg-gray-50 px-4 py-6 md:py-10">
+        <div className="min-h-screen bg-slate-50 pb-24 px-3 md:px-6 py-5">
             <div className="max-w-6xl mx-auto">
 
-                <h1 className="text-3xl font-bold mb-8">
+                <h1 className="text-2xl md:text-3xl font-bold mb-6">
                     My Orders
                 </h1>
 
-                <div className="space-y-6">
+                <div className="space-y-5">
 
                     {orders.map(order => (
                         <div
                             key={order.orderId}
-                            className="bg-white rounded-3xl border shadow-sm p-5 md:p-6"
+                            className="bg-white rounded-3xl shadow-sm border p-4 md:p-6"
                         >
+                            {/* header */}
 
-                            {/* ORDER HEADER */}
-                            <div className="flex flex-col md:flex-row md:justify-between gap-4 border-b pb-5">
+                            <div className="flex justify-between items-start mb-5 pb-4 border-b">
 
                                 <div>
-                                    <h2 className="text-lg font-semibold">
-                                        Order #{order.orderId}
-                                    </h2>
+                                    <p className="font-semibold text-lg">
+                                        #{order.orderNumber}
+                                    </p>
 
                                     <p className="text-sm text-gray-500 mt-1">
                                         {new Date(
@@ -92,59 +116,58 @@ export default function MyOrdersPage() {
                                     </p>
                                 </div>
 
-                                <div className="text-left md:text-right">
-                                    <p className="text-3xl font-bold text-emerald-600">
-                                        ₹{Number(
-                                            order.grandTotal
-                                        ).toFixed(2)}
+                                <div className="text-right">
+                                    <p className="text-2xl font-bold text-emerald-600">
+                                        ₹{order.grandTotal?.toFixed(2)}
                                     </p>
 
                                     <p className="text-xs text-gray-500">
-                                        Customer Paid
+                                        Total Amount
                                     </p>
                                 </div>
-
                             </div>
 
-                            {/* PRODUCTS */}
-                            <div className="divide-y">
+                            {/* items */}
+
+                            <div className="space-y-4">
 
                                 {order.items.map(item => (
                                     <div
-                                        key={item.productId}
-                                        className="py-5 flex flex-col sm:flex-row gap-4 sm:items-center"
+                                        key={`${item.productId}-${item.variantId}`}
+                                        className="flex gap-4 items-center"
                                     >
-
                                         <img
                                             src={item.productImage}
-                                            alt=""
-                                            className="w-20 h-20 rounded-2xl object-contain bg-gray-100"
+                                            className="w-20 h-20 rounded-2xl object-contain bg-slate-100"
                                         />
 
-                                        <div className="flex-1">
+                                        <div className="flex-1 min-w-0">
 
-                                            <h3 className="font-semibold">
+                                            <h3 className="font-semibold text-sm md:text-base line-clamp-2">
                                                 {item.productName}
                                             </h3>
 
-                                            <p className="text-sm text-gray-500 mt-1">
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                {item.variantName}
+                                            </p>
+
+                                            <p className="text-xs mt-1 text-gray-500">
                                                 Qty: {item.quantity}
                                             </p>
 
-                                            <p className="font-semibold mt-2">
-                                                ₹{Number(
-                                                    item.itemTotal
-                                                ).toFixed(2)}
+                                            <p className="font-bold text-pink-600 mt-2">
+                                                ₹{item.itemTotal?.toFixed(2)}
                                             </p>
                                         </div>
 
                                         <button
                                             onClick={() =>
                                                 reorder(
-                                                    item.productId
+                                                    item.productId,
+                                                    item.variantId
                                                 )
                                             }
-                                            className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-2xl"
+                                            className="px-4 py-2 rounded-xl bg-black text-white text-sm active:scale-95 transition"
                                         >
                                             Reorder
                                         </button>
@@ -153,39 +176,38 @@ export default function MyOrdersPage() {
 
                             </div>
 
-                            {/* FOOTER */}
-                            <div className="pt-5 border-t flex flex-col md:flex-row justify-between items-center gap-4">
+                            {/* footer */}
 
-                                <div className="flex gap-2">
+                            <div className="border-t mt-5 pt-4 flex flex-col md:flex-row gap-3 justify-between items-center">
 
+                                <div className="flex gap-2 flex-wrap">
                                     <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs">
-                                        {order.orderStatus}
+                                       Order : {order.orderStatus}
                                     </span>
 
                                     <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs">
-                                        {order.paymentStatus}
+                                       Payment : {order.paymentStatus}
                                     </span>
-
                                 </div>
 
-                                <button
-                                    onClick={() =>
-                                        openInvoice(
-                                            order.orderId
-                                        )
-                                    }
-                                    className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl"
-                                >
-                                    Download Invoice
-                                </button>
-
+                                {
+                                    order.paymentStatus === "Completed" && (
+                                        <button
+                                            onClick={() =>
+                                                downloadInvoice(order.orderId)
+                                            }
+                                            className="px-5 py-2 rounded-xl bg-indigo-600 text-white"
+                                        >
+                                            Download Invoice
+                                        </button>
+                                    )
+                                }
                             </div>
-
                         </div>
                     ))}
-
                 </div>
             </div>
         </div>
     );
 }
+

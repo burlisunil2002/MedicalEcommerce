@@ -100,6 +100,9 @@ const navigate = useNavigate();
 
                                             <img
                                                 src={image}
+                                                loading="lazy"
+                                                decoding="async"
+                                                fetchPriority="low"
                                                 alt={name}
                                                 onClick={() =>
                                                     navigate(`/product/${id}`)
