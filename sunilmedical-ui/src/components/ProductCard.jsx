@@ -64,7 +64,11 @@ export default function ProductCard({ p }) {
 
     }, [p]);
 
-    const wishlisted = isWishlisted(data.id);
+    const wishlisted = isWishlisted(
+        data.id,
+        defaultVariant?.productVariantId ??
+        defaultVariant?.id
+    );
 
     return (
         <div className="group h-full flex flex-col bg-white rounded-2xl border border-gray-100 
@@ -141,8 +145,20 @@ export default function ProductCard({ p }) {
                     )}
 
                     <button
-                        onClick={() => toggleWishlist(p)}
-                        className="text-lg hover:scale-110 transition"
+                        onClick={() =>
+                            toggleWishlist({
+                                ...p,
+
+                                id: data.id,
+
+                                variantId:
+                                    defaultVariant?.productVariantId ??
+                                    defaultVariant?.id,
+
+                                selectedVariant:
+                                    defaultVariant
+                            })
+                        }
                     >
                         {wishlisted ? "❤️" : "🤍"}
                     </button>

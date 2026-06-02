@@ -131,8 +131,6 @@ const handleBuyNow = async () => {
     // ✅ AFTER hooks
     if (!product) return <div className="p-6">Loading...</div>;
 
-    const wishlisted = isWishlisted(data.id);
-
     // 🔥 SPEC FALLBACK
     const firstVariant = product.variants?.[0];
 
@@ -147,6 +145,11 @@ const handleBuyNow = async () => {
         selectedVariant?.productVariantId ??
         selectedVariant?.id ??
         null;
+
+    const wishlisted = isWishlisted(
+        data.id,
+        selectedVariantId
+    );
 
     return (
         <div className="bg-white min-h-screen select-none">

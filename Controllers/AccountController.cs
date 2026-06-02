@@ -111,11 +111,19 @@ public class AccountController : Controller
             }
 
             // 🔹 STEP 5: Generate OTP
-            var otp = new Random().Next(100000, 999999).ToString();
+            var otp = new Random()
+    .Next(100000, 999999)
+    .ToString();
+
+            Console.WriteLine(
+                $"OTP Generated => {email} => {otp}");
 
             user.LoginOTP = otp;
-            user.OTPExpiry = DateTime.UtcNow.AddMinutes(5);
-            user.OTPLastSentAt = DateTime.UtcNow;
+            user.OTPExpiry =
+                DateTime.UtcNow.AddMinutes(5);
+
+            user.OTPLastSentAt =
+                DateTime.UtcNow;
 
             var updateResult = await _userManager.UpdateAsync(user);
 
@@ -127,12 +135,10 @@ public class AccountController : Controller
 
             // 🔹 STEP 6: Send email
             await _emailService.SendEmailAsync(
-                user.Email,
-                "Login OTP",
-                $@"<h3>Login Verification</h3>
-               <p>Your OTP is: <b>{otp}</b></p>
-               <p>This OTP is valid for 5 minutes.</p>"
-            );
+     user.Email,
+     "Login OTP",
+     otp
+ );
 
             // 🔹 STEP 7: Response
             return Ok(new
@@ -146,7 +152,8 @@ public class AccountController : Controller
             return StatusCode(500, new
             {
                 success = false,
-                message = ex.InnerException?.Message ?? ex.Message
+                message = ex.Message,
+                inner = ex.InnerException?.Message
             });
         }
     }
@@ -154,34 +161,122 @@ public class AccountController : Controller
     // ================= VERIFY OTP =================
 
     [HttpPost("/api/account/verify-otp")]
-    public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequest req)
+    public async Task<IActionResult> VerifyOtp(
+    [FromBody] VerifyOtpRequest req)
     {
-        var user = await _userManager.FindByEmailAsync(req.Email);
-
-        if (user == null)
-            return BadRequest(new { message = "User not found" });
-
-        if (user.LoginOTP != req.Otp)
-            return BadRequest(new { message = "Invalid OTP" });
-
-        if (user.OTPExpiry < DateTime.UtcNow)
-            return BadRequest(new { message = "OTP expired" });
-
-        user.LoginOTP = null;
-        user.OTPExpiry = null;
-
-        await _userManager.UpdateAsync(user);
-
-        await _signInManager.SignInAsync(user, true);
-
-        await MergeCartAfterLogin(user.Id);
-        await MergeWishlist(user.Id);
-
-        return Ok(new
+        try
         {
-            success = true,
-            isProfileCompleted = user.IsProfileCompleted
-        });
+            if (string.IsNullOrWhiteSpace(req.Email))
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Email is required"
+                });
+            }
+
+            if (string.IsNullOrWhiteSpace(req.Otp))
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "OTP is required"
+                });
+            }
+
+            var email = req.Email.Trim();
+
+            var user = await _userManager
+                .FindByEmailAsync(email);
+
+            if (user == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "User not found"
+                });
+            }
+
+            if (string.IsNullOrWhiteSpace(user.LoginOTP))
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "No OTP generated"
+                });
+            }
+
+            if (!user.OTPExpiry.HasValue)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "OTP expired"
+                });
+            }
+
+            if (user.OTPExpiry.Value < DateTime.UtcNow)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "OTP expired"
+                });
+            }
+
+            var storedOtp =
+                user.LoginOTP.Trim();
+
+            var enteredOtp =
+                req.Otp.Trim();
+
+            Console.WriteLine(
+                $"Stored OTP = {storedOtp}");
+
+            Console.WriteLine(
+                $"Entered OTP = {enteredOtp}");
+
+            if (!storedOtp.Equals(
+                    enteredOtp,
+                    StringComparison.Ordinal))
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Invalid OTP"
+                });
+            }
+
+            user.LoginOTP = null;
+            user.OTPExpiry = null;
+            user.OTPLastSentAt = null;
+
+            await _userManager.UpdateAsync(user);
+
+            await _signInManager.SignInAsync(
+                user,
+                isPersistent: true);
+
+            await MergeCartAfterLogin(user.Id);
+
+            await MergeWishlist(user.Id);
+
+            return Ok(new
+            {
+                success = true,
+                isProfileCompleted =
+                    user.IsProfileCompleted
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new
+            {
+                success = false,
+                message = ex.Message
+            });
+        }
     }
 
 

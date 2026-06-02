@@ -53,9 +53,10 @@ export const WishlistProvider = ({ children }) => {
         const productId = product.id ?? product.Id;
         const variantId = product.variantId;
 
-        const exists = wishlist.some(x =>
-            x.id === productId &&
-            x.variantId === variantId
+        const exists = wishlist.some(
+            x =>
+                Number(x.id) === Number(productId) &&
+                Number(x.variantId) === Number(variantId)
         );
 
         let updated;
@@ -88,8 +89,15 @@ export const WishlistProvider = ({ children }) => {
         }
     };
 
-    const isWishlisted = (id) => {
-        return wishlist.some(x => x.id === id);
+    const isWishlisted = (
+        productId,
+        variantId
+    ) => {
+        return wishlist.some(
+            x =>
+                Number(x.id) === Number(productId) &&
+                Number(x.variantId) === Number(variantId)
+        );
     };
 
     return (

@@ -31,8 +31,10 @@ export default function WishlistPage() {
     return (
         <div className="max-w-7xl mx-auto p-6 grid grid-cols-2 md:grid-cols-4 gap-5">
             {wishlist.map(item => (
-                <ProductCard key={item.id} p={item} />
-            ))}
+                <ProductCard
+                    key={`${item.id}-${item.variantId}`}
+                    p={item}
+                />            ))}
         </div>
     );
 }

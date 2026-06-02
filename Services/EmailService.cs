@@ -26,9 +26,9 @@ public class EmailService
 
         // ✅ Use DOMAIN email (NOT Gmail)
         var from = new EmailAddress(
-            "noreply@sunilmedicalproducts.online",   // ✅ your domain email
-            "Sunil Medical Products"
-        );
+     "burlisunil16@gmail.com",
+     "Sunil Medical Products"
+ );
 
         var to = new EmailAddress(toEmail);
 
@@ -76,8 +76,11 @@ public class EmailService
         if (!response.IsSuccessStatusCode)
         {
             var error = await response.Body.ReadAsStringAsync();
-            Console.WriteLine("SendGrid ERROR: " + error);
-            throw new Exception("Email sending failed");
+
+            Console.WriteLine("SENDGRID ERROR:");
+            Console.WriteLine(error);
+
+            throw new Exception(error);
         }
     }
 
@@ -156,7 +159,7 @@ public class EmailService
         var client = new SendGridClient(_apiKey);
 
         var from = new EmailAddress(
-            "noreply@sunilmedicalproducts.online",
+            "burlisunil16@gmail.com",
             "Sunil Medical Products"
         );
 
@@ -172,7 +175,7 @@ public class EmailService
 
         // ✅ Reply-To
         msg.ReplyTo = new EmailAddress(
-            "support@sunilmedicalproducts.online",
+            "burlisunil16@gmail.com",
             "Support Team"
         );
 
