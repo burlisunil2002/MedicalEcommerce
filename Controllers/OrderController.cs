@@ -137,8 +137,7 @@ namespace VivekMedicalProducts.Controllers
                 _context.Orders.Add(order);
                 await _context.SaveChangesAsync();
 
-                // Create Order Items
-                var orderItems = carts.Select(item =>
+                decimal totalTaxableAmount = carts.Sum(item =>
                 {
                     decimal originalPrice =
                         item.ProductVariant?.Price ?? 0;
@@ -148,15 +147,57 @@ namespace VivekMedicalProducts.Controllers
 
                     decimal discountAmount =
                         item.Product?.IsHotDeal == true
-                            ? originalPrice *
-                              discountPercent / 100m
+                            ? originalPrice * discountPercent / 100m
                             : 0;
 
-                    decimal finalPrice =
+                    decimal finalUnitPrice =
                         originalPrice - discountAmount;
 
-                    decimal lineTotal =
-                        finalPrice * item.Quantity;
+                    return finalUnitPrice * item.Quantity;
+                });
+
+
+                // Create Order Items
+                var orderItems = carts.Select(item =>
+                {
+
+                    decimal originalPrice =
+    item.ProductVariant?.Price ?? 0;
+
+                    decimal discountPercent =
+                        item.Product?.DiscountPercentage ?? 0;
+
+                    decimal discountAmount =
+                        item.Product?.IsHotDeal == true
+                            ? originalPrice * discountPercent / 100m
+                            : 0;
+
+                    decimal finalUnitPrice =
+                        originalPrice - discountAmount;
+
+                    decimal taxableAmount =
+                        finalUnitPrice * item.Quantity;
+
+                    decimal gstPercent =
+                        item.Product?.GSTPercentage ?? 0;
+
+                    decimal gstAmount =
+                        taxableAmount * gstPercent / 100m;
+
+                    decimal couponShare = 0;
+
+                    if (totals.CouponDiscount > 0 &&
+                        totalTaxableAmount > 0)
+                    {
+                        couponShare =
+                            (taxableAmount / totalTaxableAmount)
+                            * totals.CouponDiscount;
+                    }
+
+                    decimal finalPaidAmount =
+                        taxableAmount +
+                        gstAmount -
+                        couponShare;
 
                     return new OrderItemModel
                     {
@@ -164,41 +205,40 @@ namespace VivekMedicalProducts.Controllers
 
                         ProductId = item.ProductId,
 
-                        ProductVariantId =
-                            item.ProductVariantId,
+                        ProductVariantId = item.ProductVariantId,
 
-                        ProductName =
-                            item.Product?.Name ?? "",
+                        ProductName = item.Product?.Name ?? "",
 
-                        Quantity =
-                            item.Quantity,
+                        Quantity = item.Quantity,
 
-                        Price =
-                            Math.Round(originalPrice, 2),
+                        Price = Math.Round(originalPrice, 2),
 
                         DiscountAmount =
-                            Math.Round(discountAmount, 2),
+        Math.Round(discountAmount, 2),
 
-                        CouponDiscountAmount =
-                            0,
-
-                        FinalPaidAmount =
-                            Math.Round(finalPrice, 2),
-
-                        LineTotal =
-                            Math.Round(lineTotal, 2),
+                        TaxableAmount =
+        Math.Round(taxableAmount, 2),
 
                         GSTPercentage =
-                            item.Product?.GSTPercentage ?? 0,
+        gstPercent,
 
-                        SellerId =
-                            item.SellerId,
+                        GSTAmount =
+        Math.Round(gstAmount, 2),
 
-                        ItemStatus =
-                            "Pending",
+                        CouponDiscountAmount =
+        Math.Round(couponShare, 2),
 
-                        CreatedAt =
-                            DateTime.UtcNow
+                        FinalPaidAmount =
+        Math.Round(finalPaidAmount, 2),
+
+                        LineTotal =
+        Math.Round(finalPaidAmount, 2),
+
+                        SellerId = item.SellerId,
+
+                        ItemStatus = "Pending",
+
+                        CreatedAt = DateTime.UtcNow
                     };
                 }).ToList();
 
@@ -341,8 +381,7 @@ namespace VivekMedicalProducts.Controllers
                 _context.Orders.Add(order);
                 await _context.SaveChangesAsync();
 
-                // ORDER ITEMS
-                var orderItems = carts.Select(item =>
+                decimal totalTaxableAmount = carts.Sum(item =>
                 {
                     decimal originalPrice =
                         item.ProductVariant?.Price ?? 0;
@@ -352,15 +391,56 @@ namespace VivekMedicalProducts.Controllers
 
                     decimal discountAmount =
                         item.Product?.IsHotDeal == true
-                            ? originalPrice *
-                              discountPercent / 100m
+                            ? originalPrice * discountPercent / 100m
                             : 0;
 
-                    decimal finalPrice =
+                    decimal finalUnitPrice =
                         originalPrice - discountAmount;
 
-                    decimal lineTotal =
-                        finalPrice * item.Quantity;
+                    return finalUnitPrice * item.Quantity;
+                });
+
+                // ORDER ITEMS
+                var orderItems = carts.Select(item =>
+                {
+
+                    decimal originalPrice =
+    item.ProductVariant?.Price ?? 0;
+
+                    decimal discountPercent =
+                        item.Product?.DiscountPercentage ?? 0;
+
+                    decimal discountAmount =
+                        item.Product?.IsHotDeal == true
+                            ? originalPrice * discountPercent / 100m
+                            : 0;
+
+                    decimal finalUnitPrice =
+                        originalPrice - discountAmount;
+
+                    decimal taxableAmount =
+                        finalUnitPrice * item.Quantity;
+
+                    decimal gstPercent =
+                        item.Product?.GSTPercentage ?? 0;
+
+                    decimal gstAmount =
+                        taxableAmount * gstPercent / 100m;
+
+                    decimal couponShare = 0;
+
+                    if (totals.CouponDiscount > 0 &&
+                        totalTaxableAmount > 0)
+                    {
+                        couponShare =
+                            (taxableAmount / totalTaxableAmount)
+                            * totals.CouponDiscount;
+                    }
+
+                    decimal finalPaidAmount =
+                        taxableAmount +
+                        gstAmount -
+                        couponShare;
 
                     return new OrderItemModel
                     {
@@ -368,41 +448,40 @@ namespace VivekMedicalProducts.Controllers
 
                         ProductId = item.ProductId,
 
-                        ProductVariantId =
-                            item.ProductVariantId,
+                        ProductVariantId = item.ProductVariantId,
 
-                        ProductName =
-                            item.Product?.Name ?? "",
+                        ProductName = item.Product?.Name ?? "",
 
-                        Quantity =
-                            item.Quantity,
+                        Quantity = item.Quantity,
 
-                        SellerId =
-                            item.SellerId,
-
-                        Price =
-                            Math.Round(originalPrice, 2),
+                        Price = Math.Round(originalPrice, 2),
 
                         DiscountAmount =
-                            Math.Round(discountAmount, 2),
+        Math.Round(discountAmount, 2),
 
-                        CouponDiscountAmount =
-                            0,
-
-                        FinalPaidAmount =
-                            Math.Round(finalPrice, 2),
-
-                        LineTotal =
-                            Math.Round(lineTotal, 2),
+                        TaxableAmount =
+        Math.Round(taxableAmount, 2),
 
                         GSTPercentage =
-                            item.Product?.GSTPercentage ?? 0,
+        gstPercent,
 
-                        ItemStatus =
-                            "Pending",
+                        GSTAmount =
+        Math.Round(gstAmount, 2),
 
-                        CreatedAt =
-                            DateTime.UtcNow
+                        CouponDiscountAmount =
+        Math.Round(couponShare, 2),
+
+                        FinalPaidAmount =
+        Math.Round(finalPaidAmount, 2),
+
+                        LineTotal =
+        Math.Round(finalPaidAmount, 2),
+
+                        SellerId = item.SellerId,
+
+                        ItemStatus = "Pending",
+
+                        CreatedAt = DateTime.UtcNow
                     };
                 }).ToList();
 
@@ -903,12 +982,16 @@ public async Task SendInvoiceEmailAsync(
             var address = order.UserAddress;
 
             decimal subtotal =
-                order.OrderItems.Sum(x =>
-                    x.Price * x.Quantity);
+     order.OrderItems.Sum(x =>
+         x.Price * x.Quantity);
 
             decimal productDiscount =
                 order.OrderItems.Sum(x =>
                     x.DiscountAmount * x.Quantity);
+
+            decimal taxableAmount =
+                order.OrderItems.Sum(x =>
+                    x.TaxableAmount);
 
             decimal couponDiscount =
                 order.OrderItems.Sum(x =>
@@ -916,99 +999,98 @@ public async Task SendInvoiceEmailAsync(
 
             decimal gstTotal =
                 order.OrderItems.Sum(x =>
-                    (x.FinalPaidAmount * x.Quantity) *
-                    x.GSTPercentage / 100m);
+                    x.GSTAmount);
 
             decimal finalPaid =
                 order.OrderItems.Sum(x =>
-                    x.LineTotal);
+                    x.FinalPaidAmount);
 
             return new OrderInvoiceViewModel
             {
                 OrderId = order.OrderId,
 
                 InvoiceNumber =
-                    $"INV-{order.OrderNumber}",
+        $"INV-{order.OrderNumber}",
 
                 Date = order.OrderDate,
 
-                CompanyName = "Sunil Medical Products Pvt Ltd",
+                CompanyName =
+        "Sunil Medical Products Pvt Ltd",
 
-                CompanyGST = "37ABCDE1234F1Z5",
+                CompanyGST =
+        "37ABCDE1234F1Z5",
 
                 CompanyAddress =
-    "Visakhapatnam, Andhra Pradesh, India",
+        "Visakhapatnam, Andhra Pradesh, India",
 
-                CompanyPhone = "9014060858",
+                CompanyPhone =
+        "9014060858",
 
                 CustomerName =
-                    address?.FullName ?? "",
+        address?.FullName ?? "",
 
                 Address =
-                    $"{address?.AddressLine1}, {address?.AddressLine2}",
+        $"{address?.AddressLine1}, {address?.AddressLine2}",
 
-                City = address?.City ?? "",
+                City =
+        address?.City ?? "",
 
-                Pincode = address?.Pincode ?? "",
+                Pincode =
+        address?.Pincode ?? "",
 
-                Phone = address?.MobileNumber ?? "",
+                Phone =
+        address?.MobileNumber ?? "",
 
                 SubTotal = subtotal,
 
                 DiscountTotal = productDiscount,
 
+                TaxableAmount = taxableAmount,
+
                 CouponDiscount = couponDiscount,
 
                 GSTTotal = gstTotal,
 
-                GrandTotal = order.GrandTotal,
-
                 FinalPaidAmount = finalPaid,
 
+                GrandTotal = order.GrandTotal,
+
                 Items = order.OrderItems.Select(item =>
-                    new InvoiceItemViewModel
-                    {
-                        ProductName = item.ProductName,
+    new InvoiceItemViewModel
+    {
+        ProductName =
+            item.ProductName,
 
-                        VariantName =
-                            item.ProductVariant?.Model ?? "",
+        VariantName =
+            item.ProductVariant?.Model ?? "",
 
-                        Quantity = item.Quantity,
+        Quantity =
+            item.Quantity,
 
-                        Price =
-    item.Price - item.DiscountAmount,
+        Price =
+            item.Price,
 
-                        DiscountAmount =
-                            item.DiscountAmount,
+        DiscountAmount =
+            item.DiscountAmount,
 
-                        CouponDiscountAmount =
-                            item.CouponDiscountAmount,
+        TaxableAmount =
+            item.TaxableAmount,
 
-                        FinalPaidAmount =
-                            item.FinalPaidAmount,
+        GSTPercentage =
+            item.GSTPercentage,
 
-                        GSTPercentage =
-                            item.GSTPercentage,
+        GSTAmount =
+            item.GSTAmount,
 
-                        GSTAmount =
-    ((item.Price - item.DiscountAmount)
-    * item.Quantity)
-    * item.GSTPercentage / 100m,
+        CouponDiscountAmount =
+            item.CouponDiscountAmount,
 
+        FinalPaidAmount =
+            item.FinalPaidAmount,
 
-                        Total =
-(
-    (item.Price - item.DiscountAmount)
-    * item.Quantity
-)
-+
-(
-    ((item.Price - item.DiscountAmount)
-    * item.Quantity)
-    * item.GSTPercentage / 100m
-)
-
-                    }).ToList()
+        Total =
+            item.LineTotal
+    }).ToList()
             };
         }
 

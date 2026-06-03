@@ -41,6 +41,18 @@ public class OrderItemModel
     [Column(TypeName = "decimal(5,2)")]
     public decimal GSTPercentage { get; set; }
 
+    // GST Amount for this line
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal GSTAmount { get; set; }
+
+    // Total before GST
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal TaxableAmount { get; set; }
+
+    // Final amount after GST & coupon allocation
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal NetAmount { get; set; }
+
     public string ItemStatus { get; set; } = "Pending";
 
     // audit
