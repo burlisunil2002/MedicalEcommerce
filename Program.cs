@@ -33,9 +33,23 @@ builder.Services.ConfigureApplicationCookie(options =>
         builder.Environment.IsDevelopment()
             ? CookieSecurePolicy.SameAsRequest
             : CookieSecurePolicy.Always;
-    options.Cookie.SameSite = SameSiteMode.None;             // ?? MUST
 
-    options.LoginPath = "/Account/Login";
+    options.Cookie.SameSite = SameSiteMode.None;
+
+    // React Admin Login Page
+    options.LoginPath = "/admin-login";
+
+    options.Events.OnRedirectToLogin = context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        return Task.CompletedTask;
+    };
+
+    options.Events.OnRedirectToAccessDenied = context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        return Task.CompletedTask;
+    };
 });
 
 builder.Services.Configure<CookiePolicyOptions>(options =>

@@ -13,6 +13,10 @@ import CartPage from "./pages/CartPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import ReviewPage from "./pages/ReviewPage";
 import MyOrdersPage from "./pages/MyOrdersPage";
+import InvoicePage from "./pages/InvoicePage";
+import AdminDashboard from "./pages/AdminDashboard";
+import ProductManagement from "./pages/ProductManagement";
+import AdminLoginPage from "./pages/AdminLoginPage";
 
 // Layout
 import MainLayout from "./layouts/MainLayout";
@@ -32,6 +36,16 @@ function App() {
 
                     {/* ?? PUBLIC ROUTES */}
                     <Route path="/login" element={<LoginPage />} />
+
+                    <Route
+                        path="/admin-login"
+                        element={<AdminLoginPage />}
+                    />
+
+                    <Route
+                        path="/admin/admin-dashboard"
+                        element={<AdminDashboard />}
+                    />
 
                     {/* ?? MAIN APP WITH HEADER */}
                     <Route path="/" element={<MainLayout />}>
@@ -70,8 +84,19 @@ function App() {
                             element={<MyOrdersPage />}
                         />
 
+                        <Route
+                            path="invoice/:id"
+                            element={<InvoicePage />}
+                        />
+
                         {/* ?? WISHLIST */}
                         <Route path="wishlist" element={<WishlistPage />} />
+
+
+                        <Route
+                            path="/product-management"
+                            element={<ProductManagement />}
+                        />
 
                     </Route>
 

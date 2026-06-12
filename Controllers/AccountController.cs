@@ -470,42 +470,68 @@ public class AccountController : Controller
         });
     }
 
-    [HttpGet("AdminLogin")]
-    public IActionResult AdminLogin()
+    [HttpPost("/api/admin-login")]
+    public async Task<IActionResult> AdminLoginApi(
+     [FromBody] AdminLoginRequest model)
     {
-        return View();
+        try
+        {
+            var user = await _userManager
+                .FindByEmailAsync(model.Email);
+
+            if (user == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Admin not found"
+                });
+            }
+
+            if (!await _userManager.IsInRoleAsync(user, "Admin"))
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Access denied"
+                });
+            }
+
+            var passwordValid =
+                await _userManager.CheckPasswordAsync(
+                    user,
+                    model.Password);
+
+            if (!passwordValid)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Invalid password"
+                });
+            }
+
+            await _signInManager.SignInAsync(
+                user,
+                isPersistent: true);
+
+            return Ok(new
+            {
+                success = true,
+                role = "Admin",
+                email = user.Email
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new
+            {
+                success = false,
+                message = ex.Message
+            });
+        }
     }
 
-    [HttpPost("AdminLogin")]
-    public async Task<IActionResult> AdminLogin(string email, string password)
-    {
-        var user = await _userManager.FindByEmailAsync(email);
-
-        if (user == null)
-        {
-            ModelState.AddModelError("", "Admin not found");
-            return View();
-        }
-
-        if (!await _userManager.IsInRoleAsync(user, "Admin"))
-        {
-            ModelState.AddModelError("", "Not an admin");
-            return View();
-        }
-
-        // 🔥 SIGN IN MANUALLY (BEST FIX)
-        var passwordValid = await _userManager.CheckPasswordAsync(user, password);
-
-        if (!passwordValid)
-        {
-            ModelState.AddModelError("", "Invalid password");
-            return View();
-        }
-
-        await _signInManager.SignInAsync(user, isPersistent: true);
-
-        return RedirectToAction("AdminHome", "Admin");
-    }
 
     private async Task MergeCartAfterLogin(string userId)
     {

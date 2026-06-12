@@ -115,184 +115,319 @@ namespace VivekMedicalProducts.Controllers
         // ================= ADD (GET) =================
 
 
-        public async Task<IActionResult> AddProducts()
+        [Authorize]
+        [HttpGet("/api/products/add-product-info")]
+        public async Task<IActionResult> AddProductInfo()
         {
             var userId = _userContext.GetUserId();
 
             var user = await _userManager.FindByIdAsync(userId);
 
             if (user == null)
-                return RedirectToAction("Login", "Account");
+            {
+                return Unauthorized(new
+                {
+                    success = false,
+                    message = "User not found"
+                });
+            }
 
-            // 🔥 Check role
-            bool isAdmin = await _userManager.IsInRoleAsync(user, "Admin");
+            bool isAdmin =
+                await _userManager.IsInRoleAsync(
+                    user,
+                    "Admin"
+                );
+
+            if (isAdmin)
+            {
+                return Ok(new
+                {
+                    success = true,
+                    sellerName = "Admin",
+                    isSubscribed = true,
+                    isAdmin = true
+                });
+            }
+
+            var seller =
+                await _context.Sellers
+                    .FirstOrDefaultAsync(x =>
+                        x.UserId == userId);
+
+            if (seller == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Seller not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                sellerName = seller.BusinessName,
+                isSubscribed =
+                    seller.SubscriptionEndDate != null &&
+                    seller.SubscriptionEndDate > DateTime.UtcNow,
+                isAdmin = false
+            });
+        }
+
+        [Authorize]
+        [HttpPost("/api/products")]
+        public async Task<IActionResult> AddProducts(
+    [FromForm] ProductModel product,
+    IFormFile imageFile,
+    IFormFile quotationFile)
+        {
+            try
+            {
+                var userId =
+                    _userContext.GetUserId();
+
+                var user =
+                    await _userManager
+                        .FindByIdAsync(userId);
+
+                if (user == null)
+                {
+                    return Unauthorized(new
+                    {
+                        success = false,
+                        message = "User not found"
+                    });
+                }
+
+                bool isAdmin =
+                    await _userManager
+                        .IsInRoleAsync(user, "Admin");
+
+                if (!isAdmin)
+                {
+                    var seller =
+                        await _context.Sellers
+                            .FirstOrDefaultAsync(x =>
+                                x.UserId == userId);
+
+                    if (seller == null)
+                    {
+                        return BadRequest(new
+                        {
+                            success = false,
+                            message = "Seller not found"
+                        });
+                    }
+
+                    product.SellerId =
+                        seller.SellerId;
+                }
+
+                if (product.ExpiryDate.HasValue)
+                {
+                    product.ExpiryDate =
+                        DateTime.SpecifyKind(
+                            product.ExpiryDate.Value,
+                            DateTimeKind.Local
+                        ).ToUniversalTime();
+                }
+
+                if (product.DealEndDate.HasValue)
+                {
+                    product.DealEndDate =
+                        DateTime.SpecifyKind(
+                            product.DealEndDate.Value,
+                            DateTimeKind.Local
+                        ).ToUniversalTime();
+                }
+
+                product.CreatedDate =
+                    DateTime.UtcNow;
+
+                product.Status =
+                    "Active";
+
+                if (
+                    imageFile != null &&
+                    imageFile.Length > 0
+                )
+                {
+                    product.ImageUrl =
+                        await _fileStorage.UploadAsync(
+                            imageFile,
+                            "products"
+                        );
+                }
+
+                if (
+                    product.Variants != null &&
+                    product.Variants.Any()
+                )
+                {
+                    foreach (var v in product.Variants)
+                    {
+                        v.Status = "Active";
+
+                        if (
+                            v.ImageFile != null &&
+                            v.ImageFile.Length > 0
+                        )
+                        {
+                            v.ImageUrl =
+                                await _fileStorage
+                                    .UploadAsync(
+                                        v.ImageFile,
+                                        "variants"
+                                    );
+                        }
+
+                        if (v.Specifications != null)
+                        {
+                            v.Specifications =
+                                v.Specifications
+                                    .Where(x =>
+                                        !string.IsNullOrWhiteSpace(x.Key) &&
+                                        !string.IsNullOrWhiteSpace(x.Value))
+                                    .ToList();
+                        }
+                    }
+                }
+
+                _context.Products.Add(product);
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Product added successfully",
+                    productId = product.Id
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = ex.Message,
+                    inner =
+                        ex.InnerException?.Message
+                });
+            }
+        }
+
+        // ================= PRODUCT MANAGEMENT =================
+        [Authorize]
+        [HttpGet("/api/product-management")]
+        public async Task<IActionResult> ProductManagement()
+        {
+            var userId = _userContext.GetUserId();
+
+            var user = await _userManager.FindByIdAsync(userId);
+
+            if (user == null)
+            {
+                return Unauthorized(new
+                {
+                    success = false,
+                    message = "User not found"
+                });
+            }
+
+            bool isAdmin =
+                await _userManager.IsInRoleAsync(
+                    user,
+                    "Admin"
+                );
 
             SellerModel seller = null;
 
             if (!isAdmin)
             {
-                seller = _context.Sellers.FirstOrDefault(s => s.UserId == userId);
+                seller = await _context.Sellers
+                    .FirstOrDefaultAsync(x =>
+                        x.UserId == userId);
 
                 if (seller == null)
-                    return RedirectToAction("SellerLogin", "Seller");
-
-                ViewBag.sellerName = seller.BusinessName;
-                ViewBag.IsSubscribed = seller.SubscriptionEndDate != null &&
-                                       seller.SubscriptionEndDate > DateTime.UtcNow;
-            }
-            else
-            {
-                ViewBag.sellerName = "Admin";
-                ViewBag.IsSubscribed = true;
-            }
-
-            return View(new ProductModel());
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddProducts(
-      ProductModel product,
-      IFormFile imageFile,
-      IFormFile quotationFile)
-        {
-            var userId = _userContext.GetUserId();
-            var user = await _userManager.FindByIdAsync(userId);
-
-            if (user == null)
-                return RedirectToAction("Login", "Account");
-
-            bool isAdmin = await _userManager.IsInRoleAsync(user, "Admin");
-
-            if (!isAdmin)
-            {
-                var seller = _context.Sellers.FirstOrDefault(s => s.UserId == userId);
-                if (seller == null)
-                    return RedirectToAction("SellerLogin", "Seller");
-
-                product.SellerId = seller.SellerId;
-            }
-
-            // ✅ UTC FIX
-            if (product.ExpiryDate.HasValue)
-                product.ExpiryDate = DateTime.SpecifyKind(product.ExpiryDate.Value, DateTimeKind.Local).ToUniversalTime();
-
-            if (product.DealEndDate.HasValue)
-                product.DealEndDate = DateTime.SpecifyKind(product.DealEndDate.Value, DateTimeKind.Local).ToUniversalTime();
-
-            product.CreatedDate = DateTime.UtcNow;
-            product.Status = "Active";
-
-            // ✅ PRODUCT IMAGE
-            if (imageFile != null && imageFile.Length > 0)
-                product.ImageUrl = await _fileStorage.UploadAsync(imageFile, "products");
-
-            // ✅ VARIANTS
-            if (product.Variants != null && product.Variants.Any())
-            {
-                foreach (var v in product.Variants)
                 {
-                    v.Status = "Active";
-
-                    // 🔥 VARIANT IMAGE
-                    if (v.ImageFile != null && v.ImageFile.Length > 0)
+                    return BadRequest(new
                     {
-                        v.ImageUrl = await _fileStorage.UploadAsync(v.ImageFile, "variants");
-                    }
+                        success = false,
+                        message = "Seller not found"
+                    });
+                }
 
-                    // CLEAN SPECS
-                    if (v.Specifications != null)
+                if (
+                    seller.SubscriptionEndDate == null ||
+                    seller.SubscriptionEndDate < DateTime.UtcNow
+                )
+                {
+                    return BadRequest(new
                     {
-                        v.Specifications = v.Specifications
-                            .Where(s => !string.IsNullOrWhiteSpace(s.Key) &&
-                                        !string.IsNullOrWhiteSpace(s.Value))
-                            .ToList();
-                    }
+                        success = false,
+                        message = "Subscription expired"
+                    });
                 }
             }
 
-            _context.Products.Add(product);
-            await _context.SaveChangesAsync();
+            var products =
+                await _context.Products
+                    .Include(p => p.Variants)
+                        .ThenInclude(v => v.Specifications)
+                    .OrderByDescending(p =>
+                        p.CreatedDate)
+                    .ToListAsync();
 
-            TempData["SuccessMessage"] = "Product added successfully!";
-            return RedirectToAction("ProductManagement");
-        }
-
-        // ================= PRODUCT MANAGEMENT =================
-        public IActionResult ProductManagement()
-        {
-            if (!User.Identity.IsAuthenticated)
-                return RedirectToAction("SellerLogin", "Seller");
-
-            List<ProductModel> products;
-
-            // 👑 ADMIN
-            if (User.IsInRole("Admin"))
+            return Ok(new
             {
-                products = _context.Products
-    .Include(p => p.Variants)
-        .ThenInclude(v => v.Specifications) // 🔥 NEW
-    .OrderByDescending(p => p.CreatedDate)
-    .ToList();
-
-                ViewBag.sellerName = "Admin";
-                ViewBag.IsSubscribed = true;
-
-                return View(products);
-            }
-
-            // 🧑 SELLER
-            var userId = _userContext.GetUserId();
-
-            var seller = _context.Sellers
-                .FirstOrDefault(s => s.UserId == userId);
-
-            if (seller == null)
-                return RedirectToAction("SellerLogin", "Seller");
-
-            // 🔥 subscription check
-            if (seller.SubscriptionEndDate == null ||
-                seller.SubscriptionEndDate < DateTime.UtcNow)
-            {
-                TempData["ErrorMessage"] = "Your subscription has expired. Please upgrade your plan.";
-                return Redirect("/Subscription");
-            }
-
-            ViewBag.sellerName = seller.BusinessName;
-            ViewBag.IsSubscribed = true;
-
-            products = _context.Products
-    .Include(p => p.Variants)
-        .ThenInclude(v => v.Specifications) // 🔥 NEW
-    .OrderByDescending(p => p.CreatedDate)
-    .ToList();
-
-            return View(products);
+                success = true,
+                sellerName =
+                    isAdmin
+                        ? "Admin"
+                        : seller.BusinessName,
+                isSubscribed = true,
+                products
+            });
         }
 
         // ================= EDIT (GET) =================
-        [HttpGet]
-        public IActionResult ProductEdit(int id)
+        [Authorize]
+        [HttpGet("/api/products/{id}")]
+        public async Task<IActionResult> ProductEdit(
+    int id)
         {
-            var product = _context.Products
-    .Include(p => p.Variants)
-        .ThenInclude(v => v.Specifications)
-    .FirstOrDefault(p => p.Id == id);
+            var product =
+                await _context.Products
+                    .Include(p => p.Variants)
+                        .ThenInclude(v => v.Specifications)
+                    .FirstOrDefaultAsync(p =>
+                        p.Id == id);
 
             if (product == null)
-                return NotFound();
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Product not found"
+                });
+            }
 
-            return View(product);
+            return Ok(new
+            {
+                success = true,
+                product
+            });
         }
 
         // ================= EDIT (POST) =================
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
+        [Authorize]
+        [HttpPut("/api/products/{id}")]
         public async Task<IActionResult> ProductEdit(
-     ProductModel model,
-     IFormFile imageFile,
-     IFormFile quotationFile)
+    int id,
+    [FromForm] ProductModel model,
+    IFormFile imageFile,
+    IFormFile quotationFile)
         {
             var product = await _context.Products
                 .Include(p => p.Variants)
@@ -394,67 +529,84 @@ namespace VivekMedicalProducts.Controllers
 
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Product updated successfully!";
-            return RedirectToAction("ProductManagement");
+            return Ok(new
+            {
+                success = true,
+                message =
+         "Product updated successfully",
+                productId = product.Id
+            });
         }
 
 
-        // ================= DELETE =================
-        [HttpPost]
+        [Authorize]
+        [HttpDelete("/api/products/{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var product = await _context.Products.FindAsync(id);
+            var product =
+                await _context.Products
+                    .FindAsync(id);
 
             if (product == null)
-                return NotFound();
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Product not found"
+                });
+            }
 
             _context.Products.Remove(product);
+
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Product deleted successfully!";
-            return RedirectToAction("ProductManagement");
+            return Ok(new
+            {
+                success = true,
+                message = "Product deleted successfully"
+            });
         }
 
         // ================= DETAILS =================
-        public IActionResult Details(int id)
+        [HttpGet("/api/products/details/{id}")]
+        public async Task<IActionResult> GetDetails(int id)
         {
-            var product = _context.Products.FirstOrDefault(p => p.Id == id);
+            var product =
+                await _context.Products
+                    .Where(p =>
+                        p.Id == id)
+                    .Select(p => new
+                    {
+                        p.Id,
+                        p.Name,
+                        p.Category,
+                        p.Description,
+                        p.ImageUrl,
+                        p.PriceType,
+                        p.IsHotDeal,
+                        p.DiscountPercentage,
+                        p.DealEndDate
+                    })
+                    .FirstOrDefaultAsync();
 
             if (product == null)
-                return NotFound();
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Product not found"
+                });
+            }
 
-            return View(product);
-        }
-
-        // ================= AJAX DETAILS =================
-        [HttpGet]
-        public IActionResult GetDetails(int id)
-        {
-            var product = _context.Products
-                                  .Where(p => p.Id == id)
-                                  .Select(p => new
-                                  {
-                                      p.Id,
-                                      p.Name,
-                                      p.Category,
-                                     // p.Price,
-                                      p.Description,
-                                      p.ImageUrl,
-                                      p.PriceType,
-                                      p.IsHotDeal,
-                                      p.DiscountPercentage,
-                                      p.DealEndDate
-                                  })
-                                  .FirstOrDefault();
-
-            if (product == null)
-                return NotFound();
-
-            return Json(product);
+            return Ok(new
+            {
+                success = true,
+                product
+            });
         }
 
 
-// -------------------- REACT API ------------------------- //
+        // -------------------- REACT API ------------------------- //
 
         [HttpGet("/api/products")]
         public IActionResult GetProducts()

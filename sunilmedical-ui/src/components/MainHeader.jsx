@@ -33,21 +33,19 @@ export default function MainHeader() {
     const isKycDone = user?.isProfileCompleted;
 
     // 🔥 WHATSAPP CONFIG
-    const whatsappNumber = "9014060858"; // 🔁 replace
+    const whatsappNumber = "919014060858";
 
     const handleChat = () => {
-        if (!user) {
-            navigate("/login");
-            return;
-        }
 
-        if (!isKycDone) {
-            navigate("/kyc/register");
-            return;
-        }
+        const msg = encodeURIComponent(
+            "Hi, I need assistance with products."
+        );
 
-        const msg = encodeURIComponent("Hi, I need assistance with products.");
-        window.open(`https://wa.me/${whatsappNumber}?text=${msg}`, "_blank");
+        window.open(
+            `https://wa.me/${whatsappNumber}?text=${msg}`,
+            "_blank",
+            "noopener,noreferrer"
+        );
     };
 
     // 🔐 LOAD USER
@@ -81,8 +79,18 @@ export default function MainHeader() {
                 🚀 Trusted | Fast Delivery
             </div>
 
-            <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-16">
-
+            <div
+                className="
+        max-w-7xl
+        mx-auto
+        px-3
+        py-2
+        flex
+        flex-wrap
+        items-center
+        gap-2
+    "
+            >
                 {/* LEFT */}
                 <div className="flex items-center gap-3">
                     <img
@@ -93,8 +101,16 @@ export default function MainHeader() {
                 </div>
 
                 {/* SEARCH */}
-                <div className="flex-1 mx-6 relative hidden md:block">
-
+                <div
+                    className="
+        w-full
+        md:flex-1
+        md:mx-6
+        relative
+        order-3
+        md:order-none
+    "
+                >
                     <div className="flex items-center bg-gray-100 rounded-full px-4 py-2 shadow-sm focus-within:ring-2 focus-within:ring-pink-400">
 
                         <input
@@ -140,8 +156,7 @@ export default function MainHeader() {
                 </div>
 
                 {/* RIGHT MENU */}
-                <div className="flex items-center gap-4">
-
+                <div className="flex items-center gap-3 ml-auto">
                     {/* HOME */}
                     <button
                         onClick={() => navigate("/")}
@@ -153,7 +168,11 @@ export default function MainHeader() {
                     {/* KYC */}
                     {user && (
                         <button
-                            onClick={() => navigate(isKycDone ? "/kyc/view" : "/kyc/register")}
+                            onClick={() => {
+                                if (!isKycDone) {
+                                    navigate("/kyc/register");
+                                }
+                            }}
                             className={`text-xs px-3 py-1 rounded-full font-medium
                             ${isKycDone
                                     ? "bg-green-100 text-green-600"
@@ -162,14 +181,6 @@ export default function MainHeader() {
                             {isKycDone ? "KYC was Completed ✓" : "KYC is Pending"}
                         </button>
                     )}
-
-                    {/* 💬 CHAT */}
-                    <button
-                        onClick={handleChat}
-                        className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-full text-sm shadow transition"
-                    >
-                        💬 <span className="hidden md:inline">Chat Now</span>
-                    </button>
 
                     {/* ❤️ */}
                     <Link to="/wishlist" className="relative hover:scale-110 transition">
@@ -202,8 +213,25 @@ export default function MainHeader() {
                                 <div className="absolute right-0 mt-2 w-56 bg-white shadow-xl rounded-lg overflow-hidden">
 
                                     <button onClick={() => navigate("/profile")} className="menu-item">👤 Profile</button>
-                                    <button onClick={() => navigate("/my-orders")} className="menu-item">📦 Orders</button>
+                                    <button onClick={() => navigate("/my-orders")} className="menu-item">📦My Orders</button>
                                     <button onClick={() => navigate("/kyc/register")} className="menu-item">🧾 KYC</button>
+                                    <button
+                                        onClick={handleChat}
+                                        className="
+        w-full
+        text-left
+        px-4
+        py-3
+        hover:bg-gray-100
+        flex
+        items-center
+        gap-2
+        text-green-600
+        font-medium
+    "
+                                    >
+                                        💬 Chat on WhatsApp
+                                    </button>
 
                                     <button onClick={handleLogout} className="menu-item text-red-500">
                                         🚪 Logout

@@ -186,3 +186,29 @@ input:focus {
 }
 
 .animate-shake { animation: shake 0.3s; }
+
+/* Invoice */ 
+
+@media print {
+    body
+
+{
+    background: white !important;
+}
+
+button {
+    display: none !important;
+}
+
+.shadow-xl,
+.shadow-sm {
+    box-shadow: none !important;
+}
+
+.rounded-3xl,
+.rounded-2xl {
+    border-radius: 0 !important;
+}
+}
+
+/* Invoice end */
