@@ -91,18 +91,21 @@
     </Content>
   </ItemGroup>
 	
+	
+<Target Name="CopyReactBuild"
+        AfterTargets="Build"
+        Condition="Exists('sunilmedical-ui/build/index.html')">
 
-	<Target Name="BuildReact" BeforeTargets="Build" Condition="'$(RENDER)' != 'true'">
-  <Exec WorkingDirectory="sunilmedical-ui" Command="npm install" />
-  <Exec WorkingDirectory="sunilmedical-ui" Command="npm run build" />
-</Target>
-
-<Target Name="CopyReactBuild" AfterTargets="Build">
   <ItemGroup>
-    <ReactBuildFiles Include="sunilmedical-ui/build/**/*" />
+    <ReactBuildFiles Include="sunilmedical-ui/build/**" />
   </ItemGroup>
 
-  <Copy SourceFiles="@(ReactBuildFiles)" DestinationFiles="@(ReactBuildFiles->'wwwroot/react/%(RecursiveDir)%(Filename)%(Extension)')" />
+  <MakeDir Directories="wwwroot/react" />
+
+  <Copy
+      SourceFiles="@(ReactBuildFiles)"
+      DestinationFiles="@(ReactBuildFiles->'wwwroot/react/%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true" />
 </Target>
 
 </Project>
