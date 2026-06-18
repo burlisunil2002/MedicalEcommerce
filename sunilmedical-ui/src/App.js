@@ -1,6 +1,5 @@
 import { Routes, Route } from "react-router-dom";
 
-
 // Pages
 import ProductList from "./pages/ProductList";
 import LoginPage from "./pages/LoginPage";
@@ -17,6 +16,12 @@ import InvoicePage from "./pages/InvoicePage";
 import AdminDashboard from "./pages/AdminDashboard";
 import ProductManagement from "./pages/ProductManagement";
 import AdminLoginPage from "./pages/AdminLoginPage";
+import AddProduct from "./pages/AddProduct";
+import EditProduct from "./pages/EditProduct";
+import AdminOrders from "./pages/AdminOrders";
+
+
+
 
 // Layout
 import MainLayout from "./layouts/MainLayout";
@@ -96,6 +101,19 @@ function App() {
                         <Route
                             path="/product-management"
                             element={<ProductManagement />}
+                        />
+                        <Route
+                            path="/admin/add-product"
+                            element={<AddProduct />}
+                        />
+
+                         <Route
+                            path="/admin/products/edit/:id"
+                            element={<EditProduct />}
+                        />
+                        <Route
+                            path="/admin-orders"
+                            element={<AdminOrders />}
                         />
 
                     </Route>

@@ -6,6 +6,8 @@ export default function ProductManagement() {
 
     const navigate = useNavigate();
 
+    const [search, setSearch] = useState("");
+
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -18,7 +20,7 @@ export default function ProductManagement() {
 
             const res =
                 await API.get(
-                    "/api/products/manage"
+                    "/api/product-management"
                 );
 
             setProducts(
@@ -26,7 +28,13 @@ export default function ProductManagement() {
             );
         }
         catch (err) {
-            console.error(err);
+
+            console.log(err.response);
+
+            alert(
+                err.response?.data?.message ||
+                err.message
+            );
         }
         finally {
             setLoading(false);
@@ -45,7 +53,7 @@ export default function ProductManagement() {
         try {
 
             await API.delete(
-                `/api/products/${id}`
+                `/api/products/delete/${id}`
             );
 
             setProducts(prev =>
@@ -58,12 +66,57 @@ export default function ProductManagement() {
                 "Product deleted successfully"
             );
 
-        } catch {
+        }
 
-            alert(
-                "Unable to delete product"
+           catch (err) {
+
+                console.log(err);
+
+                alert(
+                    err.response?.data?.message ||
+                    err.response?.data?.error ||
+                    err.message
+                );
+            }
+    };
+
+    const filteredProducts = products.filter(item => {
+
+        const text = search.toLowerCase();
+
+        return (
+            item.name?.toLowerCase().includes(text) ||
+            item.brand?.toLowerCase().includes(text) ||
+            item.category?.toLowerCase().includes(text) ||
+            item.description?.toLowerCase().includes(text) ||
+            item.hsnCode?.toLowerCase().includes(text) ||
+            item.variants?.some(v =>
+                v.model?.toLowerCase().includes(text)
+            )
+        );
+    });
+
+    const toggleStatus = async (id) => {
+        try {
+            const res = await API.put(
+                `/api/products/change-status/${id}`
             );
 
+            setProducts(prev =>
+                prev.map(p =>
+                    p.id === id
+                        ? {
+                            ...p,
+                            status: res.data.status
+                        }
+                        : p
+                )
+            );
+        } catch (err) {
+            alert(
+                err.response?.data?.message ||
+                err.message
+            );
         }
     };
 
@@ -84,68 +137,118 @@ export default function ProductManagement() {
 
     return (
         <div className="
-            min-h-screen
-            bg-gradient-to-br
-            from-indigo-900
-            via-slate-900
-            to-black
-            p-6
-            text-white
-        ">
+    min-h-screen
+    bg-gradient-to-br
+    from-slate-950
+    via-indigo-950
+    to-slate-900
+    p-8
+">
 
             {/* Header */}
 
-            <div className="
-                max-w-7xl
-                mx-auto
-                mb-8
-                flex
-                justify-between
-                items-center
-                flex-wrap
-                gap-4
-            ">
-
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5 mb-8">
                 <div>
-
-                    <h1 className="
-                        text-3xl
-                        font-bold
-                    ">
-                        📦 Product Management
+                    <h1 className="text-4xl font-bold text-white">
+                        Product Management
                     </h1>
-
-                    <p className="
-                        text-gray-300
-                        text-sm
-                    ">
-                        Manage all your products,
-                        variants & stock
+                    <p className="text-slate-400 mt-2">
+                        Manage products, variants and inventory
                     </p>
-
                 </div>
 
                 <button
-                    onClick={() =>
-                        navigate(
-                            "/admin/add-product"
-                        )
-                    }
+                    onClick={() => navigate("/admin/add-product")}
                     className="
-                        px-6
-                        py-3
-                        bg-gradient-to-r
-                        from-pink-500
-                        to-red-500
-                        rounded-xl
-                        font-semibold
-                        shadow-lg
-                    "
+      flex items-center gap-2
+      px-6 py-3
+      rounded-2xl
+      bg-blue-600 hover:bg-blue-700
+      text-white font-semibold
+      shadow-lg
+    "
                 >
-                    + Add Product
+                    ➕ Add Product
                 </button>
+            </div>
+
+            {/* STATS */}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+
+                <div className="bg-white/10 rounded-3xl p-6">
+                    <p className="text-slate-400">Total Products</p>
+                    <h2 className="text-4xl font-bold text-white mt-2">
+                        {products.length}
+                    </h2>
+                </div>
+
+                <div className="bg-white/10 rounded-3xl p-6">
+                    <p className="text-slate-400">Active Products</p>
+                    <h2 className="text-4xl font-bold text-green-400 mt-2">
+                        {
+                            products.filter(
+                                p => p.status === "Active"
+                            ).length
+                        }
+                    </h2>
+                </div>
+
+                <div className="bg-white/10 rounded-3xl p-6">
+                    <p className="text-slate-400">Inactive</p>
+                    <h2 className="text-4xl font-bold text-red-400 mt-2">
+                        {
+                            products.filter(
+                                p => p.status !== "Active"
+                            ).length
+                        }
+                    </h2>
+                </div>
+
+                <div className="bg-white/10 rounded-3xl p-6">
+                    <p className="text-slate-400">Total Variants</p>
+                    <h2 className="text-4xl font-bold text-blue-400 mt-2">
+                        {
+                            products.reduce(
+                                (sum, p) =>
+                                    sum + (p.variants?.length || 0),
+                                0
+                            )
+                        }
+                    </h2>
+                </div>
 
             </div>
+
+            <div className="
+  flex items-center
+  bg-white/10
+  border border-white/20
+  rounded-2xl
+  px-5 py-4
+  mb-8
+">
+                <span className="text-slate-400 mr-3">
+                    🔍
+                </span>
+
+                <input
+                    type="text"
+                    placeholder="Search by name, brand, category..."
+                    value={search}
+                    onChange={(e) =>
+                        setSearch(e.target.value)
+                    }
+                    className="
+      w-full
+      bg-transparent
+      text-white
+      placeholder:text-slate-400
+      outline-none
+    "
+                />
+            </div>
+
 
             {/* Table */}
 
@@ -168,11 +271,12 @@ export default function ProductManagement() {
                     ">
 
                         <thead className="
-                            bg-white/10
-                            uppercase
-                            text-xs
-                            text-gray-300
-                        ">
+  bg-slate-800/70
+  text-slate-300
+  uppercase
+  text-xs
+  sticky top-0
+">
 
                             <tr>
 
@@ -214,7 +318,7 @@ export default function ProductManagement() {
 
                         <tbody>
 
-                            {products.map(item => {
+                            {filteredProducts.map(item => { 
 
                                 const variants =
                                     item.variants || [];
@@ -368,58 +472,42 @@ export default function ProductManagement() {
 
                                         </td>
 
-                                        <td className="
-                                            px-6
-                                            py-4
-                                        ">
-
-                                            <div className="
-                                                flex
-                                                gap-2
-                                                justify-center
-                                            ">
+                                        <td className="px-6 py-4">
+                                            <div className="flex gap-2">
 
                                                 <button
                                                     onClick={() =>
                                                         navigate(
-                                                            `/admin/edit-product/${item.id}`
+                                                            `/admin/products/edit/${item.id}`
                                                         )
                                                     }
                                                     className="
-                                                        px-3
-                                                        py-1
-                                                        bg-yellow-400
-                                                        text-black
-                                                        rounded-lg
-                                                        text-xs
-                                                    "
+        bg-amber-500
+        hover:bg-amber-600
+        px-4 py-2
+        rounded-xl
+        text-black
+        font-medium
+      "
                                                 >
                                                     Edit
                                                 </button>
 
                                                 <button
-                                                    onClick={() =>
-                                                        deleteProduct(
-                                                            item.id
-                                                        )
-                                                    }
-                                                    className="
-                                                        px-3
-                                                        py-1
-                                                        bg-red-500
-                                                        text-white
-                                                        rounded-lg
-                                                        text-xs
-                                                    "
+                                                    onClick={() => toggleStatus(item.id)}
+                                                    className={`px-4 py-2 rounded-xl font-medium ${item.status === "Active"
+                                                            ? "bg-red-500 hover:bg-red-600 text-white"
+                                                            : "bg-green-500 hover:bg-green-600 text-white"
+                                                        }`}
                                                 >
-                                                    Delete
+                                                    {item.status === "Active"
+                                                        ? "Deactivate"
+                                                        : "Activate"}
                                                 </button>
 
                                             </div>
-
                                         </td>
-
-                                    </tr>
+                                        </tr>
                                 );
                             })}
 

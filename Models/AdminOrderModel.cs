@@ -5,6 +5,7 @@ namespace VivekMedicalProducts.Models
     [Keyless]
     public class AdminOrderModel
     {
+        public int? SellerId { get; set; }
         public int OrderId { get; set; }
         public int OrderItemId { get; set; }
         public DateTime OrderDate { get; set; }

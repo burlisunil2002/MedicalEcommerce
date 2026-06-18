@@ -319,7 +319,10 @@ namespace VivekMedicalProducts.Controllers
         // ================= PRODUCT MANAGEMENT =================
         [Authorize]
         [HttpGet("/api/product-management")]
-        public async Task<IActionResult> ProductManagement()
+        public async Task<IActionResult> ProductManagement(
+    string search = "",
+            int page = 1,
+    int pageSize = 20)
         {
             var userId = _userContext.GetUserId();
 
@@ -370,47 +373,102 @@ namespace VivekMedicalProducts.Controllers
                 }
             }
 
-            var products =
-                await _context.Products
-                    .Include(p => p.Variants)
-                        .ThenInclude(v => v.Specifications)
-                    .OrderByDescending(p =>
-                        p.CreatedDate)
-                    .ToListAsync();
+            var query = _context.Products
+    .Include(p => p.Variants)
+        .ThenInclude(v => v.Specifications)
+    .AsQueryable();
+
+            if (!isAdmin)
+            {
+                query = query.Where(x =>
+                    x.SellerId == seller.SellerId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                search = search.ToLower();
+
+                query = query.Where(x =>
+                    (x.Name ?? "").ToLower().Contains(search) ||
+                    (x.Brand ?? "").ToLower().Contains(search) ||
+                    (x.Category ?? "").ToLower().Contains(search));
+            }       
+
+            var totalCount = await query.CountAsync();
+
+            var products = await query
+     .OrderByDescending(x => x.CreatedDate)
+     .Skip((page - 1) * pageSize)
+     .Take(pageSize)
+     .Select(p => new
+     {
+         p.Id,
+         p.Name,
+         p.Brand,
+         p.Category,
+         p.Description,
+         p.ImageUrl,
+         p.GSTPercentage,
+         p.PriceType,
+         p.Status,
+         p.CreatedDate,
+
+         Variants = p.Variants.Select(v => new
+         {
+             v.ProductVariantId,
+             v.Model,
+             v.Size,
+             v.Unit,
+             v.Price,
+             v.StockQuantity,
+             v.ImageUrl,
+             v.Status,
+
+             Specifications = v.Specifications.Select(s => new
+             {
+                 s.Id,
+                 s.Key,
+                 s.Value
+             })
+         })
+     })
+     .ToListAsync();
 
             return Ok(new
             {
                 success = true,
+
                 sellerName =
-                    isAdmin
-                        ? "Admin"
-                        : seller.BusinessName,
+         isAdmin
+             ? "Admin"
+             : seller.BusinessName,
+
                 isSubscribed = true,
+
+                page,
+                pageSize,
+                totalCount,
+                totalPages =
+         (int)Math.Ceiling(
+             totalCount / (double)pageSize
+         ),
+
                 products
             });
         }
 
         // ================= EDIT (GET) =================
         [Authorize]
-        [HttpGet("/api/products/{id}")]
-        public async Task<IActionResult> ProductEdit(
-    int id)
+        [HttpGet("/api/products/edit/{id}")]
+        public async Task<IActionResult> GetProductForEdit(int id)
         {
-            var product =
-                await _context.Products
-                    .Include(p => p.Variants)
-                        .ThenInclude(v => v.Specifications)
-                    .FirstOrDefaultAsync(p =>
-                        p.Id == id);
+            var product = await _context.Products
+                .Include(p => p.Variants)
+                .ThenInclude(v => v.Specifications)
+                .FirstOrDefaultAsync(p => p.Id == id);
 
             if (product == null)
-            {
-                return NotFound(new
-                {
-                    success = false,
-                    message = "Product not found"
-                });
-            }
+                return NotFound();
 
             return Ok(new
             {
@@ -424,10 +482,10 @@ namespace VivekMedicalProducts.Controllers
         [Authorize]
         [HttpPut("/api/products/{id}")]
         public async Task<IActionResult> ProductEdit(
-    int id,
-    [FromForm] ProductModel model,
-    IFormFile imageFile,
-    IFormFile quotationFile)
+     int id,
+     [FromForm] ProductModel model,
+     IFormFile imageFile,
+     IFormFile quotationFile)
         {
             var product = await _context.Products
                 .Include(p => p.Variants)
@@ -540,31 +598,39 @@ namespace VivekMedicalProducts.Controllers
 
 
         [Authorize]
-        [HttpDelete("/api/products/{id}")]
-        public async Task<IActionResult> Delete(int id)
+        [HttpPut("/api/products/change-status/{id}")]
+        public async Task<IActionResult> ChangeStatus(int id)
         {
-            var product =
-                await _context.Products
-                    .FindAsync(id);
-
-            if (product == null)
+            try
             {
-                return NotFound(new
+                var product = await _context.Products
+                    .FirstOrDefaultAsync(x => x.Id == id);
+
+                if (product == null)
                 {
-                    success = false,
-                    message = "Product not found"
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "Product not found"
+                    });
+                }
+
+                product.Status = product.Status == "Active"
+     ? "InActive"
+     : "Active";
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    status = product.Status
                 });
             }
-
-            _context.Products.Remove(product);
-
-            await _context.SaveChangesAsync();
-
-            return Ok(new
+            catch (Exception ex)
             {
-                success = true,
-                message = "Product deleted successfully"
-            });
+                return StatusCode(500, ex.ToString());
+            }
         }
 
         // ================= DETAILS =================
