@@ -230,7 +230,7 @@ export default function AddProduct() {
                 );
 
             alert(
-                "Product added successfully"
+                "Product added successfully!"
             );
             navigate("/product-management");
 
