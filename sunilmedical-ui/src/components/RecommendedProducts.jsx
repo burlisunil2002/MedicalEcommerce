@@ -37,7 +37,7 @@ export default function RecommendedProducts({ currentProduct }) {
         <div className="mt-12">
 
             <h2 className="text-lg font-semibold text-gray-900 mb-6">
-                You may also like
+                Recommended For You
             </h2>
 
             <div className="

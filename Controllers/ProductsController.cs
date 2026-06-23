@@ -223,6 +223,24 @@ namespace VivekMedicalProducts.Controllers
                         seller.SellerId;
                 }
 
+                var existingProduct =
+    await _context.Products
+        .AnyAsync(x =>
+            x.Name == product.Name &&
+            x.Brand == product.Brand &&
+            x.CreatedDate >
+                DateTime.UtcNow.AddSeconds(-10));
+
+                if (existingProduct)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message =
+                            "Product is already being saved. Please wait."
+                    });
+                }
+
                 if (product.ExpiryDate.HasValue)
                 {
                     product.ExpiryDate =
@@ -317,7 +335,7 @@ namespace VivekMedicalProducts.Controllers
         }
 
         // ================= PRODUCT MANAGEMENT =================
-        [Authorize]
+        //[Authorize]
         [HttpGet("/api/product-management")]
         public async Task<IActionResult> ProductManagement(
     string search = "",

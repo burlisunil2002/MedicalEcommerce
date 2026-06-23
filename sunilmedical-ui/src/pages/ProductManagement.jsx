@@ -158,7 +158,7 @@ export default function ProductManagement() {
                 </div>
 
                 <button
-                    onClick={() => navigate("/admin/add-product")}
+                    onClick={() => navigate("/add-product")}
                     className="
       flex items-center gap-2
       px-6 py-3
@@ -478,7 +478,7 @@ export default function ProductManagement() {
                                                 <button
                                                     onClick={() =>
                                                         navigate(
-                                                            `/admin/products/edit/${item.id}`
+                                                            `/products/edit/${item.id}`
                                                         )
                                                     }
                                                     className="

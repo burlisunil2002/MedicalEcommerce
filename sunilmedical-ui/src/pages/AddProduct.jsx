@@ -30,6 +30,10 @@ const categories = [
 export default function AddProduct() {
     const navigate = useNavigate();
 
+    const [loading, setLoading] = useState(false);
+    const [successMessage, setSuccessMessage] = useState("");
+    const [errorMessage, setErrorMessage] = useState("");
+
     const [product, setProduct] =
         useState({
             name: "",
@@ -53,10 +57,57 @@ export default function AddProduct() {
             variants: []
         });
 
+    const [errors, setErrors] = useState({});
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
         try {
+
+            const validationErrors = {};
+
+            if (!product.name.trim())
+                validationErrors.name =
+                    "Product Name is required";
+
+            if (!product.brand.trim())
+                validationErrors.brand =
+                    "Brand is required";
+
+            if (!product.category)
+                validationErrors.category =
+                    "Category is required";
+
+            if (!product.description.trim())
+                validationErrors.description =
+                    "Description is required";
+
+            if (!product.priceType)
+                validationErrors.priceType =
+                    "Price Type is required";
+
+            if (
+                Object.keys(validationErrors)
+                    .length > 0
+            ) {
+                setErrors(validationErrors);
+
+                const firstField =
+                    document.querySelector(
+                        "[data-error='true']"
+                    );
+
+                firstField?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center"
+                });
+
+                firstField?.focus();
+
+                return;
+            }
+
+            setErrors({});
             const formData =
                 new FormData();
 
@@ -217,46 +268,62 @@ export default function AddProduct() {
                 }
             );
 
-            const res =
-                await API.post(
-                    "/api/products",
-                    formData,
-                    {
-                        headers: {
-                            "Content-Type":
-                                "multipart/form-data"
-                        }
-                    }
-                );
+            const res = await API.post(
+                "/api/products",
+                formData
+            );
 
-            alert(
+            setSuccessMessage(
+                res.data.message ||
                 "Product added successfully!"
             );
-            navigate("/product-management");
 
+            setTimeout(() => {
+                navigate("/product-management");
+            }, 1000);
 
             console.log(res.data);
 
         } catch (err) {
+            console.log(err.response);
 
-            console.log(
-                err.response
-            );
-
-            alert(
+            setErrorMessage(
                 err.response?.data?.message ||
-                err.message
+                err.message ||
+                "Failed to save product."
             );
+
+            setTimeout(() => {
+                setErrorMessage("");
+            }, 4000);
+        }
+        finally {
+            setLoading(false);
         }
     };
 
     const handleChange = (e) => {
-        const { name, value, type, checked } = e.target;
+        const {
+            name,
+            value,
+            type,
+            checked
+        } = e.target;
 
         setProduct((prev) => ({
             ...prev,
-            [name]: type === "checkbox" ? checked : value
+            [name]:
+                type === "checkbox"
+                    ? checked
+                    : value
         }));
+
+        if (errors[name]) {
+            setErrors((prev) => ({
+                ...prev,
+                [name]: undefined
+            }));
+        }
     };
 
     const addVariant = () => {
@@ -314,22 +381,70 @@ export default function AddProduct() {
                 (_, i) => i !== sIndex
             );
 
-        setProduct({
-            ...product,
-            variants: updated
-        });
+        setProduct(prev => ({
+            ...prev,
+            variants:
+                prev.variants.map((v, i) =>
+                    i === vIndex
+                        ? {
+                            ...v,
+                            price:
+                                e.target.value
+                        }
+                        : v
+                )
+        }));
     };
 
     return (
         <div className="min-h-screen bg-slate-100 p-8 text-slate-800">
             <div className="max-w-7xl mx-auto">
 
+                {successMessage && (
+                    <div
+                        className="
+            fixed
+            top-6
+            right-6
+            bg-green-600
+            text-white
+            px-6
+            py-3
+            rounded-xl
+            shadow-xl
+            z-50
+        "
+                    >
+                        {successMessage}
+                    </div>
+                )}
+
+                {errorMessage && (
+                    <div
+                        className="
+            fixed
+            top-6
+            right-6
+            bg-red-600
+            text-white
+            px-6
+            py-3
+            rounded-xl
+            shadow-xl
+            z-50
+            animate-pulse
+        "
+                    >
+                        {errorMessage}
+                    </div>
+                )}
+
                 <form onSubmit={handleSubmit}>
 
 
                 <div className="mb-10">
                     <h1 className="text-4xl font-bold">
-                        Add Medical Product
+                        Add Sunil Medical Product
                     </h1>
 
                         <p className="text-slate-500 mt-2">
@@ -359,58 +474,107 @@ mb-6
 ">                            Basic Information
                         </h2>
 
-                        <div className="grid md:grid-cols-2 gap-5">
+                            <div className="grid md:grid-cols-2 gap-5">
 
-                            <input
-                                name="name"
-                                value={product.name}
-                                onChange={handleChange}
-                                placeholder="Product Name"
-                                className="input"
-                            />
+                                <div>
+                                    <label className="block mb-2 font-medium">
+                                        Product Name
+                                        <span className="text-red-500 ml-1">*</span>
+                                    </label>
 
-                            <input
-                                name="brand"
-                                value={product.brand}
-                                onChange={handleChange}
-                                placeholder="Brand Name"
-                                className="input"
-                            />
+                                    <input
+                                        name="name"
+                                        value={product.name}
+                                        onChange={handleChange}
+                                        data-error={!!errors.name}
+                                        placeholder="Product Name"
+                                        className={`input ${errors.name
+                                                ? "border-red-500 ring-2 ring-red-200"
+                                                : ""
+                                            }`}
+                                    />
 
-                            <select
-                                name="category"
-                                value={product.category}
-                                onChange={handleChange}
-                                className="input"
-                            >
-                                <option value="">
-                                    Select Category
-                                </option>
+                                    {errors.name && (
+                                        <p className="text-red-500 text-sm mt-1">
+                                            Product Name is required
+                                        </p>
+                                    )}
+                                </div>
 
-                                {categories.map((c) => (
-                                    <option
-                                        key={c}
-                                        value={c}
+                                <div>
+                                    <label className="block mb-2 font-medium">
+                                        Brand
+                                        <span className="text-red-500 ml-1">*</span>
+                                    </label>
+
+                                    <input
+                                        name="brand"
+                                        value={product.brand}
+                                        onChange={handleChange}
+                                        data-error={!!errors.brand}
+                                        placeholder="Brand Name"
+                                        className={`input ${errors.brand
+                                                ? "border-red-500 ring-2 ring-red-200"
+                                                : ""
+                                            }`}
+                                    />
+
+                                    {errors.brand && (
+                                        <p className="text-red-500 text-sm mt-1">
+                                            Brand is required
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <label className="block mb-2 font-medium">
+                                        Category
+                                        <span className="text-red-500 ml-1">*</span>
+                                    </label>
+
+                                    <select
+                                        name="category"
+                                        value={product.category}
+                                        onChange={handleChange}
+                                        data-error={!!errors.category}
+                                        className={`input ${errors.category
+                                                ? "border-red-500 ring-2 ring-red-200"
+                                                : ""
+                                            }`}
                                     >
-                                        {c}
-                                    </option>
-                                ))}
-                            </select>
+                                        <option value="">
+                                            Select Category
+                                        </option>
 
-                            <select
-                                name="priceType"
-                                value={product.priceType}
-                                onChange={handleChange}
-                                className="input"
-                            >
-                                <option value="Normal">
-                                    Normal
-                                </option>
+                                        {categories.map((c) => (
+                                            <option key={c} value={c}>
+                                                {c}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
 
-                                <option value="AskForPrice">
-                                    Ask For Price
-                                </option>
-                            </select>
+                                <div>
+                                    <label className="block mb-2 font-medium">
+                                        Price Type
+                                        <span className="text-red-500 ml-1">*</span>
+                                    </label>
+
+                                    <select
+                                        name="priceType"
+                                        value={product.priceType}
+                                        onChange={handleChange}
+                                        className="input"
+                                    >
+                                        <option value="Normal">
+                                            Normal
+                                        </option>
+
+                                        <option value="AskForPrice">
+                                            Ask For Price
+                                        </option>
+                                    </select>
+                                </div>
 
                             <input
                                 name="gstPercentage"
@@ -431,14 +595,24 @@ mb-6
                             />
                         </div>
 
-                        <textarea
-                            name="description"
-                            value={product.description}
-                            onChange={handleChange}
-                            placeholder="Description"
-                            rows={5}
-                            className="input mt-5"
-                        />
+                            <div className="mt-5">
+                                <label className="block mb-2 font-medium">
+                                    Description
+                                    <span className="text-red-500 ml-1">*</span>
+                                </label>
+
+                                <textarea
+                                    name="description"
+                                    value={product.description}
+                                    onChange={handleChange}
+                                    rows={5}
+                                    data-error={!!errors.description}
+                                    className={`input ${errors.description
+                                            ? "border-red-500 ring-2 ring-red-200"
+                                            : ""
+                                        }`}
+                                />
+                            </div>
                     </div>
 
                     <div className="bg-white/10 rounded-3xl p-8">
@@ -889,18 +1063,20 @@ mb-6
                         <div className="text-right mt-8">
                             <button
                                 type="submit"
-                                className="
-        bg-gradient-to-r
-        from-blue-500
-        to-indigo-600
-        px-8
-        py-4
-        rounded-2xl
-        font-semibold
-        text-white
-      "
+                                disabled={loading}
+                                className={`
+        px-8 py-4 rounded-2xl
+        font-semibold text-white
+        transition-all duration-300
+        ${loading
+                                        ? "bg-gray-400 cursor-not-allowed"
+                                        : "bg-gradient-to-r from-blue-500 to-indigo-600 hover:scale-105"
+                                    }
+    `}
                             >
-                                Save Product
+                                {loading
+                                    ? "Saving Product..."
+                                    : "Save Product"}
                             </button>
                         </div>
                     </div>

@@ -9,8 +9,11 @@ export default function EditProduct() {
     const [loading, setLoading] =
         useState(true);
 
-    const [saving, setSaving] =
-        useState(false);
+    const [saving, setSaving] = useState(false);
+    const [successMessage, setSuccessMessage] =
+        useState("");
+    const [errorMessage, setErrorMessage] =
+        useState("");
 
     const [product, setProduct] =
         useState({
@@ -85,9 +88,14 @@ export default function EditProduct() {
                         ) || []
                 });
             } catch {
-                alert(
+                setErrorMessage(
+                    err.response?.data?.message ||
                     "Failed to load product"
                 );
+
+                setTimeout(() => {
+                    setErrorMessage("");
+                }, 4000);
             } finally {
                 setLoading(false);
             }
@@ -416,21 +424,24 @@ export default function EditProduct() {
                     formData
                 );
 
-          alert(
+                setSuccessMessage(
                     "Product updated successfully"
                 );
 
-                setTimeout(
-                    () =>
-                        navigate(
-                            "/product-management"
-                        ),
-                    1000
-                );
+                setTimeout(() => {
+                    navigate(
+                        "/product-management"
+                    );
+                }, 1000);
             } catch {
-                alert(
+                setErrorMessage(
+                    err.response?.data?.message ||
                     "Failed to update product"
                 );
+
+                setTimeout(() => {
+                    setErrorMessage("");
+                }, 4000);
             } finally {
                 setSaving(false);
             }
@@ -447,6 +458,46 @@ export default function EditProduct() {
     return (
         <div className="min-h-screen bg-slate-100 p-8 text-black">
             <div className="max-w-7xl mx-auto space-y-8">
+                {
+                    successMessage && (
+                        <div
+                            className="
+                fixed
+                top-6
+                right-6
+                bg-green-600
+                text-white
+                px-6
+                py-3
+                rounded-xl
+                shadow-xl
+                z-50
+            "
+                        >
+                            {successMessage}
+                        </div>
+                    )
+                }
+                {
+                    errorMessage && (
+                        <div
+                            className="
+                fixed
+                top-6
+                right-6
+                bg-red-600
+                text-white
+                px-6
+                py-3
+                rounded-xl
+                shadow-xl
+                z-50
+            "
+                        >
+                            {errorMessage}
+                        </div>
+                    )
+                }
                 <form onSubmit={handleSubmit}>
 
                     {/* HEADER */}
@@ -1120,16 +1171,15 @@ pb-4
                         <button
                             type="submit"
                             disabled={saving}
-                            className="
-              bg-gradient-to-r
-              from-blue-600
-              to-indigo-600
-              px-8
-              py-4
-              rounded-2xl
-              text-white
-              font-semibold
-            "
+                            className={`
+        px-8 py-4 rounded-2xl
+        font-semibold text-white
+        transition-all
+        ${saving
+                                    ? "bg-gray-400 cursor-not-allowed"
+                                    : "bg-gradient-to-r from-blue-500 to-indigo-600 hover:scale-105"
+                                }
+    `}
                         >
                             {
                                 saving

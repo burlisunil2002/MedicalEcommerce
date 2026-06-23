@@ -19,10 +19,9 @@
   },
   "scripts": {
     "react": "react-scripts start",
-    "dotnet": "dotnet run --project ../VivekMedicalProducts",
+    "dotnet": "dotnet watch run --project ../VivekMedicalProducts.csproj",
     "start": "concurrently \"npm run react\" \"npm run dotnet\"",
-    "build": "node --max-old-space-size=8192 node_modules/react-scripts/bin/react-scripts.js build",
-    "test": "react-scripts test"
+    "build": "react-scripts build"
   },
   "devDependencies": {
     "autoprefixer": "10.4.20",

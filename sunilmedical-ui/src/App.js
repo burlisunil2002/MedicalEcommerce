@@ -103,16 +103,16 @@ function App() {
                             element={<ProductManagement />}
                         />
                         <Route
-                            path="/admin/add-product"
+                            path="add-product"
                             element={<AddProduct />}
                         />
 
                          <Route
-                            path="/admin/products/edit/:id"
+                            path="products/edit/:id"
                             element={<EditProduct />}
                         />
                         <Route
-                            path="/admin-orders"
+                            path="admin-orders"
                             element={<AdminOrders />}
                         />
 
