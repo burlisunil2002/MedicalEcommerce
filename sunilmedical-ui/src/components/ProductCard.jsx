@@ -67,7 +67,15 @@ export default function ProductCard({ p }) {
     const wishlisted = isWishlisted(
         data.id,
         defaultVariant?.productVariantId ??
-        defaultVariant?.id
+        defaultVariant?.id ??
+        p.variantId
+    );
+
+    const variantId = Number(
+        defaultVariant?.productVariantId ??
+        defaultVariant?.id ??
+        p.variantId ??
+        0
     );
 
     return (
@@ -181,32 +189,14 @@ export default function ProductCard({ p }) {
                         >
                             Request Quote
                         </button>
-                    ) : defaultVariant && (defaultVariant.productVariantId || defaultVariant.id) ? (
-                            <AddToCartButton
-                                productId={Number(data.id)}
-                                variantId={Number(
-                                    defaultVariant?.productVariantId ??
-                                    defaultVariant?.id
-                                )}
-
-                                minQty={Number(
-                                    defaultVariant?.minQuantity ??
-                                    defaultVariant?.minQty ??
-                                    1
-                                )}
-
-                                stepQty={Number(
-                                    defaultVariant?.stepQuantity ??
-                                    defaultVariant?.stepQty ??
-                                    1
-                                )}
-
-                                maxQty={
-                                    defaultVariant?.maxQuantity ??
-                                    defaultVariant?.maxQty ??
-                                    null
-                                }
-                            />
+                    ) : variantId > 0 ? (
+                        <AddToCartButton
+                            productId={Number(data.id)}
+                            variantId={variantId}
+                            minQty={Number(defaultVariant?.minQuantity ?? 1)}
+                            stepQty={Number(defaultVariant?.stepQuantity ?? 1)}
+                            maxQty={defaultVariant?.maxQuantity ?? null}
+                        />
                     ) : (
                         <button
                             onClick={() => navigate(`/product/${data.id}`)}

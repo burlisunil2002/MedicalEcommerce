@@ -48,6 +48,16 @@ export default function AddToCartButton({
         e.preventDefault();
         e.stopPropagation();
 
+        console.log("===== ADD TO CART BUTTON =====");
+
+        console.log("Product ID :", productKey);
+
+        console.log("Variant ID :", variantKey);
+
+        console.log("Min Qty :", min);
+
+        console.log("Step Qty :", step);
+
         if (loading) return;
 
         setLoading(true);

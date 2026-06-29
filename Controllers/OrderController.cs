@@ -74,7 +74,14 @@ namespace VivekMedicalProducts.Controllers
                 var userId = _userContext.GetUserId();
 
                 if (string.IsNullOrEmpty(userId))
-                    return BadRequest("User not found");
+                {
+                    return Unauthorized(new
+                    {
+                        success = false,
+                        redirect = "/login",
+                        message = "Please login first"
+                    });
+                }
 
                 var address = await _context.UserAddresses
                     .FirstOrDefaultAsync(x =>
@@ -820,65 +827,116 @@ namespace VivekMedicalProducts.Controllers
         [HttpGet("my-orders")]
         public async Task<IActionResult> GetMyOrders()
         {
-            var userId = _userContext.GetUserId();
-
-            if (string.IsNullOrEmpty(userId))
+            try
             {
-                return Unauthorized(new
+                var userId = _userContext.GetUserId();
+
+                if (string.IsNullOrEmpty(userId))
                 {
-                    success = false,
-                    redirect = "/login"
+                    return Unauthorized(new
+                    {
+                        success = false,
+                        message = "Please login to view orders.",
+                        redirect = "/login"
+                    });
+                }
+
+                var orders = await _context.Orders
+                    .AsNoTracking()
+                    .Include(o => o.OrderItems)
+                        .ThenInclude(i => i.Product)
+                    .Include(o => o.OrderItems)
+                        .ThenInclude(i => i.ProductVariant)
+                            .ThenInclude(v => v.Images)
+                    .Where(o => o.UserId == userId)
+                    .OrderByDescending(o => o.OrderDate)
+                    .Select(o => new
+                    {
+                        orderId = o.OrderId,
+                        orderNumber = o.OrderNumber,
+                        orderDate = o.OrderDate,
+
+                        grandTotal = o.GrandTotal,
+                        orderStatus = o.OrderStatus,
+                        paymentStatus = o.PaymentStatus,
+
+                        itemCount =
+                            o.OrderItems.Count,
+
+                        items =
+                            o.OrderItems.Select(i => new
+                            {
+                                productId =
+                                    i.ProductId,
+
+                                variantId =
+                                    i.ProductVariantId,
+
+                                productName =
+                                    i.ProductName,
+
+                                variantName =
+                                    i.ProductVariant != null
+                                        ? i.ProductVariant.Model
+                                        : "",
+
+                                productImage =
+                                    i.ProductVariant != null &&
+                                    i.ProductVariant.Images.Any()
+                                        ? i.ProductVariant.Images
+                                            .OrderBy(x =>
+                                                x.DisplayOrder)
+                                            .Select(x =>
+                                                x.ImageUrl)
+                                            .FirstOrDefault()
+                                        : !string.IsNullOrEmpty(
+                                            i.Product.ImageUrl)
+                                            ? i.Product.ImageUrl
+                                            : "/images/no-image.png",
+
+                                productImages =
+                                    i.ProductVariant != null
+                                        ? i.ProductVariant.Images
+                                            .OrderBy(x =>
+                                                x.DisplayOrder)
+                                            .Select(x =>
+                                                x.ImageUrl)
+                                            .ToList()
+                                        : new List<string>(),
+
+                                quantity =
+                                    i.Quantity,
+
+                                price =
+                                    i.Price,
+
+                                finalPaidAmount =
+                                    i.FinalPaidAmount,
+
+                                itemTotal =
+                                    i.LineTotal
+                            }).ToList()
+                    })
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    orders
                 });
             }
-
-            var orders = await _context.Orders
-                .Include(o => o.OrderItems)
-                    .ThenInclude(i => i.Product)
-                .Include(o => o.OrderItems)
-                    .ThenInclude(i => i.ProductVariant)
-                .Where(o => o.UserId == userId)
-                .OrderByDescending(o => o.OrderDate)
-                .Select(o => new
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
                 {
-                    orderId = o.OrderId,
-                    orderNumber = o.OrderNumber,
-                    orderDate = o.OrderDate,
-
-                    grandTotal = o.GrandTotal,
-                    orderStatus = o.OrderStatus,
-                    paymentStatus = o.PaymentStatus,
-
-                    items = o.OrderItems.Select(i => new
-                    {
-                        productId = i.ProductId,
-                        variantId = i.ProductVariantId,
-
-                        productName = i.ProductName,
-
-                        variantName =
-                            i.ProductVariant != null
-                                ? i.ProductVariant.Model
-                                : "",
-
-                        productImage =
-                            !string.IsNullOrEmpty(i.ProductVariant.ImageUrl)
-                                ? i.ProductVariant.ImageUrl
-                                : !string.IsNullOrEmpty(i.Product.ImageUrl)
-                                    ? i.Product.ImageUrl
-                                    : "/images/no-image.png",
-
-                        quantity = i.Quantity,
-
-                        price = i.Price,
-
-                        finalPaidAmount = i.FinalPaidAmount,
-
-                        itemTotal = i.LineTotal
-                    }).ToList()
-                })
-                .ToListAsync();
-
-            return Ok(orders);
+                    success = false,
+                    message =
+                        "Failed to load orders.",
+                    error =
+                        ex.InnerException?.Message ??
+                        ex.Message
+                });
+            }
         }
 
 

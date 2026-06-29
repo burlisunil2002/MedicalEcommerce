@@ -142,6 +142,18 @@ export const CartProvider = ({ children }) => {
 
         refreshSummaryOnly(qtyToAdd);
 
+        console.log("===== CART CONTEXT =====");
+
+        console.log({
+
+            productId: productKey,
+
+            variantId: variantKey,
+
+            quantity: qtyToAdd
+
+        });
+
         try {
             await API.post("/api/cart/add", {
                 productId: productKey,
@@ -149,10 +161,10 @@ export const CartProvider = ({ children }) => {
                 quantity: qtyToAdd
             });
 
-            loadCart();
+         await loadCart();
             return true;
         } catch (err) {
-            loadCart();
+          await loadCart();
             return false;
         }
     };
@@ -288,6 +300,7 @@ setItems(
             removeFromCart,
             applyCoupon,
             getQty,
+            loadCart,
             loading
         }}>
             {children}

@@ -33,6 +33,7 @@ public class ApplicationDbContext
 
     public DbSet<ProductSpecifications> ProductSpecifications { get; set; }
 
+    public DbSet<ProductVariantImage> ProductVariantImages { get; set; }
 
     public DbSet<GstResponseModel> GstVerification { get; set; }
 

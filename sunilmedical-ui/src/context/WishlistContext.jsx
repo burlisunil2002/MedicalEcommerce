@@ -17,11 +17,28 @@ export const WishlistProvider = ({ children }) => {
         try {
             const res = await API.get("/api/wishlist");
 
-            const normalized = (res.data || []).map(p => ({
+            console.log("===== GET WISHLIST =====");
+            console.log(res.data);
+
+            const list =
+                Array.isArray(res.data)
+                    ? res.data
+                    : Array.isArray(res.data.items)
+                        ? res.data.items
+                        : Array.isArray(res.data.data)
+                            ? res.data.data
+                            : [];
+
+            const normalized = list.map(p => ({
                 ...p,
 
-                // 🔥 ensure consistent casing
-                id: p.id ?? p.Id,
+                id: Number(p.id ?? p.Id),
+
+                variantId: Number(
+                    p.variantId ??
+                    p.VariantId ??
+                    0
+                ),
 
                 discount: Number(
                     p.discount ??
@@ -29,16 +46,37 @@ export const WishlistProvider = ({ children }) => {
                     0
                 ),
 
-                isHotDeal: p.isHotDeal ?? p.IsHotDeal ?? false,
+                isHotDeal:
+                    p.isHotDeal ??
+                    p.IsHotDeal ??
+                    false,
 
-                priceType: (p.priceType ?? p.PriceType ?? "normal").toLowerCase(),
+                priceType:
+                    (
+                        p.priceType ??
+                        p.PriceType ??
+                        "normal"
+                    ).toLowerCase(),
 
-                variants: p.variants || [],
-                defaultVariant: p.defaultVariant || null
+                variants: p.variants ?? [],
+
+                defaultVariant:
+                    p.defaultVariant ??
+                    null
             }));
 
-            setWishlist(normalized);
+            console.log("Normalized Wishlist");
+            console.log(normalized);
 
+            const distinct = normalized.filter(
+                (item, index, self) =>
+                    index === self.findIndex(x =>
+                        Number(x.id) === Number(item.id) &&
+                        Number(x.variantId) === Number(item.variantId)
+                    )
+            );
+
+            setWishlist(distinct);
             const countRes = await API.get("/api/wishlist/count");
             setWishlistCount(countRes.data);
 
@@ -50,10 +88,18 @@ export const WishlistProvider = ({ children }) => {
     // 🔥 FAST TOGGLE
     const toggleWishlist = async (product) => {
 
-        const productId = product.id ?? product.Id;
-        const variantId = product.variantId;
+        const productId =
+            Number(product.id ?? product.Id);
 
-        const exists = wishlist.some(
+        const variantId =
+            Number(
+                product.variantId ??
+                product.selectedVariant?.id ??
+                product.selectedVariant?.productVariantId ??
+                0
+            );
+
+        const existingIndex = wishlist.findIndex(
             x =>
                 Number(x.id) === Number(productId) &&
                 Number(x.variantId) === Number(variantId)
@@ -61,17 +107,29 @@ export const WishlistProvider = ({ children }) => {
 
         let updated;
 
-        if (exists) {
+        if (existingIndex >= 0) {
             updated = wishlist.filter(x =>
                 !(x.id === productId && x.variantId === variantId)
             );
         } else {
-            updated = [...wishlist, {
-                ...product,
-                id: productId,
-                variantId,
-                defaultVariant: product.selectedVariant
-            }];
+            updated = [
+                ...wishlist,
+                {
+                    ...product,
+
+                    id: productId,
+
+                    variantId,
+
+                    defaultVariant:
+                        product.selectedVariant,
+
+                    variants:
+                        product.selectedVariant
+                            ? [product.selectedVariant]
+                            : []
+                }
+            ];
         }
 
         setWishlist(updated);

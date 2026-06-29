@@ -9,7 +9,7 @@ namespace VivekMedicalProducts.Models
         public int ProductId { get; set; }
         public ProductModel Product { get; set; }
 
-        public string? Model { get; set; }
+        public string Model { get; set; }
         public string? Size { get; set; }
         public string? Unit { get; set; }
         public int? PackSize { get; set; }
@@ -19,13 +19,15 @@ namespace VivekMedicalProducts.Models
         public int StepQuantity { get; set; } = 1;
 
         public decimal Price { get; set; }
-        public int StockQuantity { get; set; }
+        public int? StockQuantity { get; set; }
 
-        // 🔥 ADD THIS
-        public string? ImageUrl { get; set; }
+
+        public ICollection<ProductVariantImage> Images { get; set; }
+     = new List<ProductVariantImage>();
 
         [NotMapped]
-        public IFormFile? ImageFile { get; set; }
+        public List<IFormFile> ImageFiles { get; set; }
+            = new();
 
         public ICollection<ProductSpecifications> Specifications { get; set; } = new List<ProductSpecifications>();
 

@@ -15,7 +15,7 @@ namespace VivekMedicalProducts.Models
         public int? SellerId { get; set; }
         public SellerModel Seller { get; set; }
 
-        public string? ImageUrl { get; set; }
+        public string ImageUrl { get; set; }
         public string? QuotationUrl { get; set; }
 
         public decimal GSTPercentage { get; set; }

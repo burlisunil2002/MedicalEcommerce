@@ -26,6 +26,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Remove="sunilmedical-ui\src\components\productDetails\fobqzzvc.kad~" />
+    <None Remove="sunilmedical-ui\src\components\productDetails\kj3ac3bv.s0v~" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Content Include="sunilmedical-ui\public\images\bannerMRI.png">
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
@@ -95,15 +100,26 @@
   </ItemGroup>
 	
 	
-<Target Name="CopyReactBuild" AfterTargets="Build" Condition="Exists('sunilmedical-ui/build/index.html')">
+<Target Name="BuildReact" BeforeTargets="Build">
+
+  <Exec WorkingDirectory="sunilmedical-ui" Command="npm install" Condition="!Exists('sunilmedical-ui/node_modules')" />
+
+  <Exec WorkingDirectory="sunilmedical-ui" Command="npm run build" />
+
+</Target>
+
+<Target Name="CopyReactBuild" AfterTargets="Build">
 
   <ItemGroup>
-    <ReactBuildFiles Include="sunilmedical-ui/build/**" />
+      <ReactBuildFiles Include="sunilmedical-ui/build/**" />
   </ItemGroup>
+
+  <RemoveDir Directories="wwwroot/react" />
 
   <MakeDir Directories="wwwroot/react" />
 
-  <Copy SourceFiles="@(ReactBuildFiles)" DestinationFiles="@(ReactBuildFiles->'wwwroot/react/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  <Copy SourceFiles="@(ReactBuildFiles)" DestinationFiles="@(ReactBuildFiles->'wwwroot/react/%(RecursiveDir)%(Filename)%(Extension)')" />
+
 </Target>
 
 </Project>

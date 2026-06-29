@@ -73,10 +73,23 @@ export default function ReviewPage() {
             }
         } catch (err) {
             if (
-                err?.response?.status === 401
+                err.response?.status === 401
             ) {
-                navigate("/login");
+                navigate("/login", {
+                    replace: true,
+                    state: {
+                        message:
+                            "Please login to continue checkout."
+                    }
+                });
+
+                return;
             }
+
+            showToast(
+                "Unable to load checkout.",
+                "error"
+            );
         } finally {
             setPageLoading(false);
         }
@@ -136,6 +149,11 @@ export default function ReviewPage() {
     };
 
     const handlePlaceOrder = async () => {
+
+        if (processing) return;
+
+        setProcessing(true);
+
         if (!selectedAddress) {
             showToast(
                 "Please select delivery address",
@@ -287,14 +305,59 @@ export default function ReviewPage() {
 
             razorpay.open();
         }
-        catch (err) {
+        /*catch (err) {
             setProcessing(false);
 
+            const status =
+                err.response?.status;
+
+            const data =
+                err.response?.data;
+
+            if (status === 401) {
+                navigate("/login", {
+                    replace: true,
+                    state: {
+                        message:
+                            data?.message ||
+                            "Please login first"
+                    }
+                });
+
+                return;
+            }
+
             showToast(
-                err?.response?.data?.message ||
+                data?.message ||
                 "Something went wrong",
                 "error"
             );
+        }*/
+        catch (err) {
+            console.log(
+                "INSIDE CATCH"
+            );
+
+            console.log(
+                "STATUS:",
+                err.response?.status
+            );
+
+            if (
+                err.response?.status === 401
+            ) {
+                console.log(
+                    "401 BLOCK"
+                );
+
+                navigate("/login");
+
+                return;
+            }
+        }
+        finally {
+            if (paymentMethod === "COD")
+                setProcessing(false);
         }
     };
 

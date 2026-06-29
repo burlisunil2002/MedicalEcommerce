@@ -395,38 +395,44 @@ public async Task<IActionResult> ApplyCoupon(
             });
         }
 
-[HttpGet("full")]
-public async Task<IActionResult> GetFullCart()
+        [HttpGet("full")]
+        public async Task<IActionResult> GetFullCart()
         {
             try
             {
                 var (userId, guestId) = GetIdentity();
 
                 var carts = await _context.Carts
+                    .AsNoTracking()
                     .Include(x => x.Product)
                     .Include(x => x.ProductVariant)
+                        .ThenInclude(v => v.Images)
                     .Where(x =>
                         (!string.IsNullOrEmpty(userId) &&
-                         x.UserId == userId)
+                            x.UserId == userId)
                         ||
                         (string.IsNullOrEmpty(userId) &&
-                         x.GuestId == guestId))
+                            x.GuestId == guestId))
                     .ToListAsync();
 
                 var couponCode =
-                    HttpContext.Session.GetString("CouponCode");
+                    HttpContext.Session
+                        .GetString("CouponCode");
 
                 var totals =
-                    await _cartCalculation.CalculateAsync(
-                        userId,
-                        guestId,
-                        couponCode
-                    );
+                    await _cartCalculation
+                        .CalculateAsync(
+                            userId,
+                            guestId,
+                            couponCode);
 
                 var items = carts.Select(c =>
                 {
-                    var variant = c.ProductVariant;
-                    var product = c.Product;
+                    var variant =
+                        c.ProductVariant;
+
+                    var product =
+                        c.Product;
 
                     decimal originalPrice =
                         variant?.Price ?? 0;
@@ -438,35 +444,61 @@ public async Task<IActionResult> GetFullCart()
                         product?.IsHotDeal == true &&
                         discountPercent > 0
                             ? originalPrice -
-                              (originalPrice * discountPercent / 100m)
+                              (originalPrice *
+                               discountPercent / 100m)
                             : originalPrice;
+
+                    var variantImage =
+                        variant?.Images?
+                            .OrderBy(i =>
+                                i.DisplayOrder)
+                            .Select(i =>
+                                i.ImageUrl)
+                            .FirstOrDefault();
 
                     return new
                     {
-                        variantId = c.ProductVariantId,
-                        productId = c.ProductId,
+                        variantId =
+                            c.ProductVariantId,
+
+                        productId =
+                            c.ProductId,
 
                         name =
                             product?.Name ?? "",
 
                         image =
-                            variant?.ImageUrl ??
+                            variantImage ??
                             product?.ImageUrl ??
                             "/images/no-image.png",
+
+                        images =
+                            variant?.Images?
+                                .OrderBy(i =>
+                                    i.DisplayOrder)
+                                .Select(i =>
+                                    i.ImageUrl)
+                                .ToList()
+                            ?? new List<string>(),
 
                         variantName =
                             variant?.Model ?? "",
 
-                        price = originalPrice,
+                        price =
+                            originalPrice,
 
-                        finalPrice = finalPrice,
+                        finalPrice =
+                            finalPrice,
 
-                        discountPercentage = discountPercent,
+                        discountPercentage =
+                            discountPercent,
 
-                        quantity = c.Quantity,
+                        quantity =
+                            c.Quantity,
 
                         lineTotal =
-                            finalPrice * c.Quantity,
+                            finalPrice *
+                            c.Quantity,
 
                         gstPercentage =
                             product?.GSTPercentage ?? 0,
@@ -478,12 +510,20 @@ public async Task<IActionResult> GetFullCart()
                             variant?.MinQuantity ?? 1,
 
                         maxQuantity =
-                            variant?.MaxQuantity
+                            variant?.MaxQuantity,
+
+                        stockQuantity =
+                            variant?.StockQuantity ?? 0,
+
+                        hasStock =
+                            (variant?.StockQuantity ?? 0) > 0
                     };
-                }).ToList();
+                })
+                .ToList();
 
                 return Ok(new
                 {
+                    success = true,
                     items,
                     summary = totals
                 });
@@ -493,8 +533,11 @@ public async Task<IActionResult> GetFullCart()
                 return StatusCode(500, new
                 {
                     success = false,
-                    message = ex.Message,
-                    inner = ex.InnerException?.Message
+                    message =
+                        "Failed to load cart.",
+                    error =
+                        ex.InnerException?.Message ??
+                        ex.Message
                 });
             }
         }

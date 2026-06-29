@@ -51,8 +51,25 @@ export default function MainHeader() {
     // 🔐 LOAD USER
     useEffect(() => {
         API.get("/api/user")
-            .then(res => setUser(res.data))
-            .catch(() => setUser(null));
+            .then(res => {
+                setUser(res.data);
+            })
+            .catch(err => {
+
+                setUser(null);
+
+                if (
+                    err.response?.status ===
+                    401
+                ) {
+                    navigate(
+                        "/login",
+                        {
+                            replace: true
+                        }
+                    );
+                }
+            });
     }, []);
 
     // 🔍 SEARCH
@@ -62,13 +79,34 @@ export default function MainHeader() {
             return;
         }
 
-        const timer = setTimeout(() => {
-            API.get(`/api/products/search?term=${search}`)
-                .then(res => setSuggestions(res.data))
-                .catch(() => setSuggestions([]));
-        }, 300);
+        const controller =
+            new AbortController();
 
-        return () => clearTimeout(timer);
+        const timer =
+            setTimeout(async () => {
+                try {
+                    const res =
+                        await API.get(
+                            `/api/products/search?term=${search}`,
+                            {
+                                signal:
+                                    controller.signal
+                            }
+                        );
+
+                    setSuggestions(
+                        res.data
+                    );
+                }
+                catch {
+                    setSuggestions([]);
+                }
+            }, 300);
+
+        return () => {
+            clearTimeout(timer);
+            controller.abort();
+        };
     }, [search]);
 
     return (

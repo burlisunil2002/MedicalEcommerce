@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../services/api";
+import DeliveryTracker from "../components/orders/DeliveryTracker";
 
 export default function MyOrdersPage() {
     const navigate = useNavigate();
@@ -18,7 +19,16 @@ export default function MyOrdersPage() {
     const loadOrders = async () => {
         try {
             const res = await API.get("/api/order/my-orders");
-            setOrders(res.data || []);
+
+            console.log("Orders API");
+
+            console.log(res.data);
+
+            setOrders(
+                Array.isArray(res.data)
+                    ? res.data
+                    : res.data.orders ?? []
+            );
         } catch {
             navigate("/login");
         } finally {
@@ -112,6 +122,12 @@ export default function MyOrdersPage() {
         );
     }
 
+    console.log("Orders State");
+
+    console.log(orders);
+
+    console.log(Array.isArray(orders));
+
     return (
         <>
             <div className="min-h-screen bg-slate-50 pb-24 px-3 md:px-6 py-5">
@@ -125,6 +141,7 @@ export default function MyOrdersPage() {
                     <div className="space-y-5">
 
                         {orders.map(order => (
+
                             <div
                                 key={order.orderId}
                                 className="bg-white rounded-3xl shadow-sm border p-4 md:p-6"
@@ -240,17 +257,6 @@ export default function MyOrdersPage() {
                                         px-3
                                         py-1
                                         rounded-full
-                                        bg-blue-100
-                                        text-blue-700
-                                        text-xs
-                                    ">
-                                            Order : {order.orderStatus}
-                                        </span>
-
-                                        <span className="
-                                        px-3
-                                        py-1
-                                        rounded-full
                                         bg-green-100
                                         text-green-700
                                         text-xs
@@ -258,6 +264,11 @@ export default function MyOrdersPage() {
                                             Payment : {order.paymentStatus}
                                         </span>
 
+                                    </div>
+
+                                    <div className="flex gap-2 flex-wrap">
+
+                                        <DeliveryTracker status={order.orderStatus} />
                                     </div>
 
                                     {order.paymentStatus === "Completed" && (
