@@ -100,11 +100,18 @@
   </ItemGroup>
 	
 	
-<Target Name="BuildReact" BeforeTargets="Build">
+<Target Name="BuildReact" BeforeTargets="Publish">
 
-  <Exec WorkingDirectory="sunilmedical-ui" Command="npm install" Condition="!Exists('sunilmedical-ui/node_modules')" />
+    <Exec WorkingDirectory="sunilmedical-ui"
+          Command="npm ci"
+          Condition="Exists('sunilmedical-ui/package-lock.json')" />
 
-  <Exec WorkingDirectory="sunilmedical-ui" Command="npm run build" />
+    <Exec WorkingDirectory="sunilmedical-ui"
+          Command="npm install"
+          Condition="!Exists('sunilmedical-ui/package-lock.json')" />
+
+    <Exec WorkingDirectory="sunilmedical-ui"
+          Command="npm run build" />
 
 </Target>
 
