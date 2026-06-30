@@ -208,28 +208,6 @@ export default function WishlistPage() {
 
                 </div>
 
-                <div>
-
-                    <p className="text-sm text-gray-500">
-
-                        Wishlist Items
-
-                    </p>
-
-                    <h2
-                        className="
-                            text-3xl
-                            font-bold
-                            text-pink-600
-                        "
-                    >
-
-                        {wishlist.length}
-
-                    </h2>
-
-                </div>
-
             </div>
 
         </div>

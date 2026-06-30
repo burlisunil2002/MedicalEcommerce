@@ -124,7 +124,7 @@ namespace VivekMedicalProducts.Controllers
 
                     Currency = "INR",
 
-                    OrderStatus = "Confirmed",
+                    OrderStatus = "Placed",
 
                     PaymentStatus = "Pending",
 
@@ -648,7 +648,7 @@ namespace VivekMedicalProducts.Controllers
 
                 // success
                 order.PaymentStatus = "Completed";
-                order.OrderStatus = "Confirmed";
+                order.OrderStatus = "Placed";
                 order.IsPaymentVerified = true;
                 order.RazorpayPaymentId =
                     model.razorpay_payment_id;
@@ -765,7 +765,7 @@ namespace VivekMedicalProducts.Controllers
                 if (eventType == "payment.captured")
                 {
                     order.PaymentStatus = "Completed";
-                    order.OrderStatus = "Confirmed";
+                    order.OrderStatus = "Placed";
                     order.IsPaymentVerified = true;
                     order.PaymentVerifiedAt = DateTime.UtcNow;
 
@@ -970,7 +970,7 @@ namespace VivekMedicalProducts.Controllers
 
                 if (
                     order.PaymentStatus != "Completed" ||
-                    order.OrderStatus != "Confirmed"
+                    order.OrderStatus != "Placed"
                 )
                 {
                     return BadRequest(new

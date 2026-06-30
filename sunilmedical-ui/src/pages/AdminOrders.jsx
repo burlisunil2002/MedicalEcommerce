@@ -659,16 +659,20 @@ export default function AdminOrders() {
                                                         })
                                                     }
                                                 >
-                                                    <option value="Pending">
-                                                        Pending
+                                                    <option value="Placed">
+                                                        Placed
                                                     </option>
 
-                                                    <option value="Processing">
-                                                        Processing
+                                                    <option value="Packed">
+                                                        Packed
                                                     </option>
 
                                                     <option value="Shipped">
                                                         Shipped
+                                                    </option>
+
+                                                    <option value="OutForDelivery">
+                                                        OutForDelivery
                                                     </option>
 
                                                     <option value="Delivered">
