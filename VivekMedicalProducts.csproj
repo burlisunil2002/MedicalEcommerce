@@ -102,21 +102,16 @@
 	
 <Target Name="BuildReact" BeforeTargets="Publish">
 
-    <Exec WorkingDirectory="sunilmedical-ui"
-          Command="npm ci"
-          Condition="Exists('sunilmedical-ui/package-lock.json')" />
+    <Exec WorkingDirectory="sunilmedical-ui" Command="npm ci" Condition="Exists('sunilmedical-ui/package-lock.json')" />
 
-    <Exec WorkingDirectory="sunilmedical-ui"
-          Command="npm install"
-          Condition="!Exists('sunilmedical-ui/package-lock.json')" />
+    <Exec WorkingDirectory="sunilmedical-ui" Command="npm install" Condition="!Exists('sunilmedical-ui/package-lock.json')" />
 
-    <Exec WorkingDirectory="sunilmedical-ui"
-          Command="npm run build" />
+    <Exec WorkingDirectory="sunilmedical-ui" Command="npm run build" />
 
 </Target>
 
-<Target Name="CopyReactBuild" AfterTargets="Build">
-
+<Target Name="CopyReactBuild" AfterTargets="Publish">
+	
   <ItemGroup>
       <ReactBuildFiles Include="sunilmedical-ui/build/**" />
   </ItemGroup>

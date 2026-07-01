@@ -35,6 +35,10 @@ public class ApplicationDbContext
 
     public DbSet<ProductVariantImage> ProductVariantImages { get; set; }
 
+    public DbSet<PaymentSession> PaymentSessions { get; set; }
+
+    public DbSet<CheckoutSessionModel> CheckoutSessions { get; set; }
+
     public DbSet<GstResponseModel> GstVerification { get; set; }
 
     public DbSet<WishlistModel> Wishlists { get; set; }

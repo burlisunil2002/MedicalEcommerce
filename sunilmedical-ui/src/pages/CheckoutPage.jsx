@@ -75,10 +75,15 @@ export default function CheckoutPage() {
             await loadCheckout();
 
         } catch (err) {
-            console.error(
-                "Address save failed:",
-                err
-            );
+
+            const message =
+                err?.response?.data?.message ||
+                err?.response?.data ||
+                "Unable to save address.";
+
+            alert(message);
+
+            console.error(err);
         }
     };
 
@@ -126,7 +131,12 @@ export default function CheckoutPage() {
                                         key={a.id}
                                         address={a}
                                         selected={selectedAddress === a.id}
-                                        onSelect={() => setSelectedAddress(a.id)}
+                                        onSelect={async () => {
+
+                                            await selectAddress(a.id);
+
+                                            setSelectedAddress(a.id);
+                                        }}
                                         onEdit={setEditingAddress}
                                     />
                                 ))

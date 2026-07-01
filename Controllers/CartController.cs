@@ -256,18 +256,30 @@ private (string? userId, string guestId) GetIdentity()
         {
             var (userId, guestId) = GetIdentity();
 
+            var checkoutSession =
+    await _context.CheckoutSessions
+    .FirstOrDefaultAsync(x =>
+
+        x.IsActive &&
+
+        (
+
+            (userId != null && x.UserId == userId)
+
+            ||
+
+            (userId == null && x.GuestId == guestId)
+
+        ));
+
             var couponCode =
-                HttpContext.Session.GetString(
-                    "CouponCode"
-                );
+                checkoutSession?.CouponCode;
 
             var totals =
-                await _cartCalculation
-                    .CalculateAsync(
-                        userId,
-                        guestId,
-                        couponCode
-                    );
+                await _cartCalculation.CalculateAsync(
+                    userId,
+                    guestId,
+                    couponCode);
 
             return Ok(totals);
         }
@@ -302,10 +314,40 @@ public async Task<IActionResult> ApplyCoupon(
                 });
             }
 
-            HttpContext.Session.SetString(
-                "CouponCode",
-                code
-            );
+            var checkoutSession =
+    await _context.CheckoutSessions
+    .FirstOrDefaultAsync(x =>
+
+        x.IsActive &&
+
+        (
+
+            (userId != null && x.UserId == userId)
+
+            ||
+
+            (userId == null && x.GuestId == guestId)
+
+        ));
+
+            if (checkoutSession == null)
+            {
+                checkoutSession = new CheckoutSessionModel
+                {
+                    UserId = userId,
+                    GuestId = guestId,
+                    CreatedDate = DateTime.UtcNow,
+                    ModifiedDate = DateTime.UtcNow,
+                    IsActive = true
+                };
+
+                _context.CheckoutSessions.Add(checkoutSession);
+            }
+
+            checkoutSession.CouponCode = code;
+            checkoutSession.ModifiedDate = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
 
             var totals =
                 await _cartCalculation.CalculateAsync(
@@ -319,6 +361,48 @@ public async Task<IActionResult> ApplyCoupon(
                 success = true,
                 message = "Coupon applied successfully",
                 couponDiscount = totals.CouponDiscount,
+                summary = totals
+            });
+        }
+
+        [HttpDelete("remove-coupon")]
+        public async Task<IActionResult> RemoveCoupon()
+        {
+            var (userId, guestId) = GetIdentity();
+
+            var session =
+                await _context.CheckoutSessions
+                .FirstOrDefaultAsync(x =>
+
+                    x.IsActive &&
+
+                    (
+
+                        (userId != null && x.UserId == userId)
+
+                        ||
+
+                        (userId == null && x.GuestId == guestId)
+
+                    ));
+
+            if (session != null)
+            {
+                session.CouponCode = null;
+                session.ModifiedDate = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+            }
+
+            var totals =
+                await _cartCalculation.CalculateAsync(
+                    userId,
+                    guestId,
+                    null);
+
+            return Ok(new
+            {
+                success = true,
                 summary = totals
             });
         }
@@ -415,9 +499,24 @@ public async Task<IActionResult> ApplyCoupon(
                             x.GuestId == guestId))
                     .ToListAsync();
 
+                var checkoutSession =
+    await _context.CheckoutSessions
+    .FirstOrDefaultAsync(x =>
+
+        x.IsActive &&
+
+        (
+
+            (userId != null && x.UserId == userId)
+
+            ||
+
+            (userId == null && x.GuestId == guestId)
+
+        ));
+
                 var couponCode =
-                    HttpContext.Session
-                        .GetString("CouponCode");
+                    checkoutSession?.CouponCode;
 
                 var totals =
                     await _cartCalculation

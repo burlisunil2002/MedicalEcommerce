@@ -95,57 +95,60 @@ export default function ReviewPage() {
         }
     };
 
-    const startPolling = (orderId) => {
+    const startPolling = (razorpayOrderId) => {
+
         let attempts = 0;
 
-        const interval = setInterval(
-            async () => {
-                attempts++;
+        const interval = setInterval(async () => {
 
-                try {
-                    const { data } =
-                        await API.get(
-                            `/api/order/check-payment-status/${orderId}`
-                        );
+            attempts++;
 
-                    if (data.success) {
-                        clearInterval(interval);
+            try {
 
-                        setProcessing(false);
+                const { data } = await API.get(
+                    `/api/order/check-payment-status/${razorpayOrderId}`
+                );
 
-                        navigate("/my-orders", {
-                            state: {
-                                successMessage:
-                                    "🎉 Payment successful"
-                            }
-                        });
+                if (data.success) {
 
-                        return;
-                    }
+                    clearInterval(interval);
 
-                    if (attempts >= 10) {
-                        clearInterval(interval);
+                    setProcessing(false);
 
-                        setProcessing(false);
+                    navigate("/my-orders", {
+                        state: {
+                            successMessage: "🎉 Payment Successful"
+                        }
+                    });
 
-                        showToast(
-                            "Verification taking longer than expected",
-                            "error"
-                        );
-                    }
-                } catch (err) {
+                    return;
+                }
+
+                if (attempts >= 10) {
+
                     clearInterval(interval);
 
                     setProcessing(false);
 
                     showToast(
-                        "Unable to verify payment",
+                        "Payment verification is taking longer than expected.",
                         "error"
                     );
                 }
-            },
-            2500
-        );
+
+            } catch {
+
+                clearInterval(interval);
+
+                setProcessing(false);
+
+                showToast(
+                    "Unable to verify payment.",
+                    "error"
+                );
+            }
+
+        }, 2500);
     };
 
     const handlePlaceOrder = async () => {
@@ -163,13 +166,7 @@ export default function ReviewPage() {
         }
 
         const payload = {
-            addressId: selectedAddress.id,
-            fullName: selectedAddress.fullName,
-            phoneNumber: selectedAddress.phoneNumber,
-            address: selectedAddress.address,
-            city: selectedAddress.city,
-            state: selectedAddress.state,
-            pincode: selectedAddress.pincode
+            checkout: true
         };
 
         try {
@@ -246,17 +243,15 @@ export default function ReviewPage() {
                         try {
                             setProcessing(true);
 
-                            const {
-                                data: verify
-                            } = await API.post(
+                            await API.post(
                                 "/api/order/verify-payment",
                                 {
-                                    orderId:
-                                        order.orderId,
                                     razorpay_payment_id:
                                         response.razorpay_payment_id,
+
                                     razorpay_order_id:
                                         response.razorpay_order_id,
+
                                     razorpay_signature:
                                         response.razorpay_signature
                                 }

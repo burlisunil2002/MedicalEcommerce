@@ -64,7 +64,7 @@ namespace VivekMedicalProducts.Controllers
 
         [HttpPost("place-cod")]
         public async Task<IActionResult> PlaceCOD(
-    [FromBody] CheckoutViewModel model)
+     [FromBody] CheckoutViewModel model)
         {
             using var transaction =
                 await _context.Database.BeginTransactionAsync();
@@ -83,277 +83,72 @@ namespace VivekMedicalProducts.Controllers
                     });
                 }
 
+                // Address
+                var checkoutSession = await _context.CheckoutSessions
+    .FirstOrDefaultAsync(x =>
+        x.UserId == userId &&
+        x.IsActive);
+
+                if (checkoutSession == null)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Checkout session not found."
+                    });
+                }
+
                 var address = await _context.UserAddresses
                     .FirstOrDefaultAsync(x =>
-                        x.Id == model.AddressId &&
+                        x.Id == checkoutSession.SelectedAddressId &&
                         x.UserId == userId);
 
                 if (address == null)
-                    return BadRequest("Address not found");
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Please select a delivery address."
+                    });
+                }
 
-                var carts = await _context.Carts
+                // Cart
+                var carts =
+                    await _context.Carts
                     .Include(x => x.Product)
                     .Include(x => x.ProductVariant)
                     .Where(x => x.UserId == userId)
                     .ToListAsync();
 
                 if (!carts.Any())
-                    return BadRequest("Cart is empty");
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Cart is empty."
+                    });
+                }
 
                 var couponCode =
-                    HttpContext.Session.GetString("CouponCode");
+    checkoutSession.CouponCode;
 
+                // Totals
                 var totals =
                     await _calc.CalculateAsync(
                         userId,
                         null,
-                        couponCode
-                    );
+                        couponCode);
+
+                var sellerId =
+                    carts.FirstOrDefault()?.SellerId;
 
                 // Create Order
                 var order = new OrderModel
                 {
                     UserId = userId,
-                    SellerId = carts.First().SellerId,
-                    UserAddressId = address.Id,
 
-                    OrderNumber =
-                        $"ORD-{DateTime.UtcNow.Ticks}",
-
-                    GrandTotal = totals.Total,
-
-                    Currency = "INR",
-
-                    OrderStatus = "Placed",
-
-                    PaymentStatus = "Pending",
-
-                    OrderDate = DateTime.UtcNow,
-
-                    CreatedBy = userId,
-
-                    IpAddress =
-                        HttpContext.Connection
-                            .RemoteIpAddress
-                            ?.ToString(),
-
-                    UserAgent =
-                        Request.Headers["User-Agent"]
-                            .ToString()
-                };
-
-                _context.Orders.Add(order);
-                await _context.SaveChangesAsync();
-
-                decimal totalTaxableAmount = carts.Sum(item =>
-                {
-                    decimal originalPrice =
-                        item.ProductVariant?.Price ?? 0;
-
-                    decimal discountPercent =
-                        item.Product?.DiscountPercentage ?? 0;
-
-                    decimal discountAmount =
-                        item.Product?.IsHotDeal == true
-                            ? originalPrice * discountPercent / 100m
-                            : 0;
-
-                    decimal finalUnitPrice =
-                        originalPrice - discountAmount;
-
-                    return finalUnitPrice * item.Quantity;
-                });
-
-
-                // Create Order Items
-                var orderItems = carts.Select(item =>
-                {
-
-                    decimal originalPrice =
-    item.ProductVariant?.Price ?? 0;
-
-                    decimal discountPercent =
-                        item.Product?.DiscountPercentage ?? 0;
-
-                    decimal discountAmount =
-                        item.Product?.IsHotDeal == true
-                            ? originalPrice * discountPercent / 100m
-                            : 0;
-
-                    decimal finalUnitPrice =
-                        originalPrice - discountAmount;
-
-                    decimal taxableAmount =
-                        finalUnitPrice * item.Quantity;
-
-                    decimal gstPercent =
-                        item.Product?.GSTPercentage ?? 0;
-
-                    decimal gstAmount =
-                        taxableAmount * gstPercent / 100m;
-
-                    decimal couponShare = 0;
-
-                    if (totals.CouponDiscount > 0 &&
-                        totalTaxableAmount > 0)
-                    {
-                        couponShare =
-                            (taxableAmount / totalTaxableAmount)
-                            * totals.CouponDiscount;
-                    }
-
-                    decimal finalPaidAmount =
-                        taxableAmount +
-                        gstAmount -
-                        couponShare;
-
-                    return new OrderItemModel
-                    {
-                        OrderId = order.OrderId,
-
-                        ProductId = item.ProductId,
-
-                        ProductVariantId = item.ProductVariantId,
-
-                        ProductName = item.Product?.Name ?? "",
-
-                        Quantity = item.Quantity,
-
-                        Price = Math.Round(originalPrice, 2),
-
-                        DiscountAmount =
-        Math.Round(discountAmount, 2),
-
-                        TaxableAmount =
-        Math.Round(taxableAmount, 2),
-
-                        GSTPercentage =
-        gstPercent,
-
-                        GSTAmount =
-        Math.Round(gstAmount, 2),
-
-                        CouponDiscountAmount =
-        Math.Round(couponShare, 2),
-
-                        FinalPaidAmount =
-        Math.Round(finalPaidAmount, 2),
-
-                        LineTotal =
-        Math.Round(finalPaidAmount, 2),
-
-                        SellerId = item.SellerId,
-
-                        ItemStatus = "Pending",
-
-                        CreatedAt = DateTime.UtcNow
-                    };
-                }).ToList();
-
-                _context.OrderItems.AddRange(orderItems);
-
-                // Clear Cart
-                _context.Carts.RemoveRange(carts);
-
-                await transaction.CommitAsync();
-
-                // clear coupon after order success
-                HttpContext.Session.Remove("CouponCode");
-
-                await _context.SaveChangesAsync();
-
-                return Ok(new
-                {
-                    success = true,
-                    orderId = order.OrderId,
-                    message = "Order placed successfully"
-                });
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-
-                return BadRequest(new
-                {
-                    success = false,
-                    message = ex.Message,
-                    inner = ex.InnerException?.Message
-                });
-            }
-        }
-
-
-        // ================= CREATE ORDER =================
-        [HttpPost("create")]
-        public async Task<IActionResult> CreateOrder(
-      [FromBody] CheckoutViewModel model)
-        {
-            using var transaction =
-                await _context.Database.BeginTransactionAsync();
-
-            try
-            {
-                var userId = _userContext.GetUserId();
-
-                if (string.IsNullOrEmpty(userId))
-                {
-                    return Unauthorized(new
-                    {
-                        success = false,
-                        redirect = "/login",
-                        message = "Please login first"
-                    });
-                }
-
-                // ADDRESS
-                var address =
-                    await _context.UserAddresses
-                        .FirstOrDefaultAsync(x =>
-                            x.Id == model.AddressId &&
-                            x.UserId == userId);
-
-                if (address == null)
-                {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Address not found"
-                    });
-                }
-
-                // CART
-                var carts =
-                    await _context.Carts
-                        .Include(c => c.Product)
-                        .Include(c => c.ProductVariant)
-                        .Where(c => c.UserId == userId)
-                        .ToListAsync();
-
-                if (!carts.Any())
-                {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Cart is empty"
-                    });
-                }
-
-                // TOTALS
-                var totals =
-                    await _calc.CalculateAsync(
-                        userId,
-                        null,
-                        model.CouponCode
-                    );
-
-                var sellerId =
-                    carts.FirstOrDefault()?.SellerId;
-
-                // ORDER
-                var order = new OrderModel
-                {
-                    UserId = userId,
                     SellerId = sellerId,
+
                     UserAddressId = address.Id,
 
                     OrderNumber =
@@ -364,22 +159,24 @@ namespace VivekMedicalProducts.Controllers
 
                     Currency = "INR",
 
-                    PaymentStatus =
-                        "Initiated",
+                    OrderStatus = "Placed",
 
-                    OrderStatus =
-                        "Pending",
+                    PaymentStatus = "Cash On Delivery",
 
-                    OrderDate =
-                        DateTime.UtcNow,
+                    IsPaymentVerified = false,
 
-                    CreatedBy =
-                        userId,
+                    PaymentVerifiedAt = null,
+
+                    OrderDate = DateTime.UtcNow,
+
+                    OrderModifiedDate = DateTime.UtcNow,
+
+                    CreatedBy = userId,
 
                     IpAddress =
                         HttpContext.Connection
-                            .RemoteIpAddress
-                            ?.ToString(),
+                            .RemoteIpAddress?
+                            .ToString(),
 
                     UserAgent =
                         Request.Headers["User-Agent"]
@@ -387,33 +184,36 @@ namespace VivekMedicalProducts.Controllers
                 };
 
                 _context.Orders.Add(order);
+
                 await _context.SaveChangesAsync();
 
-                decimal totalTaxableAmount = carts.Sum(item =>
+                decimal totalTaxableAmount =
+                    carts.Sum(item =>
+                    {
+                        decimal originalPrice =
+                            item.ProductVariant?.Price ?? 0;
+
+                        decimal discountPercent =
+                            item.Product?.DiscountPercentage ?? 0;
+
+                        decimal discountAmount =
+                            item.Product?.IsHotDeal == true
+                                ? originalPrice *
+                                  discountPercent / 100m
+                                : 0;
+
+                        decimal finalPrice =
+                            originalPrice -
+                            discountAmount;
+
+                        return finalPrice *
+                               item.Quantity;
+                    });
+
+                var orderItems = carts.Select(item =>
                 {
                     decimal originalPrice =
                         item.ProductVariant?.Price ?? 0;
-
-                    decimal discountPercent =
-                        item.Product?.DiscountPercentage ?? 0;
-
-                    decimal discountAmount =
-                        item.Product?.IsHotDeal == true
-                            ? originalPrice * discountPercent / 100m
-                            : 0;
-
-                    decimal finalUnitPrice =
-                        originalPrice - discountAmount;
-
-                    return finalUnitPrice * item.Quantity;
-                });
-
-                // ORDER ITEMS
-                var orderItems = carts.Select(item =>
-                {
-
-                    decimal originalPrice =
-    item.ProductVariant?.Price ?? 0;
 
                     decimal discountPercent =
                         item.Product?.DiscountPercentage ?? 0;
@@ -465,46 +265,178 @@ namespace VivekMedicalProducts.Controllers
                         Price = Math.Round(originalPrice, 2),
 
                         DiscountAmount =
-        Math.Round(discountAmount, 2),
+                            Math.Round(discountAmount, 2),
 
                         TaxableAmount =
-        Math.Round(taxableAmount, 2),
+                            Math.Round(taxableAmount, 2),
 
-                        GSTPercentage =
-        gstPercent,
+                        GSTPercentage = gstPercent,
 
                         GSTAmount =
-        Math.Round(gstAmount, 2),
+                            Math.Round(gstAmount, 2),
 
                         CouponDiscountAmount =
-        Math.Round(couponShare, 2),
+                            Math.Round(couponShare, 2),
 
                         FinalPaidAmount =
-        Math.Round(finalPaidAmount, 2),
+                            Math.Round(finalPaidAmount, 2),
 
                         LineTotal =
-        Math.Round(finalPaidAmount, 2),
+                            Math.Round(finalPaidAmount, 2),
 
                         SellerId = item.SellerId,
 
-                        ItemStatus = "Pending",
+                        ItemStatus = "Placed",
 
                         CreatedAt = DateTime.UtcNow
                     };
+
                 }).ToList();
 
                 _context.OrderItems.AddRange(orderItems);
-                await _context.SaveChangesAsync();
 
-                // RAZORPAY ORDER
-                var client =
-                    new RazorpayClient(
-                        _config["Razorpay:Key"],
-                        _config["Razorpay:Secret"]
-                    );
+                // Clear Cart
+                _context.Carts.RemoveRange(carts);
+
+                // Commit transaction
+                await transaction.CommitAsync();
+
+                // Clear Coupon
+                _context.CheckoutSessions.Remove(checkoutSession);
+
+                await _context.SaveChangesAsync();
+                // Send Invoice
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await SendInvoiceEmailAsync(order.OrderId);
+                    }
+                    catch
+                    {
+                        // Ignore email errors
+                    }
+                });
+
+                return Ok(new
+                {
+                    success = true,
+
+                    orderId = order.OrderId,
+
+                    orderNumber = order.OrderNumber,
+
+                    paymentStatus = order.PaymentStatus,
+
+                    orderStatus = order.OrderStatus,
+
+                    message = "Order placed successfully."
+                });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+
+                return BadRequest(new
+                {
+                    success = false,
+
+                    message =
+                        ex.InnerException?.Message ??
+                        ex.Message
+                });
+            }
+        }
+
+        // ================= CREATE ORDER =================
+        [HttpPost("create")]
+        public async Task<IActionResult> CreateOrder(
+     [FromBody] CheckoutViewModel model)
+        {
+            try
+            {
+                var userId = _userContext.GetUserId();
+
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized(new
+                    {
+                        success = false,
+                        redirect = "/login",
+                        message = "Please login first"
+                    });
+                }
+
+                var checkoutSession = await _context.CheckoutSessions
+    .FirstOrDefaultAsync(x =>
+        x.UserId == userId &&
+        x.IsActive);
+
+                if (checkoutSession == null)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Checkout session not found."
+                    });
+                }
+
+                var address = await _context.UserAddresses
+                    .FirstOrDefaultAsync(x =>
+                        x.Id == checkoutSession.SelectedAddressId &&
+                        x.UserId == userId);
+
+                if (address == null)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Please select a delivery address."
+                    });
+                }
+
+                // Cart
+                var carts = await _context.Carts
+                    .Include(x => x.Product)
+                    .Include(x => x.ProductVariant)
+                    .Where(x => x.UserId == userId)
+                    .ToListAsync();
+
+                if (!carts.Any())
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Cart is empty"
+                    });
+                }
+
+                // Totals
+                var totals = await _calc.CalculateAsync(
+    userId,
+    null,
+    checkoutSession.CouponCode);
+
+                if (totals.Total != checkoutSession.GrandTotal)
+                {
+                    checkoutSession.GrandTotal = totals.Total;
+                    checkoutSession.SubTotal = totals.Subtotal;
+                    checkoutSession.GSTAmount = totals.GST;
+                    checkoutSession.CouponDiscount = totals.CouponDiscount;
+                    checkoutSession.ShippingCharge = totals.Delivery;
+
+                    await _context.SaveChangesAsync();
+                }
 
                 var amountInPaise =
-                    (int)(totals.Total * 100);
+                    (int)Math.Round(totals.Total * 100);
+
+                var client = new RazorpayClient(
+                    _config["Razorpay:Key"],
+                    _config["Razorpay:Secret"]);
+
+                var receipt =
+                    $"ORD-{DateTime.UtcNow.Ticks}";
 
                 var razorpayOrder =
                     client.Order.Create(
@@ -512,15 +444,396 @@ namespace VivekMedicalProducts.Controllers
                         {
                     { "amount", amountInPaise },
                     { "currency", "INR" },
-                    { "receipt", order.OrderNumber }
+                    { "receipt", receipt }
                         });
 
-                order.RazorpayOrderId =
+                var razorpayOrderId =
                     razorpayOrder["id"].ToString();
 
-                await transaction.CommitAsync();
+                // Remove any old pending session
+                var oldSession =
+                    await _context.PaymentSessions
+                    .FirstOrDefaultAsync(x =>
+                        x.UserId == userId &&
+                        !x.IsCompleted);
+
+                if (oldSession != null)
+                {
+                    oldSession.IsCompleted = true;
+                    oldSession.PaymentStatus = "Cancelled";
+                    oldSession.FailureReason = "Superseded by new payment session";
+                }
+
+                // Save Payment Session
+
+                var session = new PaymentSession
+                {
+                    CheckoutSessionId = checkoutSession.Id,
+
+                    RazorpayOrderId = razorpayOrderId,
+
+                    UserId = userId,
+
+                    Amount = checkoutSession.GrandTotal,
+
+                    Currency = checkoutSession.Currency,
+
+                    CreatedDate = DateTime.UtcNow,
+
+                    ExpiryDate = DateTime.UtcNow.AddMinutes(30),
+
+                    IsCompleted = false,
+
+                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+
+                    UserAgent = Request.Headers["User-Agent"].ToString()
+                };
+
+                _context.PaymentSessions.Add(session);
 
                 await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    success = true,
+
+                    paymentSessionId = session.Id,
+
+                    razorpayOrderId,
+
+                    amount = amountInPaise,
+
+                    razorpayKey = _config["Razorpay:Key"]
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+
+                    message =
+                        ex.InnerException?.Message ??
+                        ex.Message
+                });
+            }
+        }
+
+
+        // ================= VERIFY PAYMENT =================
+        [HttpPost("verify-payment")]
+        public async Task<IActionResult> VerifyPayment(
+    [FromBody] PaymentDto model)
+        {
+            using var transaction =
+                await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                if (model == null ||
+                    string.IsNullOrWhiteSpace(model.razorpay_order_id) ||
+                    string.IsNullOrWhiteSpace(model.razorpay_payment_id) ||
+                    string.IsNullOrWhiteSpace(model.razorpay_signature))
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Invalid payment details."
+                    });
+                }
+
+                // Payment Session
+                var session =
+                    await _context.PaymentSessions
+                    .FirstOrDefaultAsync(x =>
+                        x.RazorpayOrderId ==
+                        model.razorpay_order_id);
+
+                if (session == null)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Payment session not found."
+                    });
+                }
+
+                if (session.IsCompleted)
+                {
+                    return Ok(new
+                    {
+                        success = true,
+                        redirect = "/my-orders"
+                    });
+                }
+
+                if (session.ExpiryDate < DateTime.UtcNow)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Payment session expired."
+                    });
+                }
+
+                // Verify Razorpay Signature
+                var payload =
+                    $"{model.razorpay_order_id}|{model.razorpay_payment_id}";
+
+                using var hmac =
+                    new HMACSHA256(
+                        Encoding.UTF8.GetBytes(
+                            _config["Razorpay:Secret"]));
+
+                var generated =
+                    Convert.ToHexString(
+                        hmac.ComputeHash(
+                            Encoding.UTF8.GetBytes(payload)))
+                    .ToLowerInvariant();
+
+                if (generated != model.razorpay_signature)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Payment verification failed."
+                    });
+                }
+
+                // Load Checkout Session
+                var checkoutSession = await _context.CheckoutSessions
+                    .FirstOrDefaultAsync(x =>
+                        x.Id == session.CheckoutSessionId &&
+                        x.IsActive);
+
+                if (checkoutSession == null)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Checkout session not found."
+                    });
+                }
+
+                var userId = checkoutSession.UserId;
+
+                // Address
+                var address = await _context.UserAddresses
+                    .FirstOrDefaultAsync(x =>
+                        x.Id == checkoutSession.SelectedAddressId &&
+                        x.UserId == userId);
+
+                if (address == null)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Delivery address not found."
+                    });
+                }
+
+                // Cart
+                var carts = await _context.Carts
+                    .Include(x => x.Product)
+                    .Include(x => x.ProductVariant)
+                    .Where(x => x.UserId == userId)
+                    .ToListAsync();
+
+                if (!carts.Any())
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Cart is empty."
+                    });
+                }
+
+                // Latest Totals
+                var totals = await _calc.CalculateAsync(
+                    userId,
+                    null,
+                    checkoutSession.CouponCode);
+
+                var sellerId = carts.First().SellerId;
+
+                // Create Order
+                var order =
+                    new OrderModel
+                    {
+                        UserId = userId,
+
+                        SellerId = sellerId,
+
+                        UserAddressId = address.Id,
+
+                        OrderNumber =
+                            $"ORD-{DateTime.UtcNow.Ticks}",
+
+                        GrandTotal = checkoutSession.GrandTotal,
+
+                        Currency = checkoutSession.Currency,
+
+                        PaymentStatus = "Completed",
+
+                        OrderStatus = "Placed",
+
+                        RazorpayOrderId =
+                            model.razorpay_order_id,
+
+                        RazorpayPaymentId =
+                            model.razorpay_payment_id,
+
+                        RazorpaySignature =
+                            model.razorpay_signature,
+
+                        PaymentVerifiedAt =
+                            DateTime.UtcNow,
+
+                        IsPaymentVerified = true,
+
+                        OrderDate =
+                            DateTime.UtcNow,
+
+                        OrderModifiedDate =
+                            DateTime.UtcNow,
+
+                        CreatedBy = userId,
+
+                        IpAddress =
+                            HttpContext.Connection
+                                .RemoteIpAddress?
+                                .ToString(),
+
+                        UserAgent =
+                            Request.Headers["User-Agent"]
+                                .ToString()
+                    };
+
+                _context.Orders.Add(order);
+
+                await _context.SaveChangesAsync();
+
+                decimal totalTaxableAmount =
+                    carts.Sum(item =>
+                    {
+                        decimal originalPrice =
+                            item.ProductVariant?.Price ?? 0;
+
+                        decimal discountPercent =
+                            item.Product?.DiscountPercentage ?? 0;
+
+                        decimal discountAmount =
+                            item.Product?.IsHotDeal == true
+                                ? originalPrice *
+                                  discountPercent / 100m
+                                : 0;
+
+                        decimal finalPrice =
+                            originalPrice -
+                            discountAmount;
+
+                        return finalPrice *
+                               item.Quantity;
+                    });
+
+                var orderItems = carts.Select(item =>
+                {
+                    decimal originalPrice =
+                        item.ProductVariant?.Price ?? 0;
+
+                    decimal discountPercent =
+                        item.Product?.DiscountPercentage ?? 0;
+
+                    decimal discountAmount =
+                        item.Product?.IsHotDeal == true
+                            ? originalPrice * discountPercent / 100m
+                            : 0;
+
+                    decimal finalUnitPrice =
+                        originalPrice - discountAmount;
+
+                    decimal taxableAmount =
+                        finalUnitPrice * item.Quantity;
+
+                    decimal gstPercent =
+                        item.Product?.GSTPercentage ?? 0;
+
+                    decimal gstAmount =
+                        taxableAmount * gstPercent / 100m;
+
+                    decimal couponShare = 0;
+
+                    if (totals.CouponDiscount > 0 &&
+                        totalTaxableAmount > 0)
+                    {
+                        couponShare =
+                            (taxableAmount / totalTaxableAmount)
+                            * totals.CouponDiscount;
+                    }
+
+                    decimal finalPaidAmount =
+                        taxableAmount +
+                        gstAmount -
+                        couponShare;
+
+                    return new OrderItemModel
+                    {
+                        OrderId = order.OrderId,
+
+                        ProductId = item.ProductId,
+
+                        ProductVariantId = item.ProductVariantId,
+
+                        ProductName = item.Product?.Name ?? "",
+
+                        Quantity = item.Quantity,
+
+                        Price = Math.Round(originalPrice, 2),
+
+                        DiscountAmount =
+                            Math.Round(discountAmount, 2),
+
+                        TaxableAmount =
+                            Math.Round(taxableAmount, 2),
+
+                        GSTPercentage = gstPercent,
+
+                        GSTAmount =
+                            Math.Round(gstAmount, 2),
+
+                        CouponDiscountAmount =
+                            Math.Round(couponShare, 2),
+
+                        FinalPaidAmount =
+                            Math.Round(finalPaidAmount, 2),
+
+                        LineTotal =
+                            Math.Round(finalPaidAmount, 2),
+
+                        SellerId = item.SellerId,
+
+                        ItemStatus = "Placed",
+
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                }).ToList();
+
+                _context.OrderItems.AddRange(orderItems);
+
+                _context.Carts.RemoveRange(carts);
+
+                session.IsCompleted = true;
+                session.PaymentStatus = "Completed";
+                session.PaymentCompletedDate = DateTime.UtcNow;
+
+                checkoutSession.IsActive = false;
+
+                _context.Carts.RemoveRange(carts);
+
+                await _context.SaveChangesAsync();
+
+                await transaction.CommitAsync();
 
                 _ = Task.Run(async () =>
                 {
@@ -536,11 +849,10 @@ namespace VivekMedicalProducts.Controllers
                 return Ok(new
                 {
                     success = true,
+
                     orderId = order.OrderId,
-                    razorpayOrderId = order.RazorpayOrderId,
-                    amount = amountInPaise,
-                    razorpayKey =
-                        _config["Razorpay:Key"]
+
+                    redirect = "/my-orders"
                 });
             }
             catch (Exception ex)
@@ -550,173 +862,28 @@ namespace VivekMedicalProducts.Controllers
                 return BadRequest(new
                 {
                     success = false,
-                    message =
-                        ex.InnerException?.Message ??
-                        ex.Message
+                    message = ex.InnerException?.Message ?? ex.Message
                 });
             }
         }
 
-
-        // ================= VERIFY PAYMENT =================
-        [HttpPost("verify-payment")]
-        public async Task<IActionResult> VerifyPayment(
-     [FromBody] PaymentDto model)
-        {
-            try
-            {
-                if (model == null ||
-                    string.IsNullOrWhiteSpace(model.razorpay_order_id) ||
-                    string.IsNullOrWhiteSpace(model.razorpay_payment_id) ||
-                    string.IsNullOrWhiteSpace(model.razorpay_signature))
-                {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Invalid payment data"
-                    });
-                }
-
-                var order =
-                    await _context.Orders
-                        .FirstOrDefaultAsync(x =>
-                            x.RazorpayOrderId ==
-                            model.razorpay_order_id);
-
-                if (order == null &&
-                    model.orderId > 0)
-                {
-                    order =
-                        await _context.Orders
-                            .FindAsync(model.orderId);
-                }
-
-                if (order == null)
-                {
-                    return NotFound(new
-                    {
-                        success = false,
-                        message = "Order not found"
-                    });
-                }
-
-                // prevent duplicate verification
-                if (order.IsPaymentVerified)
-                {
-                    return Ok(new
-                    {
-                        success = true,
-                        redirect = "/my-orders"
-                    });
-                }
-
-                var secret =
-                    _config["Razorpay:Secret"];
-
-                var payload =
-                    $"{model.razorpay_order_id}|{model.razorpay_payment_id}";
-
-                using var hmac =
-                    new HMACSHA256(
-                        Encoding.UTF8.GetBytes(secret));
-
-                var hash =
-                    hmac.ComputeHash(
-                        Encoding.UTF8.GetBytes(payload));
-
-                var generatedSignature =
-                    Convert.ToHexString(hash)
-                        .ToLowerInvariant();
-
-                if (generatedSignature !=
-                    model.razorpay_signature)
-                {
-                    order.PaymentStatus = "Failed";
-                    order.OrderStatus = "Failed";
-                    order.FailureReason = "Signature mismatch";
-                    order.OrderModifiedDate =
-                        DateTime.UtcNow;
-
-                    await _context.SaveChangesAsync();
-
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Payment verification failed"
-                    });
-                }
-
-                // success
-                order.PaymentStatus = "Completed";
-                order.OrderStatus = "Placed";
-                order.IsPaymentVerified = true;
-                order.RazorpayPaymentId =
-                    model.razorpay_payment_id;
-                order.RazorpaySignature =
-                    model.razorpay_signature;
-                order.PaymentVerifiedAt =
-                    DateTime.UtcNow;
-                order.OrderModifiedDate =
-                    DateTime.UtcNow;
-
-                // clear cart
-                var cartItems =
-                    await _context.Carts
-                        .Where(x =>
-                            x.UserId == order.UserId)
-                        .ToListAsync();
-
-                if (cartItems.Any())
-                {
-                    _context.Carts.RemoveRange(cartItems);
-                }
-
-                await _context.SaveChangesAsync();
-
-                // invoice email
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await SendInvoiceEmailAsync(
-                            order.OrderId
-                        );
-                    }
-                    catch
-                    {
-                    }
-                });
-
-                return Ok(new
-                {
-                    success = true,
-                    redirect = "/my-orders"
-                });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new
-                {
-                    success = false,
-                    message = ex.Message,
-                    inner = ex.InnerException?.Message
-                });
-            }
-        }
 
         // ================= PAYMENT FAILED =================
-        [HttpPost("payment-failed/{orderId}")]
-        public IActionResult PaymentFailed(int orderId)
+        [HttpPost("payment-failed")]
+        public async Task<IActionResult> PaymentFailed([FromBody] PaymentDto dto)
         {
-            var order = _context.Orders.Find(orderId);
+            var session = await _context.PaymentSessions
+                .FirstOrDefaultAsync(x =>
+                    x.RazorpayOrderId == dto.razorpay_order_id);
 
-            if (order != null)
+            if (session != null)
             {
-                order.PaymentStatus = "Failed";
-                order.OrderStatus = "Failed";
-                order.OrderModifiedDate = DateTime.UtcNow;
+                session.IsCompleted = false;
 
-                _context.SaveChanges();
+                // Optional:
+                // session.PaymentStatus = "Failed";
+
+                await _context.SaveChangesAsync();
             }
 
             return Ok(new
@@ -732,83 +899,131 @@ namespace VivekMedicalProducts.Controllers
         {
             try
             {
-                var secret = _config["Razorpay:WebhookSecret"];
-                if (string.IsNullOrEmpty(secret))
+                var webhookSecret = _config["Razorpay:WebhookSecret"];
+
+                if (string.IsNullOrWhiteSpace(webhookSecret))
                     return Unauthorized();
 
                 string body;
+
                 using (var reader = new StreamReader(Request.Body))
                 {
                     body = await reader.ReadToEndAsync();
                 }
 
-                var receivedSignature = Request.Headers["X-Razorpay-Signature"];
+                var receivedSignature =
+                    Request.Headers["X-Razorpay-Signature"].ToString();
 
-                var expectedSignature = ComputeHmac(body, secret);
+                var expectedSignature =
+                    ComputeHmac(body, webhookSecret);
 
                 if (!CryptographicOperations.FixedTimeEquals(
                         Encoding.UTF8.GetBytes(expectedSignature),
                         Encoding.UTF8.GetBytes(receivedSignature)))
+                {
                     return Unauthorized();
+                }
 
                 dynamic data = JsonConvert.DeserializeObject(body)!;
+
                 string eventType = data.@event;
 
-                string razorpayOrderId = data?.payload?.payment?.entity?.order_id;
+                string razorpayOrderId =
+                    data?.payload?.payment?.entity?.order_id;
 
-                var order = _context.Orders
-                    .FirstOrDefault(o => o.RazorpayOrderId == razorpayOrderId);
+                string razorpayPaymentId =
+                    data?.payload?.payment?.entity?.id;
 
-                if (order == null || order.IsPaymentVerified)
+                var session =
+                    await _context.PaymentSessions
+                        .FirstOrDefaultAsync(x =>
+                            x.RazorpayOrderId ==
+                            razorpayOrderId);
+
+                if (session == null)
                     return Ok();
 
-                if (eventType == "payment.captured")
+                switch (eventType)
                 {
-                    order.PaymentStatus = "Completed";
-                    order.OrderStatus = "Placed";
-                    order.IsPaymentVerified = true;
-                    order.PaymentVerifiedAt = DateTime.UtcNow;
+                    case "payment.captured":
 
-                    await _context.SaveChangesAsync();
+                        session.IsCompleted = true;
 
-                    // 🔥 CLEAR CART SAFELY
-                    var cartItems = await _context.Carts
-                        .Where(c => c.UserId == order.UserId)
-                        .ToListAsync();
+                        // Optional if you add these columns later
+                        // session.PaymentStatus = "Captured";
+                        // session.RazorpayPaymentId = razorpayPaymentId;
 
-                    _context.Carts.RemoveRange(cartItems);
-                    await _context.SaveChangesAsync();
+                        break;
 
-                    await SendInvoiceEmailAsync(order.OrderId);
+                    case "payment.failed":
 
+                        session.IsCompleted = false;
 
+                        // Optional
+                        // session.PaymentStatus = "Failed";
+
+                        break;
+
+                    default:
+
+                        return Ok();
                 }
+
+                await _context.SaveChangesAsync();
 
                 return Ok();
             }
             catch
             {
-                return Ok(); // prevent retry storm
+                // Prevent Razorpay from continuously retrying
+                return Ok();
             }
         }
 
-        [HttpGet("check-payment-status/{orderId}")]
-        public IActionResult CheckPaymentStatus(int orderId)
+        [HttpGet("check-payment-status/{razorpayOrderId}")]
+        public async Task<IActionResult> CheckPaymentStatus(string razorpayOrderId)
         {
-            var order = _context.Orders
-                .FirstOrDefault(x => x.OrderId == orderId);
+            var session = await _context.PaymentSessions
+                .FirstOrDefaultAsync(x =>
+                    x.RazorpayOrderId == razorpayOrderId);
+
+            if (session == null)
+            {
+                return Ok(new
+                {
+                    success = false,
+                    message = "Payment session not found"
+                });
+            }
+
+            if (!session.IsCompleted)
+            {
+                return Ok(new
+                {
+                    success = false,
+                    paymentStatus = session.PaymentStatus,
+                    message = "Payment is still processing"
+                });
+            }
+
+            var order = await _context.Orders
+                .FirstOrDefaultAsync(x =>
+                    x.RazorpayOrderId == razorpayOrderId);
 
             if (order == null)
             {
-                return Unauthorized(new
+                return Ok(new
                 {
-                    success = false
+                    success = false,
+                    paymentStatus = session.PaymentStatus,
+                    message = "Order is being created"
                 });
             }
 
             return Ok(new
             {
-                success = order.IsPaymentVerified,
+                success = true,
+                orderId = order.OrderId,
                 paymentStatus = order.PaymentStatus,
                 orderStatus = order.OrderStatus
             });

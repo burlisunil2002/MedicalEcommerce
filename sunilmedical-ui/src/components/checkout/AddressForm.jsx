@@ -12,6 +12,67 @@ export default function AddressForm({
             [e.target.name]: e.target.value
         });
 
+    const validate = () => {
+
+        if (!form.fullName?.trim()) {
+
+            alert("Enter Full Name");
+
+            return false;
+        }
+
+        if (form.fullName.trim().length < 3) {
+
+            alert("Enter valid Full Name");
+
+            return false;
+        }
+
+        if (!/^[6-9]\d{9}$/.test(form.mobileNumber)) {
+
+            alert("Enter valid Mobile Number");
+
+            return false;
+        }
+
+        if (!form.addressLine1?.trim()) {
+
+            alert("Enter Address");
+
+            return false;
+        }
+
+        if (form.addressLine1.length < 10) {
+
+            alert("Enter complete Address");
+
+            return false;
+        }
+
+        if (!form.city?.trim()) {
+
+            alert("Enter City");
+
+            return false;
+        }
+
+        if (!form.state?.trim()) {
+
+            alert("Enter State");
+
+            return false;
+        }
+
+        if (!/^\d{6}$/.test(form.pincode)) {
+
+            alert("Enter valid Pincode");
+
+            return false;
+        }
+
+        return true;
+    };
+
     useEffect(() => {
         setForm({
             fullName: initialData?.fullName || "",
@@ -79,10 +140,16 @@ export default function AddressForm({
 
             </div>
 
-            <button
-                onClick={() => onSave(form)}
-                className="mt-4 bg-emerald-600 text-white px-6 py-3 rounded-xl"
-            >
+                <button
+                onClick={() => {
+                    console.log(form);
+
+                    if (!validate()) return;
+
+                    onSave(form);
+                }}
+                    className="mt-4 bg-emerald-600 text-white px-6 py-3 rounded-xl"
+                >
                 Save Address
             </button>
         </div>

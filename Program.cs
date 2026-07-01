@@ -4,11 +4,12 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Rotativa.AspNetCore;
+using System.Text.Json.Serialization;
 using VivekMedicalProducts.Data;
+using VivekMedicalProducts.Interfaces;
 using VivekMedicalProducts.Models;
 using VivekMedicalProducts.Services;
 using VivekMedicalProducts.Services.Storage;
-using System.Text.Json.Serialization;
 
 
 
@@ -88,6 +89,8 @@ Rotativa.AspNetCore.RotativaConfiguration.Setup(builder.Environment.WebRootPath)
 builder.Services.AddScoped<IFileStorageService, SupabaseService>();
 
 builder.Services.AddScoped<ICouponService, CouponService>();
+
+builder.Services.AddScoped<ICheckoutService, CheckoutService>();
 
 builder.Services.AddScoped<ICartCalculationService, CartCalculationService>();
 

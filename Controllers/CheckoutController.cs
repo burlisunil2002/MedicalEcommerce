@@ -1,139 +1,172 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using VivekMedicalProducts.Data;
+using VivekMedicalProducts.Interfaces;
 using VivekMedicalProducts.Models;
-using VivekMedicalProducts.Services;
 
-[ApiController]
-[Route("api/checkout")]
-public class CheckoutController : ControllerBase
+namespace VivekMedicalProducts.Controllers
 {
-    private readonly ApplicationDbContext _context;
-    private readonly IUserContextService _userContext;
-    private readonly ICartCalculationService _calc;
-
-    public CheckoutController(
-        ApplicationDbContext context,
-        IUserContextService userContext,
-        ICartCalculationService calc)
+    [ApiController]
+    [Route("api/checkout")]
+    public class CheckoutController : ControllerBase
     {
-        _context = context;
-        _userContext = userContext;
-        _calc = calc;
-    }
+        private readonly ICheckoutService _checkoutService;
 
-    private (string? userId, string? guestId) GetIdentity()
-    {
-        var userId = _userContext.GetUserId();
-
-        var guestId =
-            string.IsNullOrEmpty(userId)
-            ? Request.Cookies["guest_id"]
-            : null;
-
-        return (userId, guestId);
-    }
-
-    [HttpGet]
-    public async Task<IActionResult> GetCheckout()
-    {
-        var (userId, guestId) = GetIdentity();
-
-        var coupon =
-            HttpContext.Session.GetString("CouponCode");
-
-        var cartItems = await _context.Carts
-            .Include(c => c.Product)
-            .Include(c => c.ProductVariant)
-            .Where(c =>
-                (userId != null && c.UserId == userId) ||
-                (userId == null && c.GuestId == guestId))
-            .Select(c => new
-            {
-                c.Id,
-                c.Quantity,
-
-                ProductId = c.ProductId,
-                ProductName = c.Product.Name,
-
-                ProductPrice = c.ProductVariant != null
-        ? c.ProductVariant.Price
-        : 0,
-
-                ProductImage = c.Product.ImageUrl,
-
-                VariantId = c.ProductVariantId,
-
-                VariantName = c.ProductVariant != null
-        ? c.ProductVariant.Model
-        : null
-            })
-            .ToListAsync();
-
-        var addresses = await _context.UserAddresses
-            .Where(x =>
-                (userId != null && x.UserId == userId) ||
-                (userId == null && x.GuestId == guestId))
-            .OrderByDescending(x => x.IsDefault)
-            .ToListAsync();
-
-        try
+        public CheckoutController(
+            ICheckoutService checkoutService)
         {
-            var totals = await _calc.CalculateAsync(
-                userId,
-                guestId,
-                coupon);
+            _checkoutService = checkoutService;
+        }
+
+        // ================= GET CHECKOUT =================
+
+        [HttpGet]
+        public async Task<IActionResult> GetCheckout()
+        {
+            try
+            {
+                var result =
+                    await _checkoutService.GetCheckoutAsync();
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = ex.Message
+                });
+            }
+        }
+
+        // ================= ADD ADDRESS =================
+
+        [HttpPost("address")]
+        public async Task<IActionResult> AddAddress(
+            [FromBody] UserAddress model)
+        {
+            try
+            {
+                var result =
+                    await _checkoutService.AddAddressAsync(model);
+
+                return Ok(new
+                {
+                    success = true,
+                    address = result
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = ex.Message
+                });
+            }
+        }
+
+        // ================= UPDATE ADDRESS =================
+
+        [HttpPut("address/{id}")]
+        public async Task<IActionResult> UpdateAddress(
+            int id,
+            [FromBody] UserAddress model)
+        {
+            try
+            {
+                var result =
+                    await _checkoutService.UpdateAddressAsync(
+                        id,
+                        model);
+
+                return Ok(new
+                {
+                    success = true,
+                    address = result
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = ex.Message
+                });
+            }
+        }
+
+        // ================= SELECT ADDRESS =================
+
+        [HttpPost("select-address/{id}")]
+        public async Task<IActionResult> SelectAddress(int id)
+        {
+            await _checkoutService.SaveSelectedAddressAsync(id);
 
             return Ok(new
             {
-                cartItems,
-                addresses,
-                summary = totals
+                success = true
             });
         }
-        catch (Exception ex)
+
+        // ================= APPLY COUPON =================
+
+        [HttpPost("apply-coupon")]
+        public async Task<IActionResult> ApplyCoupon(
+            [FromBody] ApplyCouponRequest request)
         {
-            return BadRequest(ex.Message);
+            try
+            {
+                await _checkoutService
+                    .ApplyCouponAsync(request.CouponCode);
+
+                return Ok(new
+                {
+                    success = true
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = ex.Message
+                });
+            }
+        }
+
+        // ================= REMOVE COUPON =================
+
+        [HttpDelete("remove-coupon")]
+        public async Task<IActionResult> RemoveCoupon()
+        {
+            try
+            {
+                await _checkoutService
+                    .RemoveCouponAsync();
+
+                return Ok(new
+                {
+                    success = true
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = ex.Message
+                });
+            }
         }
     }
 
-    [HttpPost("address")]
-    public async Task<IActionResult> AddAddress(
-    [FromBody] UserAddress model)
+    public class SelectAddressRequest
     {
-        var (userId, guestId) = GetIdentity();
-
-        model.UserId = userId;
-        model.GuestId = guestId;
-
-        _context.UserAddresses.Add(model);
-
-        await _context.SaveChangesAsync();
-
-        return Ok(model);
+        public int AddressId { get; set; }
     }
 
-    [HttpPut("address/{id}")]
-    public async Task<IActionResult> UpdateAddress(
-    int id,
-    [FromBody] UserAddress model)
+    public class ApplyCouponRequest
     {
-        var address =
-            await _context.UserAddresses.FindAsync(id);
-
-        if (address == null)
-            return NotFound();
-
-        address.FullName = model.FullName;
-        address.MobileNumber = model.MobileNumber;
-        address.AddressLine1 = model.AddressLine1;
-        address.City = model.City;
-        address.State = model.State;
-        address.Pincode = model.Pincode;
-        address.AddressType = model.AddressType;
-
-        await _context.SaveChangesAsync();
-
-        return Ok(address);
+        public string CouponCode { get; set; } = "";
     }
 }
