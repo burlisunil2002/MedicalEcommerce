@@ -7,14 +7,14 @@ import AddressForm from "../components/checkout/AddressForm";
 import {
     getCheckout,
     addAddress,
-    updateAddress
+    updateAddress,
+    selectAddress
 } from "../services/checkoutService";
-
 export default function CheckoutPage() {
 
     const navigate = useNavigate();
 
-    const [checkout, setCheckout] = useState(null);
+    const [checkout, setCheckout] = useState(null); 
 
     const [selectedAddress, setSelectedAddress] =
         useState(null);
@@ -30,19 +30,24 @@ export default function CheckoutPage() {
 
             if (res.data.addresses?.length > 0) {
 
-                const defaultAddress =
-                    res.data.addresses.find(x => x.isDefault);
+                if (res.data.addresses?.length > 0) {
 
-                // if default exists select it
-                if (defaultAddress) {
-                    setSelectedAddress(defaultAddress.id);
-                }
+                    let selected =
+                        res.data.addresses.find(
+                            x => x.id === res.data.selectedAddressId
+                        );
 
-                // otherwise select latest added address
-                else {
-                    setSelectedAddress(
-                        res.data.addresses[0].id
-                    );
+                    if (!selected)
+                        selected =
+                            res.data.addresses.find(
+                                x => x.isDefault
+                            );
+
+                    if (!selected)
+                        selected =
+                            res.data.addresses[0];
+
+                    setSelectedAddress(selected.id);
                 }
             }
 
@@ -133,9 +138,25 @@ export default function CheckoutPage() {
                                         selected={selectedAddress === a.id}
                                         onSelect={async () => {
 
-                                            await selectAddress(a.id);
+                                            console.log("Address clicked:", a.id);
 
-                                            setSelectedAddress(a.id);
+                                            try {
+
+                                                const result = await selectAddress(a.id);
+
+                                                alert("Address Saved");
+
+                                                console.log(result.data);
+
+                                                setSelectedAddress(a.id);
+
+                                            }
+                                            catch (err) {
+
+                                                console.log("API Error:", err);
+
+                                            }
+
                                         }}
                                         onEdit={setEditingAddress}
                                     />
@@ -163,14 +184,27 @@ export default function CheckoutPage() {
                     summary={checkout?.summary || {}}
                     showCoupon={false}
                     buttonText="Proceed To Review"
-                    onButtonClick={() => {
-                        if (!selectedAddress) {
-                            alert("Please select delivery address");
-                            return;
-                        }
+                        onButtonClick={async () => {
 
-                        navigate("/review");
-                    }}
+                            if (!selectedAddress) {
+                                alert("Please select delivery address");
+                                return;
+                            }
+
+                            try {
+
+                                await selectAddress(selectedAddress);
+
+                                navigate("/review");
+
+                            } catch (err) {
+
+                                console.log(err);
+
+                                alert("Unable to save selected address.");
+
+                            }
+                        }}
                     />
                 </div>
 

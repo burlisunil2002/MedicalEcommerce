@@ -381,6 +381,18 @@ namespace VivekMedicalProducts.Controllers
                     });
                 }
 
+                Console.WriteLine("============= DEBUG =============");
+
+                Console.WriteLine($"UserId : {userId}");
+
+                Console.WriteLine($"CheckoutSession Id : {checkoutSession?.Id}");
+
+                Console.WriteLine($"SelectedAddressId : {checkoutSession?.SelectedAddressId}");
+
+                Console.WriteLine($"Coupon : {checkoutSession?.CouponCode}");
+
+                Console.WriteLine("=================================");
+
                 var address = await _context.UserAddresses
                     .FirstOrDefaultAsync(x =>
                         x.Id == checkoutSession.SelectedAddressId &&

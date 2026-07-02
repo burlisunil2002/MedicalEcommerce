@@ -143,13 +143,28 @@ namespace VivekMedicalProducts.Services
 
         public async Task SaveSelectedAddressAsync(int addressId)
         {
+            var (userId, guestId) = GetIdentity();
+
+            Console.WriteLine($"USER: {userId}");
+            Console.WriteLine($"GUEST: {guestId}");
+            Console.WriteLine($"ADDRESS: {addressId}");
+
             var session = await GetOrCreateSessionAsync();
 
-            session.SelectedAddressId = addressId;
+            Console.WriteLine($"SESSION ID: {session.Id}");
 
+            session.SelectedAddressId = addressId;
             session.ModifiedDate = DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            var rows = await _context.SaveChangesAsync();
+
+            Console.WriteLine($"ROWS UPDATED: {rows}");
+
+            // Read it back from DB immediately
+            var verify = await _context.CheckoutSessions
+                .FirstOrDefaultAsync(x => x.Id == session.Id);
+
+            Console.WriteLine($"DB VALUE: {verify?.SelectedAddressId}");
         }
 
         public async Task<UserAddress> UpdateAddressAsync(

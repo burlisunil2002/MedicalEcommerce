@@ -9,5 +9,13 @@ export const addAddress = (data) =>
 export const updateAddress = (id, data) =>
     API.put(`/api/checkout/address/${id}`, data);
 
-export const selectAddress = (id) =>
-    API.post(`/api/checkout/select-address/${id}`);
+export const selectAddress = async (id) => {
+
+    console.log("Calling select-address API with:", id);
+
+    const response = await API.post(`/api/checkout/select-address/${id}`);
+
+    console.log("Response:", response);
+
+    return response;
+};

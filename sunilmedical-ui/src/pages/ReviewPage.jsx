@@ -17,10 +17,6 @@ export default function ReviewPage() {
     const [message, setMessage] = useState("");
     const [messageType, setMessageType] = useState("");
 
-    useEffect(() => {
-        loadReview();
-    }, []);
-
     const showToast = (text, type = "success") => {
         setMessage(text);
         setMessageType(type);
@@ -33,48 +29,53 @@ export default function ReviewPage() {
 
     const loadReview = async () => {
         try {
+
             setPageLoading(true);
 
             const { data } = await getCheckout();
 
             setCheckout(data);
 
-            const addresses =
-                data.savedAddresses ||
-                data.addresses ||
-                [];
+            const addresses = data.addresses || [];
 
             if (addresses.length > 0) {
-                const selected =
-                    addresses.find(x => x.isDefault)
-                    || addresses[0];
+
+                // Use the address saved in CheckoutSession
+                let selected =
+                    addresses.find(
+                        x => x.id === data.selectedAddressId
+                    );
+
+                // Fallbacks
+                if (!selected)
+                    selected = addresses.find(x => x.isDefault);
+
+                if (!selected)
+                    selected = addresses[0];
 
                 setSelectedAddress({
                     id: selected.id,
 
-                    fullName:
-                        selected.fullName || "",
+                    fullName: selected.fullName || "",
 
-                    phoneNumber:
-                        selected.mobileNumber || "",
+                    phoneNumber: selected.mobileNumber || "",
 
                     address:
                         `${selected.addressLine1 || ""} ${selected.addressLine2 || ""}`.trim(),
 
-                    city:
-                        selected.city || "",
+                    city: selected.city || "",
 
-                    state:
-                        selected.state || "",
+                    state: selected.state || "",
 
-                    pincode:
-                        selected.pincode || ""
+                    pincode: selected.pincode || ""
                 });
             }
-        } catch (err) {
-            if (
-                err.response?.status === 401
-            ) {
+
+        }
+        catch (err) {
+
+            if (err.response?.status === 401) {
+
                 navigate("/login", {
                     replace: true,
                     state: {
@@ -90,8 +91,11 @@ export default function ReviewPage() {
                 "Unable to load checkout.",
                 "error"
             );
-        } finally {
+        }
+        finally {
+
             setPageLoading(false);
+
         }
     };
 
@@ -124,7 +128,7 @@ export default function ReviewPage() {
                     return;
                 }
 
-                if (attempts >= 10) {
+                if (attempts >= 30) {
 
                     clearInterval(interval);
 
@@ -158,10 +162,14 @@ export default function ReviewPage() {
         setProcessing(true);
 
         if (!selectedAddress) {
+
+            setProcessing(false);
+
             showToast(
                 "Please select delivery address",
                 "error"
             );
+
             return;
         }
 
@@ -228,13 +236,11 @@ export default function ReviewPage() {
                 return;
             }
 
-            setProcessing(false);
-
             const razorpay =
                 new window.Razorpay({
                     key: order.razorpayKey,
                     amount: order.amount,
-                    currency: "INR",
+                    currency: order.currency,
                     order_id: order.razorpayOrderId,
 
                     handler: async function (
@@ -243,19 +249,20 @@ export default function ReviewPage() {
                         try {
                             setProcessing(true);
 
-                            await API.post(
-                                "/api/order/verify-payment",
-                                {
-                                    razorpay_payment_id:
-                                        response.razorpay_payment_id,
+                            const { data: verify } =
+                                await API.post(
+                                    "/api/order/verify-payment",
+                                    {
+                                        razorpay_payment_id:
+                                            response.razorpay_payment_id,
 
-                                    razorpay_order_id:
-                                        response.razorpay_order_id,
+                                        razorpay_order_id:
+                                            response.razorpay_order_id,
 
-                                    razorpay_signature:
-                                        response.razorpay_signature
-                                }
-                            );
+                                        razorpay_signature:
+                                            response.razorpay_signature
+                                    }
+                                );
 
                             if (verify.success) {
                                 localStorage.removeItem("cart");
@@ -269,9 +276,7 @@ export default function ReviewPage() {
                                     new Event("cartUpdated")
                                 );
 
-                                startPolling(
-                                    order.orderId
-                                );
+                                startPolling(order.razorpayOrderId);
                             } else {
                                 setProcessing(false);
 
@@ -281,13 +286,18 @@ export default function ReviewPage() {
                                     "error"
                                 );
                             }
-                        } catch {
+                        } catch (err) {
+
+                            console.log(err);
+
                             setProcessing(false);
 
                             showToast(
+                                err.response?.data?.message ??
                                 "Payment verification failed",
                                 "error"
                             );
+
                         }
                     },
 
@@ -356,6 +366,9 @@ export default function ReviewPage() {
         }
     };
 
+    useEffect(() => {
+        loadReview();
+    }, []);
 
     if (pageLoading) {
         return (
