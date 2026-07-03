@@ -98,17 +98,30 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
-	
-	
-<Target Name="BuildReact" BeforeTargets="Publish">
 
-    <Exec WorkingDirectory="sunilmedical-ui" Command="npm ci" Condition="Exists('sunilmedical-ui/package-lock.json')" />
 
-    <Exec WorkingDirectory="sunilmedical-ui" Command="npm install" Condition="!Exists('sunilmedical-ui/package-lock.json')" />
+	<Target Name="BuildReact" BeforeTargets="Publish">
 
-    <Exec WorkingDirectory="sunilmedical-ui" Command="npm run build" />
+		<Message Text="========== React Build ==========" Importance="high"/>
 
-</Target>
+		<Exec
+			WorkingDirectory="$(MSBuildProjectDirectory)/sunilmedical-ui"
+			Command="npm ci"
+			ContinueOnError="false"
+			Condition="Exists('$(MSBuildProjectDirectory)/sunilmedical-ui/package-lock.json')" />
+
+		<Exec
+			WorkingDirectory="$(MSBuildProjectDirectory)/sunilmedical-ui"
+			Command="npm install"
+			ContinueOnError="false"
+			Condition="!Exists('$(MSBuildProjectDirectory)/sunilmedical-ui/package-lock.json')" />
+
+		<Exec
+			WorkingDirectory="$(MSBuildProjectDirectory)/sunilmedical-ui"
+			Command="npm run build"
+			ContinueOnError="false"/>
+
+	</Target>
 
 <Target Name="CopyReactBuild" AfterTargets="Publish">
 	

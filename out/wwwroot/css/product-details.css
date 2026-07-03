@@ -1,0 +1,37 @@
+﻿.product-detail-card {
+    background: #fff;
+}
+
+.detail-img {
+    max-height: 350px;
+    object-fit: contain;
+}
+
+.ask-price {
+    background: #28a745;
+    color: white;
+    padding: 5px 10px;
+    border-radius: 6px;
+}
+
+.enquiry-btn {
+    background-color: #1976d2;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 6px;
+}
+
+    .enquiry-btn:hover {
+        background-color: #125aa3;
+    }
+
+.cart-btn {
+    background-color: #f4c542;
+    color: black;
+    padding: 10px 20px;
+    border-radius: 6px;
+}
+
+    .cart-btn:hover {
+        background-color: #e0b032;
+    }

@@ -1,0 +1,125 @@
+﻿/* ===== Page Background (Clean Light) ===== */
+.page-container {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #f4f6fb;
+    padding: 40px 20px;
+}
+
+/* ===== Colorful Card ===== */
+.edit-card {
+    width: 100%;
+    max-width: 850px;
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 40px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+    border-top: 8px solid #6c63ff; /* Color accent */
+}
+
+/* ===== Header ===== */
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+    .card-header h2 {
+        font-weight: 600;
+        color: #333;
+    }
+
+/* ===== Back Button ===== */
+.btn-back {
+    text-decoration: none;
+    padding: 8px 18px;
+    border-radius: 8px;
+    background-color: #ff6b6b;
+    color: white;
+    font-weight: 500;
+    transition: 0.3s ease;
+}
+
+    .btn-back:hover {
+        background-color: #ff4c4c;
+    }
+
+/* ===== Grid Layout ===== */
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 25px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+    .form-group.full {
+        grid-column: 1 / -1;
+    }
+
+    /* ===== Labels ===== */
+    .form-group label {
+        margin-bottom: 8px;
+        font-weight: 500;
+        color: #555;
+    }
+
+/* ===== Inputs ===== */
+.form-input {
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid #ddd;
+    font-size: 14px;
+    transition: 0.3s;
+}
+
+    .form-input:focus {
+        border-color: #6c63ff;
+        box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.15);
+        outline: none;
+    }
+
+.file-style {
+    padding: 8px;
+}
+
+/* ===== Save Button ===== */
+.action-area {
+    margin-top: 35px;
+    text-align: center;
+}
+
+.btn-save {
+    padding: 12px 40px;
+    border: none;
+    border-radius: 30px;
+    background-color: #20c997;
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.3s ease;
+}
+
+    .btn-save:hover {
+        background-color: #17b68c;
+        transform: translateY(-2px);
+    }
+
+/* ===== Responsive ===== */
+@media (max-width: 600px) {
+    .edit-card {
+        padding: 25px;
+    }
+
+    .card-header {
+        flex-direction: column;
+        gap: 15px;
+    }
+}

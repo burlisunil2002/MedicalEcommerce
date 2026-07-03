@@ -1,0 +1,251 @@
+﻿body {
+    background: #f4f6f9;
+    font-family: Segoe UI;
+}
+
+.dashboard {
+    padding: 40px;
+}
+
+h2 {
+    margin-bottom: 20px;
+}
+
+/* Search wrapper */
+
+.search-wrapper {
+    width: 100%;
+    margin: 20px 0 25px 0;
+    display: flex;
+    justify-content: center;
+}
+
+
+/* Search box */
+
+.search-box {
+    width: 80%;
+    max-width: 900px;
+    position: relative;
+}
+
+
+    /* Search input */
+
+    .search-box input {
+        width: 100%;
+        padding: 14px 20px 14px 45px;
+        font-size: 16px;
+        border-radius: 10px;
+        border: 1px solid #d1d5db;
+        background: #f9fafb;
+        transition: all 0.3s ease;
+    }
+
+
+        /* Focus effect */
+
+        .search-box input:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 8px rgba(37,99,235,0.3);
+            background: white;
+        }
+
+
+/* Icon */
+
+.search-icon {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 18px;
+    color: #6b7280;
+}
+
+.card {
+    background: white;
+    padding: 25px;
+    border-radius: 10px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th {
+    background: #2c3e50;
+    color: white;
+    padding: 12px;
+}
+
+td {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+input, select {
+    padding: 6px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+.update {
+    background: #27ae60;
+    color: white;
+    padding: 7px 15px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+    .update:hover {
+        background: #1e8449;
+    }
+.badge {
+    padding: 5px 10px;
+    border-radius: 5px;
+    color: white;
+    font-size: 13px;
+}
+
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.6);
+    justify-content: center;
+    align-items: center;
+    z-index: 999;
+}
+
+.modal-card {
+    background: #ffffff;
+    width: 500px;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+    animation: popup 0.3s ease;
+}
+
+@keyframes popup {
+    from {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.modal-title {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.close-btn {
+    float: right;
+    font-size: 22px;
+    cursor: pointer;
+    color: #555;
+}
+
+.order-details {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.detail-card {
+    background: #f5f7fb;
+    padding: 12px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 15px;
+}
+
+.detail-label {
+    font-weight: bold;
+    color: #333;
+}
+
+.detail-value {
+    color: #555;
+}
+
+/* ORDER STATUS */
+
+.status-badge {
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    color: white;
+}
+
+
+
+.payment-badge {
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    color: white;
+}
+
+/* PAYMENT STATUS DROPDOWN COLORS */
+
+.PaymentStatus.pending {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeeba;
+}
+
+.PaymentStatus.verified {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.PaymentStatus.rejected {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* ORDER STATUS DROPDOWN COLORS */
+
+.OrderStatus.pending {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.OrderStatus.processing {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+.OrderStatus.shipped {
+    background: #ffe5d0;
+    color: #8a4b00;
+}
+
+.OrderStatus.delivered {
+    background: #d4edda;
+    color: #155724;
+}
+
+.OrderStatus.cancelled {
+    background: #f8d7da;
+    color: #721c24;
+}

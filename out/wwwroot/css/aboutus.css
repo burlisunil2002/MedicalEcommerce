@@ -1,0 +1,82 @@
+﻿body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #f4f7fb;
+    margin: 0;
+}
+
+/* TOP BAR */
+.about-topbar {
+    background: linear-gradient(90deg, #0077b6, #00b4d8);
+    padding: 15px 0;
+    color: white;
+}
+
+.topbar-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.page-title {
+    margin: 0;
+    font-weight: 600;
+}
+
+/* BACK BUTTON */
+.btn-back-home {
+    background: white;
+    color: #0077b6;
+    padding: 8px 18px;
+    border-radius: 25px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: 0.3s ease;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.btn-back-home:hover {
+    background: #e0f7ff;
+    transform: translateY(-2px);
+}
+
+/* ABOUT SECTION */
+.about-section {
+    background: white;
+}
+
+.about-img {
+    border-radius: 12px;
+}
+
+/* FEATURES */
+.features-section {
+    background: #f1f8ff;
+}
+
+.feature-card {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+    transition: 0.3s;
+    height: 100%;
+}
+
+.feature-card:hover {
+    transform: translateY(-6px);
+}
+
+/* STATS */
+.stats-section {
+    background: linear-gradient(120deg, #023e8a, #0077b6);
+    color: white;
+    padding: 60px 0;
+}
+
+.stat-box h2 {
+    font-weight: 700;
+}
+
+.stat-box p {
+    margin: 0;
+}

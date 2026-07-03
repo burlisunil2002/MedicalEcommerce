@@ -1,0 +1,226 @@
+html {
+  font-size: 14px;
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+}
+
+html {
+  position: relative;
+  min-height: 100%;
+}
+
+body {
+  margin-bottom: 60px;
+}
+
+/* GLOBAL WHATSAPP BUTTON */
+.global-whatsapp {
+    position: fixed !important;
+    bottom: 25px !important;
+    right: 25px !important;
+    background: linear-gradient(45deg, #25D366, #1ebe5d);
+    color: #ffffff !important;
+    padding: 14px 24px;
+    border-radius: 50px;
+    display: flex !important;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: none !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    z-index: 999999 !important;
+    animation: whatsappPulse 2s infinite;
+    transition: all 0.3s ease;
+}
+
+    .global-whatsapp i {
+        font-size: 20px;
+    }
+
+    .global-whatsapp:hover {
+        transform: translateY(-5px) scale(1.05);
+        color: #ffffff !important;
+    }
+
+/* Pulse Highlight Animation */
+@keyframes whatsappPulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.7);
+    }
+
+    70% {
+        box-shadow: 0 0 0 18px rgba(37, 211, 102, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(37, 211, 102, 0);
+    }
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .global-whatsapp {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        justify-content: center;
+        padding: 0;
+    }
+
+        .global-whatsapp span {
+            display: none;
+        }
+}
+
+<style >
+
+body {
+    font-family: Segoe UI;
+    margin: 0;
+    background: #f5f7fb;
+}
+
+main {
+    min-height: 80vh;
+}
+
+/* HEADER */
+
+.ecom-header {
+    background: white;
+    border-bottom: 1px solid #eee;
+    position: sticky;
+    top: 0;
+    z-index: 999;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.header-container {
+    max-width: 1300px;
+    margin: auto;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 12px 20px;
+}
+
+/* LOGO */
+
+.brand-area {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.site-logo {
+    height: 40px;
+}
+
+.amtz-logo {
+    height: 28px;
+    opacity: 0.9;
+}
+
+/* SEARCH BAR */
+
+.header-search {
+    flex: 1;
+    display: flex;
+}
+
+    .header-search input {
+        flex: 1;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-right: none;
+    }
+
+    .header-search button {
+        background: #ff9800;
+        border: none;
+        padding: 8px 14px;
+        color: white;
+    }
+
+/* MENU */
+
+.header-menu {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+}
+
+    .header-menu a {
+        text-decoration: none;
+        color: #333;
+        font-weight: 500;
+    }
+
+        .header-menu a:hover {
+            color: #0d6efd;
+        }
+
+/* CART BADGE */
+
+.cart-link {
+    position: relative;
+}
+
+#cartCount {
+    background: red;
+    color: white;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 50%;
+    margin-left: 5px;
+}
+
+/* BUTTONS */
+
+.signup-btn {
+    background: #0d6efd;
+    padding: 6px 12px;
+    color: white !important;
+    border-radius: 5px;
+}
+
+.logout-btn {
+    background: #e53935;
+    padding: 6px 12px;
+    color: white !important;
+    border-radius: 5px;
+}
+
+/* FOOTER */
+
+footer {
+    background: #111;
+    color: white;
+    padding: 30px;
+    text-align: center;
+    margin-top: 40px;
+}
+
+/* MOBILE */
+
+@@media (max-width:768px) {
+    .header-container {
+        flex-wrap: wrap;
+    }
+
+    .header-search {
+        order: 3;
+        width: 100%;
+    }
+}
+
+</style >

@@ -1,0 +1,140 @@
+﻿body {
+    background: linear-gradient(135deg, #eef4ff, #f9fbff);
+    font-family: 'Segoe UI', sans-serif;
+}
+
+/* Container */
+.payment-container {
+    max-width: 1100px;
+    margin: auto;
+    padding: 40px 20px;
+}
+
+/* Title */
+.main-title {
+    text-align: center;
+    color: #0a7cff;
+    margin-bottom: 40px;
+    font-size: 28px;
+    font-weight: 700;
+}
+
+/* Grid Layout */
+.payment-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 35px;
+}
+
+/* Card Design */
+.payment-info,
+.payment-submit {
+    background: white;
+    padding: 30px;
+    border-radius: 16px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+    transition: 0.3s ease;
+}
+
+    .payment-info:hover,
+    .payment-submit:hover {
+        transform: translateY(-4px);
+    }
+
+/* Section Titles */
+.section-title {
+    color: #333;
+    margin-bottom: 20px;
+    font-weight: 600;
+}
+
+/* QR */
+.qr-img {
+    width: 230px;
+    margin: 20px 0;
+    border-radius: 12px;
+    border: 1px solid #eee;
+}
+
+.scan-text {
+    color: #666;
+    margin-bottom: 25px;
+}
+
+/* Bank Details */
+.bank-details h4 {
+    margin-bottom: 10px;
+    color: #0a7cff;
+}
+
+.bank-details p {
+    margin: 6px 0;
+    font-size: 14px;
+}
+
+.bank-details span {
+    font-weight: 600;
+}
+
+/* Input Fields */
+.input-group {
+    margin-bottom: 20px;
+}
+
+    .input-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+
+    .input-group input {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        transition: 0.3s;
+    }
+
+        .input-group input:focus {
+            border-color: #0a7cff;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(10, 124, 255, 0.1);
+        }
+
+/* Button */
+.submit-btn {
+    background: linear-gradient(135deg, #0a7cff, #005de0);
+    color: white;
+    border: none;
+    padding: 14px;
+    width: 100%;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.3s ease;
+}
+
+    .submit-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 15px rgba(10, 124, 255, 0.3);
+    }
+
+/* Validation */
+.validation-summary {
+    color: red;
+    margin-bottom: 15px;
+    font-size: 14px;
+}
+
+.field-error {
+    color: red;
+    font-size: 13px;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .payment-grid {
+        grid-template-columns: 1fr;
+    }
+}
