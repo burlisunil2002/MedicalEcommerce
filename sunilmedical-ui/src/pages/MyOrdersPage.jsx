@@ -78,11 +78,11 @@ export default function MyOrdersPage() {
 
         try {
 
-            await API.put(
-
+            const { data } = await API.put(
                 `/api/order/cancel/${selectedOrder.orderId}`
-
             );
+
+            alert(data.message);
 
             setShowCancelDialog(false);
 
@@ -91,12 +91,12 @@ export default function MyOrdersPage() {
             loadOrders();
 
         }
-
         catch (err) {
 
-            console.log(err);
-
-            alert("Unable to cancel order.");
+            alert(
+                err.response?.data?.message ??
+                "Unable to cancel order."
+            );
 
         }
 
@@ -611,8 +611,16 @@ hover:text-blue-600
 
                                         <DeliveryTracker
                                             status={order.orderStatus}
+                                            paymentStatus={order.paymentStatus}
                                             orderDate={order.orderDate}
                                             modifiedDate={order.modifiedDate}
+                                            onCancelOrder={() => {
+
+                                                setSelectedOrder(order);
+
+                                                setShowCancelDialog(true);
+
+                                            }}
                                         />
 
                                     </div>

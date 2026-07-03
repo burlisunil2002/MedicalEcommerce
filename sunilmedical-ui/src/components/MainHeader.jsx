@@ -72,6 +72,7 @@ export default function MainHeader() {
             });
     }, []);
 
+
     // 🔍 SEARCH
     useEffect(() => {
         if (search.length < 2) {

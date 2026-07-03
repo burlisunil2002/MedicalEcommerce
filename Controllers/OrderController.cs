@@ -63,8 +63,7 @@ namespace VivekMedicalProducts.Controllers
         }
 
         [HttpPost("place-cod")]
-        public async Task<IActionResult> PlaceCOD(
-     [FromBody] CheckoutViewModel model)
+        public async Task<IActionResult> PlaceCOD()
         {
             using var transaction =
                 await _context.Database.BeginTransactionAsync();
@@ -185,7 +184,7 @@ namespace VivekMedicalProducts.Controllers
 
                 _context.Orders.Add(order);
 
-                await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync();   // OrderId generated here
 
                 decimal totalTaxableAmount =
                     carts.Sum(item =>
@@ -295,16 +294,13 @@ namespace VivekMedicalProducts.Controllers
 
                 _context.OrderItems.AddRange(orderItems);
 
-                // Clear Cart
                 _context.Carts.RemoveRange(carts);
 
-                // Commit transaction
-                await transaction.CommitAsync();
-
-                // Clear Coupon
                 _context.CheckoutSessions.Remove(checkoutSession);
 
-                await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync();      // Save everything together
+
+                await transaction.CommitAsync();
                 // Send Invoice
                 _ = Task.Run(async () =>
                 {
@@ -350,8 +346,7 @@ namespace VivekMedicalProducts.Controllers
 
         // ================= CREATE ORDER =================
         [HttpPost("create")]
-        public async Task<IActionResult> CreateOrder(
-     [FromBody] CheckoutViewModel model)
+        public async Task<IActionResult> CreateOrder()
         {
             try
             {
@@ -381,22 +376,10 @@ namespace VivekMedicalProducts.Controllers
                     });
                 }
 
-                Console.WriteLine("============= DEBUG =============");
-
-                Console.WriteLine($"UserId : {userId}");
-
-                Console.WriteLine($"CheckoutSession Id : {checkoutSession?.Id}");
-
-                Console.WriteLine($"SelectedAddressId : {checkoutSession?.SelectedAddressId}");
-
-                Console.WriteLine($"Coupon : {checkoutSession?.CouponCode}");
-
-                Console.WriteLine("=================================");
-
                 var address = await _context.UserAddresses
-                    .FirstOrDefaultAsync(x =>
-                        x.Id == checkoutSession.SelectedAddressId &&
-                        x.UserId == userId);
+    .FirstOrDefaultAsync(x =>
+        x.Id == checkoutSession.SelectedAddressId &&
+        x.UserId == userId);
 
                 if (address == null)
                 {
@@ -666,8 +649,7 @@ namespace VivekMedicalProducts.Controllers
                     null,
                     checkoutSession.CouponCode);
 
-                var sellerId = carts.First().SellerId;
-
+                var sellerId = carts.FirstOrDefault()?.SellerId;
                 // Create Order
                 var order =
                     new OrderModel
@@ -838,8 +820,16 @@ namespace VivekMedicalProducts.Controllers
                 session.IsCompleted = true;
                 session.PaymentStatus = "Completed";
                 session.PaymentCompletedDate = DateTime.UtcNow;
+                session.RazorpayPaymentId = model.razorpay_payment_id;
 
                 checkoutSession.IsActive = false;
+                checkoutSession.SelectedAddressId = null;
+                checkoutSession.CouponCode = null;
+                checkoutSession.SubTotal = 0;
+                checkoutSession.GSTAmount = 0;
+                checkoutSession.CouponDiscount = 0;
+                checkoutSession.GrandTotal = 0;
+                checkoutSession.ShippingCharge = 0;
 
                 _context.Carts.RemoveRange(carts);
 
@@ -878,6 +868,7 @@ namespace VivekMedicalProducts.Controllers
                 });
             }
         }
+
 
 
         // ================= PAYMENT FAILED =================
@@ -989,6 +980,108 @@ namespace VivekMedicalProducts.Controllers
             {
                 // Prevent Razorpay from continuously retrying
                 return Ok();
+            }
+        }
+
+        [HttpPut("cancel/{orderId}")]
+        public async Task<IActionResult> CancelOrder(int orderId)
+        {
+            using var transaction =
+                await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                var userId = _userContext.GetUserId();
+
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized(new
+                    {
+                        success = false,
+                        message = "Please login first."
+                    });
+                }
+
+                var order = await _context.Orders
+                    .FirstOrDefaultAsync(x =>
+                        x.OrderId == orderId &&
+                        x.UserId == userId);
+
+                if (order == null)
+                {
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "Order not found."
+                    });
+                }
+
+                if (order.OrderStatus == "Cancelled")
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Order already cancelled."
+                    });
+                }
+
+                if (order.OrderStatus != "Placed" &&
+                    order.OrderStatus != "Packed")
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Order cannot be cancelled after shipping."
+                    });
+                }
+
+                order.OrderStatus = "Cancelled";
+                order.OrderModifiedDate = DateTime.UtcNow;
+
+                var items = await _context.OrderItems
+                    .Where(x => x.OrderId == orderId)
+                    .ToListAsync();
+
+                foreach (var item in items)
+                {
+                    item.ItemStatus = "Cancelled";
+                }
+
+                if (order.PaymentStatus == "Completed")
+                {
+                    order.PaymentStatus = "Refund Pending";
+
+                    // TODO:
+                    // Razorpay Refund API
+
+                    // order.PaymentStatus = "Refunded";
+                }
+                else
+                {
+                    order.PaymentStatus = "Cancelled";
+                }
+
+                await _context.SaveChangesAsync();
+
+                await transaction.CommitAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    message = order.PaymentStatus == "Refund Pending"
+                        ? "Order cancelled successfully. Refund will be processed within 2 business days."
+                        : "Order cancelled successfully."
+                });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+
+                return BadRequest(new
+                {
+                    success = false,
+                    message = ex.InnerException?.Message ?? ex.Message
+                });
             }
         }
 

@@ -100,11 +100,14 @@ namespace VivekMedicalProducts.Controllers
         [HttpPost("select-address/{id}")]
         public async Task<IActionResult> SelectAddress(int id)
         {
-            Console.WriteLine($"Selected Address: {id}");
+            Console.WriteLine($"Selected Address : {id}");
 
             await _checkoutService.SaveSelectedAddressAsync(id);
 
-            return Ok(new { success = true });
+            return Ok(new
+            {
+                success = true
+            });
         }
 
         // ================= APPLY COUPON =================

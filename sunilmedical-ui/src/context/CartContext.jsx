@@ -13,8 +13,28 @@ export const CartProvider = ({ children }) => {
 
     // 🔥 INITIAL LOAD
     useEffect(() => {
-        loadCart();
-    }, []);
+
+        const loadData = async () => {
+            try {
+                await loadCart();   // Refresh CartContext
+            } catch (err) {
+                console.error(err);
+            }
+        };
+
+        loadData();
+
+        const handleCartUpdated = async () => {
+            await loadCart();
+        };
+
+        window.addEventListener("cartUpdated", handleCartUpdated);
+
+        return () => {
+            window.removeEventListener("cartUpdated", handleCartUpdated);
+        };
+
+    }, [loadCart]);
 
     // 🔥 CART COUNT SYNC
     useEffect(() => {

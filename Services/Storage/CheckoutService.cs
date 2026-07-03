@@ -165,6 +165,7 @@ namespace VivekMedicalProducts.Services
                 .FirstOrDefaultAsync(x => x.Id == session.Id);
 
             Console.WriteLine($"DB VALUE: {verify?.SelectedAddressId}");
+
         }
 
         public async Task<UserAddress> UpdateAddressAsync(

@@ -115,6 +115,8 @@ export default function ReviewPage() {
 
                 if (data.success) {
 
+                    await loadCart();
+
                     clearInterval(interval);
 
                     setProcessing(false);
@@ -182,38 +184,39 @@ export default function ReviewPage() {
 
             // COD
             if (paymentMethod === "COD") {
+
                 const { data } = await API.post(
                     "/api/order/place-cod",
                     payload
                 );
 
                 if (data.success) {
-                    localStorage.removeItem("cart");
+
+                    await loadCart();
 
                     setCheckout(prev => ({
                         ...prev,
                         cartItems: []
                     }));
 
-                    window.dispatchEvent(
-                        new Event("cartUpdated")
-                    );
+                    setProcessing(false);
 
                     navigate("/my-orders", {
                         state: {
-                            successMessage:
-                                "🎉 Order placed successfully"
+                            successMessage: "🎉 Order placed successfully"
                         }
                     });
-                } else {
-                    showToast(
-                        data.message ||
-                        "Order failed",
-                        "error"
-                    );
+
+                    return;
                 }
 
+                showToast(
+                    data.message || "Order failed",
+                    "error"
+                );
+
                 setProcessing(false);
+
                 return;
             }
 
@@ -266,6 +269,7 @@ export default function ReviewPage() {
 
                             if (verify.success) {
                                 localStorage.removeItem("cart");
+                                await loadCart();
 
                                 setCheckout(prev => ({
                                     ...prev,
@@ -310,34 +314,6 @@ export default function ReviewPage() {
 
             razorpay.open();
         }
-        /*catch (err) {
-            setProcessing(false);
-
-            const status =
-                err.response?.status;
-
-            const data =
-                err.response?.data;
-
-            if (status === 401) {
-                navigate("/login", {
-                    replace: true,
-                    state: {
-                        message:
-                            data?.message ||
-                            "Please login first"
-                    }
-                });
-
-                return;
-            }
-
-            showToast(
-                data?.message ||
-                "Something went wrong",
-                "error"
-            );
-        }*/
         catch (err) {
             console.log(
                 "INSIDE CATCH"
