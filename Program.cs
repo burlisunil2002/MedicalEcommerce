@@ -152,8 +152,8 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseStaticFiles();
 
+app.UseStaticFiles();
 
 app.UseRouting();
 
@@ -164,21 +164,16 @@ app.UseSession();
 app.UseCookiePolicy();
 
 app.UseAuthentication();
+
 app.UseAuthorization();
 
-
-// ? MVC ROUTES (VERY IMPORTANT)
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
-
-// ? API ROUTES
 app.MapControllers();
 
-
-// ? REACT FALLBACK (ONLY AFTER MVC FAILS)
-app.MapFallbackToFile("react/index.html");
+app.MapFallbackToFile("index.html");
 
 app.Run();
 

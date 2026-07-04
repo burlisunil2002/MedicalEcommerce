@@ -252,7 +252,7 @@ export default function MyOrdersPage() {
 
                                 <Package size={18} />
 
-                                My Orders
+                               MY ORDERS
 
                             </div>
 

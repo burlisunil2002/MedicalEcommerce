@@ -11,95 +11,17 @@ export const CartProvider = ({ children }) => {
     const [cartCount, setCartCount] = useState(0);
     const [loading, setLoading] = useState(false);
 
-    // 🔥 INITIAL LOAD
-    useEffect(() => {
-
-        const loadData = async () => {
-            try {
-                await loadCart();   // Refresh CartContext
-            } catch (err) {
-                console.error(err);
-            }
-        };
-
-        loadData();
-
-        const handleCartUpdated = async () => {
-            await loadCart();
-        };
-
-        window.addEventListener("cartUpdated", handleCartUpdated);
-
-        return () => {
-            window.removeEventListener("cartUpdated", handleCartUpdated);
-        };
-
-    }, [loadCart]);
-
-    // 🔥 CART COUNT SYNC
-    useEffect(() => {
-        const count = items.reduce((a, b) => a + (b.quantity || 0), 0);
-        setCartCount(count);
-    }, [items]);
+   
 
     // 🔥 LOAD FULL CART
     const loadCart = async () => {
-        try {
-            setLoading(true);
 
-            const res = await API.get("/api/cart/full");
+    const res = await API.get("/api/cart/full");
 
-            setItems(
-                (res?.data?.items || []).map(i => ({
-                    ...i,
+    setItems(res.data.items || []);
 
-                    productId: Number(
-                        i.productId ?? i.ProductId ?? 0
-                    ),
-
-                    variantId: Number(
-                        i.variantId ??
-                        i.productVariantId ??
-                        i.ProductVariantId ??
-                        0
-                    ),
-
-                    quantity: Number(i.quantity ?? 1),
-
-                    price: Number(i.price ?? 0),
-
-                    finalPrice: Number(
-                        i.finalPrice ?? i.price ?? 0
-                    ),
-
-                    discountPercentage: Number(
-                        i.discountPercentage ?? 0
-                    ),
-
-                    gstPercentage: Number(
-                        i.gstPercentage ?? 0
-                    ),
-
-                    stepQuantity: Number(
-                        i.stepQuantity ?? 1
-                    ),
-
-                    minQuantity: Number(
-                        i.minQuantity ?? 1
-                    ),
-
-                    maxQuantity: i.maxQuantity ?? null
-                }))
-            );
-
-            setSummary(res?.data?.summary || {});
-
-        } catch (e) {
-            console.error("Cart load error:", e);
-        } finally {
-            setLoading(false);
-        }
-    };
+    setSummary(res.data.summary || {});
+};
 
     const refreshSummaryOnly = async () => {
         try {
@@ -162,17 +84,6 @@ export const CartProvider = ({ children }) => {
 
         refreshSummaryOnly(qtyToAdd);
 
-        console.log("===== CART CONTEXT =====");
-
-        console.log({
-
-            productId: productKey,
-
-            variantId: variantKey,
-
-            quantity: qtyToAdd
-
-        });
 
         try {
             await API.post("/api/cart/add", {
@@ -310,6 +221,32 @@ setItems(
         return item?.quantity || 0;
     };
 
+    useEffect(() => {
+
+        loadCart();
+
+        const handleCartUpdated = () => {
+            loadCart();
+        };
+
+        window.addEventListener("cartUpdated", handleCartUpdated);
+
+        return () => {
+            window.removeEventListener("cartUpdated", handleCartUpdated);
+        };
+
+    }, []);
+
+    // 🔥 CART COUNT SYNC
+    useEffect(() => {
+        const count = items.reduce((a, b) => a + (b.quantity || 0), 0);
+        setCartCount(count);
+    }, [items]);
+
+    useEffect(() => {
+        console.log("ITEMS CHANGED", items);
+    }, [items]);
+
     return (
         <CartContext.Provider value={{
             items,
@@ -326,4 +263,5 @@ setItems(
             {children}
         </CartContext.Provider>
     );
+
 };

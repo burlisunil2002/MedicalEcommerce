@@ -100,8 +100,8 @@
   </ItemGroup>
 
 
-	<Target Name="BuildReact" BeforeTargets="Publish">
-
+<Target Name="BuildReact" BeforeTargets="Build">
+	
 		<Message Text="========== React Build ==========" Importance="high"/>
 
 		<Exec
@@ -123,17 +123,22 @@
 
 	</Target>
 
-<Target Name="CopyReactBuild" AfterTargets="Publish">
-	
+<Target Name="CopyReactBuild" AfterTargets="Build">
+
+  <Message Text="========== Copy React Build ==========" Importance="high"/>
+
+  <RemoveDir Directories="$(ProjectDir)wwwroot/react" ContinueOnError="true" />
+
+  <MakeDir Directories="$(ProjectDir)wwwroot/react" />
+
   <ItemGroup>
-      <ReactBuildFiles Include="sunilmedical-ui/build/**" />
+    <ReactBuildFiles Include="$(ProjectDir)sunilmedical-ui/build/**/*" />
   </ItemGroup>
 
-  <RemoveDir Directories="wwwroot/react" />
-
-  <MakeDir Directories="wwwroot/react" />
-
-  <Copy SourceFiles="@(ReactBuildFiles)" DestinationFiles="@(ReactBuildFiles->'wwwroot/react/%(RecursiveDir)%(Filename)%(Extension)')" />
+  <Copy
+      SourceFiles="@(ReactBuildFiles)"
+      DestinationFiles="@(ReactBuildFiles->'$(ProjectDir)wwwroot/react/%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true" />
 
 </Target>
 

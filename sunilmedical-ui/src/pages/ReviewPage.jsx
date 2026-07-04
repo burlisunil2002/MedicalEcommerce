@@ -2,10 +2,12 @@
 import { useNavigate } from "react-router-dom";
 import { getCheckout } from "../services/checkoutService";
 import SummaryCard from "../components/SummaryCard";
+import { useCart } from "../context/CartContext";
 import API from "../services/api";
 
 export default function ReviewPage() {
     const navigate = useNavigate();
+    const { loadCart } = useCart();
 
     const [checkout, setCheckout] = useState(null);
     const [selectedAddress, setSelectedAddress] = useState(null);
@@ -119,6 +121,8 @@ export default function ReviewPage() {
 
                     clearInterval(interval);
 
+                    window.dispatchEvent(new Event("cartUpdated"));
+
                     setProcessing(false);
 
                     navigate("/my-orders", {
@@ -194,18 +198,7 @@ export default function ReviewPage() {
 
                     await loadCart();
 
-                    setCheckout(prev => ({
-                        ...prev,
-                        cartItems: []
-                    }));
-
-                    setProcessing(false);
-
-                    navigate("/my-orders", {
-                        state: {
-                            successMessage: "🎉 Order placed successfully"
-                        }
-                    });
+                    navigate("/myorders");
 
                     return;
                 }
@@ -271,14 +264,7 @@ export default function ReviewPage() {
                                 localStorage.removeItem("cart");
                                 await loadCart();
 
-                                setCheckout(prev => ({
-                                    ...prev,
-                                    cartItems: []
-                                }));
-
-                                window.dispatchEvent(
-                                    new Event("cartUpdated")
-                                );
+                                window.dispatchEvent(new Event("cartUpdated"));
 
                                 startPolling(order.razorpayOrderId);
                             } else {
