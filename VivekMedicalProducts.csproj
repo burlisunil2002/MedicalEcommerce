@@ -9,20 +9,13 @@
 
   <ItemGroup>
     <Compile Remove="sunilmedical-ui\build\**" />
+    <Compile Remove="wwwroot\build\**" />
     <Content Remove="sunilmedical-ui\build\**" />
+    <Content Remove="wwwroot\build\**" />
     <EmbeddedResource Remove="sunilmedical-ui\build\**" />
+    <EmbeddedResource Remove="wwwroot\build\**" />
     <None Remove="sunilmedical-ui\build\**" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Remove="wwwroot\build\favicon.ico" />
-    <Content Remove="wwwroot\build\images\bannerMRI.png" />
-    <Content Remove="wwwroot\build\images\MadeInIndiaBanner.png" />
-    <Content Remove="wwwroot\build\images\offerbanner.png" />
-    <Content Remove="wwwroot\build\index.html" />
-    <Content Remove="wwwroot\build\logo192.png" />
-    <Content Remove="wwwroot\build\logo512.png" />
-    <Content Remove="wwwroot\build\robots.txt" />
+    <None Remove="wwwroot\build\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -80,66 +73,33 @@
     <Folder Include="wwwroot\quotations\" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Include="wwwroot\build\favicon.ico" />
-    <None Include="wwwroot\build\images\bannerMRI.png" />
-    <None Include="wwwroot\build\images\MadeInIndiaBanner.png" />
-    <None Include="wwwroot\build\images\offerbanner.png" />
-    <None Include="wwwroot\build\logo192.png" />
-    <None Include="wwwroot\build\logo512.png" />
-    <None Include="wwwroot\build\robots.txt" />
-  </ItemGroup>
 
-  <ItemGroup>
-    <Content Update="wwwroot\build\asset-manifest.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Update="wwwroot\build\manifest.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
+	<Target Name="ReactBuild" BeforeTargets="Build">
 
-
-<Target Name="BuildReact" BeforeTargets="Build">
-	
-		<Message Text="========== React Build ==========" Importance="high"/>
+		<Message Text="Building React..." Importance="high"/>
 
 		<Exec
-			WorkingDirectory="$(MSBuildProjectDirectory)/sunilmedical-ui"
-			Command="npm ci"
-			ContinueOnError="false"
-			Condition="Exists('$(MSBuildProjectDirectory)/sunilmedical-ui/package-lock.json')" />
-
-		<Exec
-			WorkingDirectory="$(MSBuildProjectDirectory)/sunilmedical-ui"
+			WorkingDirectory="$(MSBuildProjectDirectory)\sunilmedical-ui"
 			Command="npm install"
-			ContinueOnError="false"
-			Condition="!Exists('$(MSBuildProjectDirectory)/sunilmedical-ui/package-lock.json')" />
+			Condition="!Exists('$(MSBuildProjectDirectory)\sunilmedical-ui\node_modules')" />
 
 		<Exec
-			WorkingDirectory="$(MSBuildProjectDirectory)/sunilmedical-ui"
-			Command="npm run build"
-			ContinueOnError="false"/>
+			WorkingDirectory="$(MSBuildProjectDirectory)\sunilmedical-ui"
+			Command="npm run build" />
+
+		<RemoveDir Directories="$(ProjectDir)wwwroot\react" ContinueOnError="true"/>
+
+		<MakeDir Directories="$(ProjectDir)wwwroot\react"/>
+
+		<ItemGroup>
+			<ReactFiles Include="$(ProjectDir)sunilmedical-ui\build\**\*" />
+		</ItemGroup>
+
+		<Copy
+			SourceFiles="@(ReactFiles)"
+			DestinationFiles="@(ReactFiles->'$(ProjectDir)wwwroot\react\%(RecursiveDir)%(Filename)%(Extension)')"
+			SkipUnchangedFiles="true" />
 
 	</Target>
-
-<Target Name="CopyReactBuild" AfterTargets="Build">
-
-  <Message Text="========== Copy React Build ==========" Importance="high"/>
-
-  <RemoveDir Directories="$(ProjectDir)wwwroot/react" ContinueOnError="true" />
-
-  <MakeDir Directories="$(ProjectDir)wwwroot/react" />
-
-  <ItemGroup>
-    <ReactBuildFiles Include="$(ProjectDir)sunilmedical-ui/build/**/*" />
-  </ItemGroup>
-
-  <Copy
-      SourceFiles="@(ReactBuildFiles)"
-      DestinationFiles="@(ReactBuildFiles->'$(ProjectDir)wwwroot/react/%(RecursiveDir)%(Filename)%(Extension)')"
-      SkipUnchangedFiles="true" />
-
-</Target>
-
+	
 </Project>

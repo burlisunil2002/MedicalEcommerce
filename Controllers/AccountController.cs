@@ -252,7 +252,16 @@ public class AccountController : Controller
             user.OTPExpiry = null;
             user.OTPLastSentAt = null;
 
-            await _userManager.UpdateAsync(user);
+            var updateResult = await _userManager.UpdateAsync(user);
+
+            if (!updateResult.Succeeded)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = string.Join(", ", updateResult.Errors.Select(e => e.Description))
+                });
+            }
 
             await _signInManager.SignInAsync(
                 user,

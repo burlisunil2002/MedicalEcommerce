@@ -78,7 +78,9 @@ export default function LoginPage() {
             );
 
             if (res.data.success) {
-                window.location.replace("/");
+                window.dispatchEvent(new Event("userLoggedIn"));
+
+                navigate("/");
             }
 
         } catch (err) {

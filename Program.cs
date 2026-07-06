@@ -173,8 +173,9 @@ app.MapControllerRoute(
 
 app.MapControllers();
 
-app.MapFallbackToFile("index.html");
+app.MapFallbackToFile("react/index.html");
 
 app.Run();
+
 
 

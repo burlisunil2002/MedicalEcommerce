@@ -198,7 +198,7 @@ export default function ReviewPage() {
 
                     await loadCart();
 
-                    navigate("/myorders");
+                    navigate("/my-orders");
 
                     return;
                 }
@@ -292,10 +292,18 @@ export default function ReviewPage() {
                     },
 
                     modal: {
+                        confirm_close: false,
+
                         ondismiss: () => {
+
+                            console.log("Razorpay closed");
+
                             setProcessing(false);
+
+                            // Optional
+                            // showToast("Payment cancelled", "info");
                         }
-                    }
+                    },
                 });
 
             razorpay.open();

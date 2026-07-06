@@ -25,7 +25,10 @@ export default function MainHeader() {
         } catch { }
 
         setUser(null);
-        loadCart(); // reset cart
+
+        await loadCart();
+
+        window.dispatchEvent(new Event("userLoggedOut"));
 
         navigate("/login");
     };
@@ -48,28 +51,33 @@ export default function MainHeader() {
         );
     };
 
-    // 🔐 LOAD USER
+    // 🔥 LOAD LOGGED-IN USER
     useEffect(() => {
-        API.get("/api/user")
-            .then(res => {
-                setUser(res.data);
-            })
-            .catch(err => {
+
+        const loadUser = async () => {
+
+            try {
+
+                const { data } = await API.get("/api/user");
+
+                setUser(data);
+
+            } catch {
 
                 setUser(null);
 
-                if (
-                    err.response?.status ===
-                    401
-                ) {
-                    navigate(
-                        "/login",
-                        {
-                            replace: true
-                        }
-                    );
-                }
-            });
+            }
+
+        };
+
+        loadUser();
+
+        window.addEventListener("userLoggedIn", loadUser);
+
+        return () => {
+            window.removeEventListener("userLoggedIn", loadUser);
+        };
+
     }, []);
 
 

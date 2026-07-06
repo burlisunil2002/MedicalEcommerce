@@ -31,6 +31,8 @@ export default function MyOrdersPage() {
     const [showCancelDialog, setShowCancelDialog] =
         useState(false);
 
+    const [cancelling, setCancelling] = useState(false);
+
     useEffect(() => {
 
         loadOrders();
@@ -78,6 +80,8 @@ export default function MyOrdersPage() {
 
         try {
 
+            setCancelling(true);
+
             const { data } = await API.put(
                 `/api/order/cancel/${selectedOrder.orderId}`
             );
@@ -85,11 +89,9 @@ export default function MyOrdersPage() {
             alert(data.message);
 
             setShowCancelDialog(false);
-
             setSelectedOrder(null);
 
             loadOrders();
-
         }
         catch (err) {
 
@@ -97,9 +99,12 @@ export default function MyOrdersPage() {
                 err.response?.data?.message ??
                 "Unable to cancel order."
             );
+        }
+        finally {
+
+            setCancelling(false);
 
         }
-
     };
 
     const filteredOrders =
@@ -614,12 +619,10 @@ hover:text-blue-600
                                             paymentStatus={order.paymentStatus}
                                             orderDate={order.orderDate}
                                             modifiedDate={order.modifiedDate}
+                                            cancelling={cancelling}
                                             onCancelOrder={() => {
-
                                                 setSelectedOrder(order);
-
                                                 setShowCancelDialog(true);
-
                                             }}
                                         />
 

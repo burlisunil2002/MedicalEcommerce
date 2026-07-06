@@ -4,10 +4,10 @@
     Truck,
     Bike,
     Home,
-    XCircle
+    XCircle,
+    AlertTriangle
 } from "lucide-react";
 
-import { useState } from "react";
 
 const steps = [
     {
@@ -39,11 +39,11 @@ const steps = [
 
 export default function DeliveryTracker({
     status,
+    paymentStatus,
     orderDate,
     modifiedDate,
-    paymentStatus,
     onCancelOrder,
-    cancelling = false
+    cancelling
 }) {
 
 
@@ -281,222 +281,54 @@ ${active
 
             {/* Bottom Message */}
 
-            <div className="mt-8 rounded-xl bg-green-50 border border-green-200 p-4">
+            {status === "Cancelled" && paymentStatus === "Completed" && (
 
-                <div className="flex items-center gap-3">
+                <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4">
 
-                    <Truck
-                        className="text-green-600"
-                    />
+                    <div className="flex gap-3">
 
-                    <div>
+                        <AlertTriangle className="text-orange-500" />
 
-                        <div className="font-semibold">
+                        <div>
 
-                            Current Status
+                            <div className="font-semibold text-orange-700">
+                                Refund Information
+                            </div>
 
-                        </div>
+                            <p className="text-sm text-gray-700 mt-2">
 
-                        <div className="text-sm text-gray-600">
+                                Your order has been cancelled successfully.
 
-                            {status === "Placed" &&
-                                "Your order has been placed successfully."}
+                                Since this order was paid online, your refund has been initiated.
 
-                            {status === "Packed" &&
-                                "Your order has been packed."}
+                                The refunded amount will be credited to your original payment method within
 
-                            {status === "Shipped" &&
-                                "Your order has been shipped."}
+                                <strong> 2 business days.</strong>
 
-                            {status === "OutForDelivery" &&
-                                "Your order is out for delivery."}
-
-                            {status === "Delivered" &&
-                                "Your order has been delivered."}
+                            </p>
 
                         </div>
 
                     </div>
 
-                   / {/* Cancel Order */}
-
-                    {status !== "Cancelled" &&
-                        (status === "Placed" || status === "Packed") && (
-
-                            <div className="mt-8">
-
-                                <button
-                                onClick={onCancelOrder}
-                                disabled={cancelling}
-                                    className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-semibold transition disabled:opacity-60"
-                                >
-                                    {cancelling
-                                        ? "Cancelling..."
-                                        : "Cancel Order"}
-                                </button>
-
-                            </div>
-
-                        )}
-
-                    {paymentStatus === "Completed" &&
-                        (status === "Placed" || status === "Packed") && (
-
-                            <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4">
-
-                                <div className="flex gap-3">
-
-                                    <AlertTriangle
-                                        className="text-orange-500"
-                                    />
-
-                                    <div>
-
-                                        <div className="font-semibold text-orange-700">
-
-                                            Refund Information
-
-                                        </div>
-
-                                        <p className="text-sm text-gray-700 mt-2">
-
-                                            Since this order was paid online,
-
-                                            cancelling it will automatically initiate
-
-                                            a refund.
-
-                                            The refunded amount will be credited to
-
-                                            your original payment method within
-
-                                            <strong> 2 business days.</strong>
-
-                                        </p>
-
-                                    </div>
-
-                                </div>
-
-                            </div>
-
-                        )}
-                    {(status === "Shipped" ||
-                        status === "OutForDelivery" ||
-                        status === "Delivered") && (
-
-                            <div className="mt-5 rounded-xl bg-gray-100 border p-4 text-center text-gray-600">
-
-                                Cancellation is no longer available once the order has been shipped.
-
-                            </div>
-
-                        )}
-                    {showCancelDialog && (
-
-                        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-
-                            <div className="bg-white rounded-3xl w-full max-w-md p-6">
-
-                                <div className="flex justify-center">
-
-                                    <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center">
-
-                                        <XCircle
-                                            size={42}
-                                            className="text-red-600"
-                                        />
-
-                                    </div>
-
-                                </div>
-
-                                <h2 className="text-2xl font-bold text-center mt-5">
-
-                                    Cancel Order?
-
-                                </h2>
-
-                                <p className="text-gray-600 text-center mt-3">
-
-                                    Are you sure you want to cancel this order?
-
-                                </p>
-
-                                {paymentStatus === "Completed" && (
-
-                                    <div className="mt-5 rounded-xl bg-orange-50 border border-orange-200 p-4">
-
-                                        <div className="font-semibold text-orange-700">
-
-                                            Refund Notice
-
-                                        </div>
-
-                                        <p className="text-sm text-gray-700 mt-2">
-
-                                            Your payment has already been completed.
-
-                                            After cancelling this order,
-
-                                            your refund will be initiated automatically.
-
-                                            The amount will be credited to your
-
-                                            original payment method within
-
-                                            <strong> 2 business days.</strong>
-
-                                        </p>
-
-                                    </div>
-
-                                )}
-
-                                <div className="flex gap-3 mt-7">
-
-                                    <button
-                                        onClick={() => setShowCancelDialog(false)}
-                                        className="flex-1 border rounded-xl py-3"
-                                    >
-
-                                        Keep Order
-
-                                    </button>
-
-                                    <button
-
-                                        disabled={cancelling}
-
-                                        onClick={async () => {
-
-                                            setShowCancelDialog(false);
-
-                                            await onCancelOrder();
-
-                                        }}
-
-                                        className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl py-3"
-
-                                    >
-
-                                        Yes, Cancel
-
-                                    </button>
-
-                                </div>
-
-                            </div>
-
-                        </div>
-
-                    )}
-
                 </div>
 
-            </div>
+            )}
 
+            {(status === "Shipped" ||
+                status === "OutForDelivery" ||
+                status === "Delivered") && (
+
+                    <div className="mt-5 rounded-xl bg-gray-100 border p-4 text-center text-gray-600">
+
+                        Cancellation is no longer available once the order has been shipped.
+
+                    </div>
+
+                )}                
+                
         </div>
+
 
     );
 

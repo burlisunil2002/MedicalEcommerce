@@ -3,25 +3,28 @@
 bin/
 obj/
 
-# User-specific files
+# User files
 *.user
 *.suo
 
 # Logs
 *.log
 
-# OS files
+# OS
 .DS_Store
 Thumbs.db
 
-# ASP.NET Core config (IMPORTANT ??)
+# ASP.NET
 appsettings.Development.json
-
-# Secrets
 secrets.json
 
-# Node (if used)
-node_modules/
+# React
+sunilmedical-ui/node_modules/
+sunilmedical-ui/build/
 
-# Publish
+# Runtime uploads (keep this if uploads are generated at runtime)
 wwwroot/uploads/
+
+# Publish folders
+publish/
+out/
