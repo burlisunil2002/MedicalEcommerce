@@ -19,6 +19,14 @@ import AdminLoginPage from "./pages/AdminLoginPage";
 import AddProduct from "./pages/AddProduct";
 import EditProduct from "./pages/EditProduct";
 import AdminOrders from "./pages/AdminOrders";
+import SellerLanding from "./pages/SellerLanding";
+import SellerRegister from "./pages/SellerRegister";
+import SellerLogin from "./pages/SellerLogin";
+import SellerLayout from "./layouts/SellerLayout";
+import SellerDashboard from "./pages/seller/SellerDashboard";
+import Subscription from "./pages/seller/Subscription";
+import SellerForgotPassword from "./pages/SellerForgotPassword";
+import SellerResetPassword from "./pages/SellerResetPassword";
 
 
 
@@ -99,7 +107,7 @@ function App() {
 
 
                         <Route
-                            path="/product-management"
+                            path="product-management"
                             element={<ProductManagement />}
                         />
                         <Route
@@ -114,6 +122,58 @@ function App() {
                         <Route
                             path="admin-orders"
                             element={<AdminOrders />}
+                        />
+                        <Route
+                            path="seller-home"
+                            element={<SellerLanding />}
+                        />
+
+                        <Route
+                            path="seller-register"
+                            element={<SellerRegister />}
+                        />
+
+                        <Route
+                            path="seller-login"
+                            element={<SellerLogin />}
+                        />
+                        <Route
+                            path="seller-forgot-password"
+                            element={<SellerForgotPassword />}
+                        />
+
+                        <Route
+                            path="seller-reset-password"
+                            element={<SellerResetPassword />}
+                        />
+
+                    </Route>
+
+                    <Route path="seller" element={<SellerLayout />}>
+
+                        <Route
+                            index
+                            element={<SellerDashboard />}
+                        />
+
+                        <Route
+                            path="dashboard"
+                            element={<SellerDashboard />}
+                        />
+
+                        <Route
+                            path="products"
+                            element={<ProductManagement />}
+                        />
+
+                        <Route
+                            path="orders"
+                            element={<AdminOrders />}
+                        />
+
+                        <Route
+                            path="subscription"
+                            element={<Subscription />}
                         />
 
                     </Route>

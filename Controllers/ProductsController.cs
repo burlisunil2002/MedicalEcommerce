@@ -112,6 +112,38 @@ namespace VivekMedicalProducts.Controllers
             return cleaned.ToLower();
         }
 
+        //  Helpers //
+
+        private async Task<SellerModel?> GetCurrentSellerAsync()
+        {
+            var userId = _userContext.GetUserId();
+
+            if (string.IsNullOrEmpty(userId))
+                return null;
+
+            return await _context.Sellers
+                .FirstOrDefaultAsync(x => x.UserId == userId);
+        }
+
+        private bool HasActiveSubscription(SellerModel seller)
+        {
+            return seller.SubscriptionEndDate != null &&
+                   seller.SubscriptionEndDate >= DateTime.UtcNow;
+        }
+
+        private int GetProductLimit(string productRange)
+        {
+            return productRange switch
+            {
+                "1-5" => 5,
+                "6-10" => 10,
+                "11-15" => 15,
+                "16-20" => 20,
+                "20+" => int.MaxValue,
+                _ => 0
+            };
+        }
+
         // ================= ADD (GET) =================
 
 
@@ -224,22 +256,57 @@ namespace VivekMedicalProducts.Controllers
 
                 if (!isAdmin)
                 {
-                    var seller =
-                        await _context.Sellers
-                            .FirstOrDefaultAsync(x =>
-                                x.UserId == userId);
+                    var seller = await GetCurrentSellerAsync();
 
                     if (seller == null)
                     {
-                        return BadRequest(new
+                        return Unauthorized(new
                         {
                             success = false,
                             message = "Seller not found."
                         });
                     }
 
-                    product.SellerId =
-                        seller.SellerId;
+                    if (!HasActiveSubscription(seller))
+                    {
+                        return StatusCode(403, new
+                        {
+                            success = false,
+                            message = "Your subscription has expired. Please renew it."
+                        });
+                    }
+
+                    var activeSubscription = await _context.Subscriptions
+                        .Where(x =>
+                            x.SellerId == seller.SellerId &&
+                            x.Status == "Active")
+                        .OrderByDescending(x => x.EndDate)
+                        .FirstOrDefaultAsync();
+
+                    if (activeSubscription == null)
+                    {
+                        return BadRequest(new
+                        {
+                            success = false,
+                            message = "No active subscription found."
+                        });
+                    }
+
+                    int limit = GetProductLimit(activeSubscription.ProductRange);
+
+                    int currentProducts = await _context.Products
+                        .CountAsync(x => x.SellerId == seller.SellerId);
+
+                    if (currentProducts >= limit)
+                    {
+                        return BadRequest(new
+                        {
+                            success = false,
+                            message = $"Your subscription allows only {limit} products. Please upgrade your plan."
+                        });
+                    }
+
+                    product.SellerId = seller.SellerId;
                 }
 
                 #endregion
@@ -553,11 +620,7 @@ namespace VivekMedicalProducts.Controllers
 
                 if (!isAdmin)
                 {
-                    seller =
-                        await _context.Sellers
-                            .AsNoTracking()
-                            .FirstOrDefaultAsync(x =>
-                                x.UserId == userId);
+                    seller = await GetCurrentSellerAsync();
 
                     if (seller == null)
                     {
@@ -568,13 +631,12 @@ namespace VivekMedicalProducts.Controllers
                         });
                     }
 
-                    if (seller.SubscriptionEndDate == null ||
-                        seller.SubscriptionEndDate < DateTime.UtcNow)
+                    if (!HasActiveSubscription(seller))
                     {
-                        return BadRequest(new
+                        return StatusCode(403, new
                         {
                             success = false,
-                            message = "Your subscription has expired."
+                            message = "Subscription expired."
                         });
                     }
                 }
@@ -721,13 +783,31 @@ namespace VivekMedicalProducts.Controllers
         {
             try
             {
-                var product = await _context.Products
-                    .AsNoTracking()
+                var userId = _userContext.GetUserId();
+
+                var user = await _userManager.FindByIdAsync(userId);
+
+                bool isAdmin =
+                    await _userManager.IsInRoleAsync(user, "Admin");
+
+                var query = _context.Products
                     .Include(p => p.Variants)
                         .ThenInclude(v => v.Images)
                     .Include(p => p.Variants)
                         .ThenInclude(v => v.Specifications)
-                    .FirstOrDefaultAsync(p => p.Id == id);
+                    .AsQueryable();
+
+                if (!isAdmin)
+                {
+                    var seller = await GetCurrentSellerAsync();
+
+                    query = query.Where(x =>
+                        x.SellerId == seller.SellerId);
+                }
+
+                var product = await query
+                    .FirstOrDefaultAsync(x =>
+                        x.Id == id);
 
                 if (product == null)
                 {
@@ -773,14 +853,39 @@ namespace VivekMedicalProducts.Controllers
 
             try
             {
+                var userId = _userContext.GetUserId();
+
+                var user = await _userManager.FindByIdAsync(userId);
+
+                bool isAdmin =
+                await _userManager.IsInRoleAsync(user, "Admin");
+
+                var query = _context.Products
+                .Include(p => p.Variants)
+                .ThenInclude(v => v.Images)
+                .Include(p => p.Variants)
+                .ThenInclude(v => v.Specifications)
+                .AsQueryable();
+
+                if (!isAdmin)
+                {
+                    var seller = await GetCurrentSellerAsync();
+
+                    if (!HasActiveSubscription(seller))
+                    {
+                        return StatusCode(403, new
+                        {
+                            success = false,
+                            message = "Subscription expired."
+                        });
+                    }
+
+                    query = query.Where(x =>
+                        x.SellerId == seller.SellerId);
+                }
+
                 var product =
-                    await _context.Products
-                        .Include(p => p.Variants)
-                            .ThenInclude(v => v.Images)
-                        .Include(p => p.Variants)
-                            .ThenInclude(v => v.Specifications)
-                        .FirstOrDefaultAsync(p =>
-                            p.Id == id);
+                await query.FirstOrDefaultAsync(x => x.Id == id);
 
                 if (product == null)
                 {
@@ -1197,7 +1302,6 @@ namespace VivekMedicalProducts.Controllers
                 });
             }
         }
-
 
         [Authorize]
         [HttpPut("/api/products/change-status/{id}")]

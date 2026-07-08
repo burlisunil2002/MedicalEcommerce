@@ -1,18 +1,46 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+########################################
+# Visual Studio
+########################################
 
-# dependencies
-/node_modules
-/.pnp
+.vs/
+bin/
+obj/
+TestResults/
+
+########################################
+# User-specific
+########################################
+
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+########################################
+# ASP.NET Core
+########################################
+
+appsettings.Development.json
+secrets.json
+
+########################################
+# React
+########################################
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# React Build
+build/
+**/build/
+
+# React Cache
+.pnp
 .pnp.js
 
-# testing
-/coverage
+coverage/
 
-# production
-/build
-
-# misc
-.DS_Store
 .env.local
 .env.development.local
 .env.test.local
@@ -21,3 +49,36 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+########################################
+# Publish
+########################################
+
+publish/
+
+########################################
+# Logs
+########################################
+
+*.log
+
+########################################
+# OS Files
+########################################
+
+.DS_Store
+Thumbs.db
+
+########################################
+# Rider / VS Code
+########################################
+
+.idea/
+.vscode/
+
+########################################
+# Temporary files
+########################################
+
+*.tmp
+*.temp

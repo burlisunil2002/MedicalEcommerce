@@ -6,11 +6,11 @@
         {
             var pricing = new Dictionary<string, Dictionary<string, decimal>>
             {
-                ["1-5"] = new() { { "basic", 10 }, { "pro", 19 }, { "ent", 27 } },
-                ["6-10"] = new() { { "basic", 15 }, { "pro", 28 }, { "ent", 40 } },
-                ["11-15"] = new() { { "basic", 20 }, { "pro", 37 }, { "ent", 52 } },
-                ["16-20"] = new() { { "basic", 25 }, { "pro", 46 }, { "ent", 65 } },
-                ["20+"] = new() { { "basic", 30 }, { "pro", 55 }, { "ent", 78 } }
+                ["1-5"] = new() { { "basic", 2999 }, { "pro", 3999 }, { "ent", 4999 } },
+                ["6-10"] = new() { { "basic", 3999 }, { "pro", 5499 }, { "ent", 6999 } },
+                ["11-15"] = new() { { "basic", 4999 }, { "pro", 7999 }, { "ent", 8999 } },
+                ["16-20"] = new() { { "basic", 5999 }, { "pro", 9499 }, { "ent", 10999 } },
+                ["20+"] = new() { { "basic", 6999 }, { "pro", 9999 }, { "ent", 12999 } }
             };
 
             int years = plan switch

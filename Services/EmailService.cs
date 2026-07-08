@@ -110,7 +110,7 @@ public class EmailService
     </div>";
 
         await SendEmailAsync(
-            "support@sunilmedicalproducts.online",   // ✅ ADMIN EMAIL
+            "burlisunil16@gmail.com",   // ✅ ADMIN EMAIL
             "New Enquiry - Sunil Medical",
             body
         );
@@ -159,9 +159,9 @@ public class EmailService
         var client = new SendGridClient(_apiKey);
 
         var from = new EmailAddress(
-            "burlisunil16@gmail.com",
-            "Sunil Medical Products"
-        );
+    "burlisunil16@gmail.com",
+    "Sunil Medical Products"
+);
 
         var to = new EmailAddress(toEmail); 
 
@@ -189,6 +189,79 @@ public class EmailService
             var error = await response.Body.ReadAsStringAsync();
             Console.WriteLine("SendGrid Attachment ERROR: " + error);
             throw new Exception("Attachment email failed");
+        }
+    }
+
+    public async Task SendPasswordResetEmail(
+    string toEmail,
+    string sellerName,
+    string resetLink)
+    {
+        var client = new SendGridClient(_apiKey);
+
+        var from = new EmailAddress(
+    "burlisunil16@gmail.com",
+    "Sunil Medical Products"
+);
+
+        var to = new EmailAddress(toEmail);
+
+        var html = $@"
+    <div style='font-family:Arial;padding:40px;background:#f5f7fb'>
+
+        <div style='background:white;
+                    max-width:600px;
+                    margin:auto;
+                    padding:30px;
+                    border-radius:12px;'>
+
+            <h2>Hello {sellerName}</h2>
+
+            <p>
+                We received a request to reset your seller password.
+            </p>
+
+            <p style='text-align:center'>
+
+                <a href='{resetLink}'
+                   style='background:#2563eb;
+                          color:white;
+                          padding:14px 30px;
+                          border-radius:8px;
+                          text-decoration:none;'>
+
+                    Reset Password
+
+                </a>
+
+            </p>
+
+            <p>
+                If you didn't request this, simply ignore this email.
+            </p>
+
+        </div>
+
+    </div>";
+
+        var msg = MailHelper.CreateSingleEmail(
+            from,
+            to,
+            "Seller Password Reset",
+            "Reset Password",
+            html);
+
+        var response = await client.SendEmailAsync(msg);
+
+        Console.WriteLine($"SendGrid Status : {response.StatusCode}");
+
+        var body = await response.Body.ReadAsStringAsync();
+
+        Console.WriteLine(body);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new Exception(body);
         }
     }
 }

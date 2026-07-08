@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Razorpay.Api;
 using System.Security.Cryptography;
 using System.Text;
@@ -8,8 +9,10 @@ using VivekMedicalProducts.Models;
 using VivekMedicalProducts.Services;
 
 
+[ApiController]
+[Route("api/subscription")]
 [Authorize(Roles = "Seller")]
-public class SubscriptionController : Controller
+public class SubscriptionController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly IConfiguration _config;
@@ -22,14 +25,35 @@ public class SubscriptionController : Controller
         _service = new SubscriptionService();
     }
 
-    private int GetSellerId()
+    /*  private int GetSellerId()
+      {
+          var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+          if (string.IsNullOrEmpty(userId))
+              throw new Exception("User not logged in");
+
+          var seller = _context.Sellers.FirstOrDefault(s => s.UserId == userId);
+
+          if (seller == null)
+              throw new Exception("Seller not found");
+
+          return seller.SellerId;
+      }*/
+
+    private async Task<SellerModel?> GetCurrentSellerAsync()
     {
         var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
 
         if (string.IsNullOrEmpty(userId))
-            throw new Exception("User not logged in");
+            return null;
 
-        var seller = _context.Sellers.FirstOrDefault(s => s.UserId == userId);
+        return await _context.Sellers
+            .FirstOrDefaultAsync(x => x.UserId == userId);
+    }
+
+    private async Task<int> GetSellerIdAsync()
+    {
+        var seller = await GetCurrentSellerAsync();
 
         if (seller == null)
             throw new Exception("Seller not found");
@@ -37,19 +61,87 @@ public class SubscriptionController : Controller
         return seller.SellerId;
     }
 
-    public IActionResult Index()
+    [HttpGet("status")]
+    public async Task<IActionResult> GetSubscriptionStatus()
     {
-        return View();
+        try
+        {
+            var seller = await GetCurrentSellerAsync();
+
+            if (seller == null)
+            {
+                return Unauthorized(new
+                {
+                    success = false,
+                    message = "Seller not found."
+                });
+            }
+
+            var subscription = await _context.Subscriptions
+                .Where(x => x.SellerId == seller.SellerId)
+                .OrderByDescending(x => x.CreatedDate)
+                .FirstOrDefaultAsync();
+
+            if (subscription == null)
+            {
+                return Ok(new
+                {
+                    success = true,
+                    subscribed = false
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+
+                subscribed = subscription.Status == "Active",
+
+                subscription = new
+                {
+                    subscription.Id,
+                    subscription.ProductRange,
+                    subscription.Years,
+                    subscription.Amount,
+                    subscription.StartDate,
+                    subscription.EndDate,
+                    subscription.Status
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new
+            {
+                success = false,
+                message = ex.Message
+            });
+        }
     }
 
     // ================= CREATE =================
-    [HttpPost]
+    [HttpPost("create")]
     public async Task<IActionResult> CreateSubscription([FromBody] SubscriptionRequestDto model)
     {
         try
         {
-            var sellerId = GetSellerId();
+            var sellerId = await GetSellerIdAsync();
 
+            var allowedPlans = new[]
+{
+    "basic",
+    "pro",
+    "ent"
+};
+
+            if (!allowedPlans.Contains(model.Plan))
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Invalid subscription plan."
+                });
+            }
             var result = _service.CalculatePrice(model.Plan, model.ProductRange);
 
             var years = result.years;
@@ -83,7 +175,7 @@ public class SubscriptionController : Controller
             _context.Subscriptions.Add(sub);
             await _context.SaveChangesAsync();
 
-            return Json(new
+            return Ok(new
             {
                 success = true,
                 subscriptionId = sub.Id,
@@ -93,7 +185,7 @@ public class SubscriptionController : Controller
         }
         catch (Exception ex)
         {
-            return Json(new
+            return BadRequest(new
             {
                 success = false,
                 message = ex.InnerException?.Message ?? ex.Message
@@ -103,18 +195,21 @@ public class SubscriptionController : Controller
 
     // ================= VERIFY =================
     [HttpPost]
+    [HttpPost("verify")]
     public async Task<IActionResult> VerifyPayment([FromBody] SubscriptionPaymentDto model)
     {
         try
         {
-            var sub = _context.Subscriptions
-                .FirstOrDefault(x => x.RazorpayOrderId == model.razorpay_order_id);
+            var sub = await _context.Subscriptions
+    .FirstOrDefaultAsync(x =>
+        x.RazorpayOrderId ==
+        model.razorpay_order_id);
 
             if (sub == null)
-                return Json(new { success = false, message = "Subscription not found" });
+                return BadRequest(new { success = false, message = "Subscription not found" });
 
             if (sub.Status == "Active")
-                return Json(new { success = true });
+                return Ok(new { success = true });
 
             var secret = _config["Razorpay:Secret"];
 
@@ -129,7 +224,7 @@ public class SubscriptionController : Controller
                 sub.Status = "Failed"; // ✅ removed FailureReason
                 await _context.SaveChangesAsync();
 
-                return Json(new { success = false, message = "Verification failed" });
+                return BadRequest(new { success = false, message = "Verification failed" });
             }
 
             // ✅ SUCCESS
@@ -139,28 +234,31 @@ public class SubscriptionController : Controller
             sub.StartDate = DateTime.UtcNow; // ✅ payment day
             sub.EndDate = DateTime.UtcNow.AddYears(sub.Years); // ✅ correct
 
-            var seller = _context.Sellers.FirstOrDefault(s => s.SellerId == sub.SellerId);
+            var seller = await _context.Sellers
+                .FirstOrDefaultAsync(s => s.SellerId == sub.SellerId);
 
             if (seller == null)
             {
-                return Json(new { success = false, message = "Seller not found" });
+                return BadRequest(new { success = false, message = "Seller not found" });
             }
 
             seller.SubscriptionEndDate = sub.EndDate;
             seller.IsActive = true;
             seller.Status = "Active";
+            seller.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 
-            return Json(new
+            return Ok(new
             {
                 success = true,
-                redirect = "/Seller/SellerLanding"
+                message = "Subscription activated successfully.",
+                redirect = "/seller/dashboard"
             });
         }
         catch (Exception ex)
         {
-            return Json(new
+            return BadRequest(new
             {
                 success = false,
                 message = ex.InnerException?.Message ?? ex.Message
@@ -170,9 +268,11 @@ public class SubscriptionController : Controller
 
     // ================= FAILED =================
     [HttpPost]
-    public IActionResult PaymentFailed([FromBody] int subscriptionId)
+    [HttpPost("payment-failed")]
+    public async Task<IActionResult> PaymentFailed([FromBody] int subscriptionId)
     {
-        var sub = _context.Subscriptions.Find(subscriptionId);
+        var sub = await _context.Subscriptions
+            .FindAsync(subscriptionId);
 
         if (sub != null)
         {
@@ -180,18 +280,71 @@ public class SubscriptionController : Controller
             _context.SaveChanges();
         }
 
-        return Json(new { success = true });
+        return Ok(new
+        {
+            success = true,
+            message = "Payment marked as failed."
+        });
     }
 
     // ================= STATUS CHECK =================
-    [HttpGet]
-    public IActionResult CheckPaymentStatus(int subscriptionId)
+    [HttpGet("payment-status")]
+    public async Task<IActionResult> CheckPaymentStatus(int subscriptionId)
     {
-        var sub = _context.Subscriptions.Find(subscriptionId);
+        var sub = await _context.Subscriptions
+            .FindAsync(subscriptionId);
 
         if (sub == null)
-            return Json(new { success = false });
+            return BadRequest(new { success = false });
 
-        return Json(new { success = sub.Status == "Active" });
+        return Ok(new
+        {
+            success = true,
+            isActive = sub.Status == "Active",
+            status = sub.Status,
+            startDate = sub.StartDate,
+            endDate = sub.EndDate
+        });
+
+    }
+
+    [HttpGet("config")]
+    public IActionResult GetConfig()
+    {
+        return Ok(new
+        {
+            razorpayKey = _config["Razorpay:Key"]
+        });
+    }
+
+    [HttpGet("current")]
+    public async Task<IActionResult> CurrentSubscription()
+    {
+        var seller = await GetCurrentSellerAsync();
+
+        if (seller == null)
+            return Unauthorized();
+
+        var subscription = await _context.Subscriptions
+            .Where(x =>
+                x.SellerId == seller.SellerId &&
+                x.Status == "Active")
+            .OrderByDescending(x => x.EndDate)
+            .FirstOrDefaultAsync();
+
+        if (subscription == null)
+        {
+            return Ok(new
+            {
+                subscribed = false
+            });
+        }
+
+        return Ok(new
+        {
+            subscribed = true,
+
+            subscription
+        });
     }
 }

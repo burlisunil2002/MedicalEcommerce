@@ -263,6 +263,12 @@ export default function MainHeader() {
                                     <button onClick={() => navigate("/my-orders")} className="menu-item">📦My Orders</button>
                                     <button onClick={() => navigate("/kyc/register")} className="menu-item">🧾 KYC</button>
                                     <button
+                                        onClick={() => navigate("/seller-home")}
+                                        className="menu-item"
+                                    >
+                                        🚀 Become a Seller
+                                    </button>
+                                    <button
                                         onClick={handleChat}
                                         className="
         w-full
