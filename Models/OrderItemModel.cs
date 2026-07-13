@@ -67,6 +67,38 @@ public class OrderItemModel
 
     public DateTime? ItemOrderModifiedDate { get; set; }
 
+    public bool IsReturnEligible { get; set; }
+
+    public DateTime? ReturnEligibleTill { get; set; }
+
+    public string ReturnStatus { get; set; } = "None";
+    // None
+    // Requested
+    // Approved
+    // Rejected
+    // PickupScheduled
+    // PickedUp
+    // RefundInitiated
+    // Refunded
+
+    public string? ReturnReason { get; set; }
+
+    public string? ReturnRemarks { get; set; }
+
+    public DateTime? ReturnRequestedDate { get; set; }
+
+    public DateTime? ReturnApprovedDate { get; set; }
+
+    public DateTime? PickupDate { get; set; }
+
+    public DateTime? RefundCompletedDate { get; set; }
+
+    public decimal? RefundAmount { get; set; }
+
+    public string? ReturnImages { get; set; }   // JSON or comma-separated URLs
+
+    public string? ReturnReviewedBy { get; set; }
+
     // navigation
     [ForeignKey(nameof(OrderId))]
     public OrderModel? Order { get; set; }

@@ -27,6 +27,8 @@ import SellerDashboard from "./pages/seller/SellerDashboard";
 import Subscription from "./pages/seller/Subscription";
 import SellerForgotPassword from "./pages/SellerForgotPassword";
 import SellerResetPassword from "./pages/SellerResetPassword";
+import OrderSuccessPage from "./pages/OrderSuccessPage";
+
 
 
 
@@ -145,6 +147,10 @@ function App() {
                         <Route
                             path="seller-reset-password"
                             element={<SellerResetPassword />}
+                        />
+                        <Route
+                            path="/success-order/:id"
+                            element={<OrderSuccessPage />}
                         />
 
                     </Route>

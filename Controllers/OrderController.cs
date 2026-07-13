@@ -2,6 +2,7 @@
 using DocumentFormat.OpenXml.InkML;
 using DocumentFormat.OpenXml.Spreadsheet;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
@@ -10,10 +11,10 @@ using Rotativa.AspNetCore;
 using System.Security.Cryptography;
 using System.Text;
 using VivekMedicalProducts.Data;
+using VivekMedicalProducts.DTOs;
 using VivekMedicalProducts.Models;
 using VivekMedicalProducts.Services;
 using VivekMedicalProducts.ViewModels;
-using VivekMedicalProducts.DTOs;
 
 
 
@@ -558,7 +559,7 @@ namespace VivekMedicalProducts.Controllers
                     return Ok(new
                     {
                         success = true,
-                        redirect = "/my-orders"
+                        redirect = "order-success/:id"
                     });
                 }
 
@@ -854,7 +855,7 @@ namespace VivekMedicalProducts.Controllers
 
                     orderId = order.OrderId,
 
-                    redirect = "/my-orders"
+                    redirect = "order-success/:id"
                 });
             }
             catch (Exception ex)
@@ -1134,6 +1135,250 @@ namespace VivekMedicalProducts.Controllers
             });
         }
 
+
+        [Authorize]
+        [HttpGet("success-order/{id}")]
+        public async Task<IActionResult> SuccessOrder(int id)
+        {
+            try
+            {
+                var userId = _userContext.GetUserId();
+
+                if (string.IsNullOrEmpty(userId))
+                    return Unauthorized();
+
+                var order = await _context.Orders
+                    .AsNoTracking()
+
+                    .Include(x => x.UserAddress)
+
+                    .Include(x => x.OrderItems)
+                        .ThenInclude(x => x.Product)
+
+                    .Include(x => x.OrderItems)
+                        .ThenInclude(x => x.ProductVariant)
+                            .ThenInclude(x => x.Images)
+
+                    .FirstOrDefaultAsync(x =>
+                        x.OrderId == id &&
+                        x.UserId == userId);
+
+                if (order == null)
+                {
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "Order not found."
+                    });
+                }
+
+                return Ok(new
+                {
+                    success = true,
+
+                    order = new
+                    {
+                        orderId = order.OrderId,
+
+                        orderNumber = order.OrderNumber,
+
+                        orderDate = order.OrderDate,
+
+                        paymentStatus = order.PaymentStatus,
+
+                        orderStatus = order.OrderStatus,
+
+                        grandTotal = order.GrandTotal,
+
+                        estimatedDelivery =
+                            order.OrderDate.AddDays(4),
+
+                        customer = new
+                        {
+                            name = order.UserAddress?.FullName,
+
+                            mobile = order.UserAddress?.MobileNumber,
+
+                            address =
+                                $"{order.UserAddress?.AddressLine1}, " +
+                                $"{order.UserAddress?.AddressLine2}",
+
+                            city = order.UserAddress?.City,
+
+                            state = order.UserAddress?.State,
+
+                            pincode = order.UserAddress?.Pincode
+                        },
+
+                        items = order.OrderItems
+                            .Select(i => new
+                            {
+                                productId = i.ProductId,
+
+                                productName = i.ProductName,
+
+                                image =
+                                    i.ProductVariant != null &&
+                                    i.ProductVariant.Images.Any()
+
+                                        ? i.ProductVariant.Images
+                                            .OrderBy(x => x.DisplayOrder)
+                                            .Select(x => x.ImageUrl)
+                                            .FirstOrDefault()
+
+                                        : i.Product.ImageUrl,
+
+                                quantity = i.Quantity,
+
+                                price = i.Price,
+
+                                discount = i.DiscountAmount,
+
+                                gst = i.GSTAmount,
+
+                                total = i.LineTotal
+                            })
+                            .ToList()
+                    }
+                });
+
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = ex.Message
+                });
+            }
+        }
+
+        [Authorize]
+        [HttpPost("request-return")]
+        public async Task<IActionResult> RequestReturn(
+    RequestReturnDto dto)
+        {
+            try
+            {
+                var userId = _userContext.GetUserId();
+
+                if (string.IsNullOrEmpty(userId))
+                    return Unauthorized();
+
+                var order = await _context.Orders
+                    .FirstOrDefaultAsync(x =>
+                        x.OrderId == dto.OrderId &&
+                        x.UserId == userId);
+
+                if (order == null)
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "Order not found."
+                    });
+
+                //------------------------------------------------
+                // Delivered?
+                //------------------------------------------------
+
+                if (order.OrderStatus != "Delivered")
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Only delivered orders can be returned."
+                    });
+                }
+
+                //------------------------------------------------
+                // 15 Days Validation
+                //------------------------------------------------
+
+                if (!order.DeliveredDate.HasValue)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Delivery date not available."
+                    });
+                }
+
+                var days =
+                    (DateTime.UtcNow -
+                    order.DeliveredDate.Value).Days;
+
+                if (days > 15)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Return period has expired."
+                    });
+                }
+
+                //------------------------------------------------
+                // Already Requested?
+                //------------------------------------------------
+
+                bool exists =
+                    await _context.OrderReturns
+                    .AnyAsync(x =>
+                        x.OrderId == dto.OrderId);
+
+                if (exists)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Return request already submitted."
+                    });
+                }
+
+                //------------------------------------------------
+
+                var request =
+                    new OrderReturnModel
+                    {
+                        OrderId = dto.OrderId,
+
+                        UserId = userId,
+
+                        Reason = dto.Reason,
+
+                        Remarks = dto.Remarks,
+
+                        Image1 = dto.Image1,
+
+                        Image2 = dto.Image2,
+
+                        Image3 = dto.Image3,
+
+                        Status = "Requested"
+                    };
+
+                _context.OrderReturns.Add(request);
+
+                order.ReturnStatus = "Requested";
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Return request submitted successfully."
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500,
+                    new
+                    {
+                        success = false,
+                        message = ex.Message
+                    });
+            }
+        }
+
         // ================= HELPERS =================
 
         private string ComputeHmac(string data, string key)
@@ -1143,7 +1388,7 @@ namespace VivekMedicalProducts.Controllers
             return Convert.ToHexString(hash).ToLowerInvariant();
         }
 
-        [Authorize]
+      /*  [Authorize]
         [HttpGet("my-orders")]
         public async Task<IActionResult> GetMyOrders()
         {
@@ -1257,6 +1502,149 @@ namespace VivekMedicalProducts.Controllers
                         ex.Message
                 });
             }
+        }*/
+
+        [Authorize]
+        [HttpGet("my-orders")]
+        public async Task<IActionResult> GetMyOrders()
+        {
+            try
+            {
+                var userId = _userContext.GetUserId();
+
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized(new
+                    {
+                        success = false,
+                        message = "Please login to view orders.",
+                        redirect = "/login"
+                    });
+                }
+
+                var orders = await _context.Orders
+                    .AsNoTracking()
+                    .Include(o => o.OrderItems)
+                        .ThenInclude(i => i.Product)
+                    .Include(o => o.OrderItems)
+                        .ThenInclude(i => i.ProductVariant)
+                            .ThenInclude(v => v.Images)
+                    .Where(o => o.UserId == userId)
+                    .OrderByDescending(o => o.OrderDate)
+                    .ToListAsync();
+
+                var response = orders.Select(o =>
+                {
+                    bool isReturnEligible = false;
+
+                    int remainingReturnDays = 0;
+
+                    if (o.OrderStatus == "Delivered" &&
+                        o.DeliveredDate.HasValue &&
+                        o.ReturnStatus == "None")
+                    {
+                        remainingReturnDays =
+                            15 - (DateTime.UtcNow - o.DeliveredDate.Value).Days;
+
+                        isReturnEligible =
+                            remainingReturnDays >= 0;
+                    }
+
+                    return new
+                    {
+                        orderId = o.OrderId,
+
+                        orderNumber = o.OrderNumber,
+
+                        orderDate = o.OrderDate,
+
+                        grandTotal = o.GrandTotal,
+
+                        orderStatus = o.OrderStatus,
+
+                        paymentStatus = o.PaymentStatus,
+
+                        returnStatus = o.ReturnStatus,
+
+                        isReturnEligible,
+
+                        remainingReturnDays =
+                            Math.Max(remainingReturnDays, 0),
+
+                        itemCount = o.OrderItems.Count,
+
+                        items = o.OrderItems.Select(i => new
+                        {
+                            productId = i.ProductId,
+
+                            variantId = i.ProductVariantId,
+
+                            productName = i.ProductName,
+
+                            variantName =
+                                i.ProductVariant != null
+                                    ? i.ProductVariant.Model
+                                    : "",
+
+                            productImage =
+                                i.ProductVariant != null &&
+                                i.ProductVariant.Images.Any()
+                                    ? i.ProductVariant.Images
+                                        .OrderBy(x => x.DisplayOrder)
+                                        .Select(x => x.ImageUrl)
+                                        .FirstOrDefault()
+                                    : !string.IsNullOrEmpty(i.Product.ImageUrl)
+                                        ? i.Product.ImageUrl
+                                        : "/images/no-image.png",
+
+                            productImages =
+                                i.ProductVariant != null
+                                    ? i.ProductVariant.Images
+                                        .OrderBy(x => x.DisplayOrder)
+                                        .Select(x => x.ImageUrl)
+                                        .ToList()
+                                    : new List<string>(),
+
+                            quantity = i.Quantity,
+
+                            price = i.Price,
+
+                            finalPaidAmount = i.FinalPaidAmount,
+
+                            itemTotal = i.LineTotal,
+
+                            returnStatus = i.ReturnStatus,
+
+                            isReturnEligible =
+        o.OrderStatus == "Delivered"
+        && i.ReturnStatus == "None"
+        && DateTime.UtcNow <= i.CreatedAt.AddDays(15),
+
+                            remainingReturnDays =
+        o.OrderStatus == "Delivered"
+            ? Math.Max(
+                0,
+                (i.CreatedAt.AddDays(15) - DateTime.UtcNow).Days)
+            : 0
+                        }).ToList()
+                    };
+                }).ToList();
+
+                return Ok(new
+                {
+                    success = true,
+                    orders = response
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = "Failed to load orders.",
+                    error = ex.InnerException?.Message ?? ex.Message
+                });
+            }
         }
 
 
@@ -1290,7 +1678,7 @@ namespace VivekMedicalProducts.Controllers
 
                 if (
                     order.PaymentStatus != "Completed" ||
-                    order.OrderStatus != "Placed"
+                    order.OrderStatus != "Delivered"
                 )
                 {
                     return BadRequest(new

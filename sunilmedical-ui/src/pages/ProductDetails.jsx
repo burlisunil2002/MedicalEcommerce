@@ -918,6 +918,22 @@ export default function ProductDetails() {
 
                     </div>
 
+                    <div>
+
+                    <section className="mt-12">
+
+                        <ProductTabs
+
+                            product={product}
+
+                            selectedVariant={selectedVariant}
+
+                        />
+
+                        </section>
+
+                    </div>
+
                     <div className="mt-12">
 
                     {
@@ -938,22 +954,8 @@ export default function ProductDetails() {
 
                         )
 
-                        }
+                     }
                     </div>
-
-                    {/* Product Tabs */}
-
-                    <section className="mt-12">
-
-                        <ProductTabs
-
-                            product={product}
-
-                            selectedVariant={selectedVariant}
-
-                        />
-
-                    </section>
 
                 </div>
 

@@ -23,6 +23,8 @@ public class ApplicationDbContext
 
     public DbSet<OrderModel> Orders { get; set; }
     public DbSet<OrderItemModel> OrderItems { get; set; }
+
+    public DbSet<OrderReturnModel> OrderReturns { get; set; }
     public DbSet<PaymentModel> Payments { get; set; }
 
     public DbSet<AdminOrderModel> AdminOrders { get; set; }

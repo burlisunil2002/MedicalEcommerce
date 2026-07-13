@@ -125,7 +125,8 @@ export default function ReviewPage() {
 
                     setProcessing(false);
 
-                    navigate("/my-orders", {
+                    navigate(`/success-order/${data.orderId}`, {
+                        
                         state: {
                             successMessage: "🎉 Payment Successful"
                         }
@@ -198,7 +199,9 @@ export default function ReviewPage() {
 
                     await loadCart();
 
-                    navigate("/my-orders");
+                    navigate(`/success-order/${data.orderId}`, {
+                        replace: true
+                    });
 
                     return;
                 }

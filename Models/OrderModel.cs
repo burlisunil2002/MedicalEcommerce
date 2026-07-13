@@ -68,6 +68,10 @@ namespace VivekMedicalProducts.Models
 
         public string? UpdatedBy { get; set; }
 
+        public string ReturnStatus { get; set; } = "None";
+
+        public DateTime? DeliveredDate { get; set; }
+
         public DateTime? CancelledAt { get; set; }
 
         public string? CancelledBy { get; set; }

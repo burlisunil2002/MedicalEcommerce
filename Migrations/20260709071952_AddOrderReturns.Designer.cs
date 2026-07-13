@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using VivekMedicalProducts.Data;
@@ -11,9 +12,11 @@ using VivekMedicalProducts.Data;
 namespace VivekMedicalProducts.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260709071952_AddOrderReturns")]
+    partial class AddOrderReturns
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -311,9 +314,6 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<decimal>("GSTPercentage")
                         .HasColumnType("decimal(5,2)");
 
-                    b.Property<bool>("IsReturnEligible")
-                        .HasColumnType("boolean");
-
                     b.Property<DateTime?>("ItemOrderModifiedDate")
                         .HasColumnType("timestamp with time zone");
 
@@ -330,9 +330,6 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<int>("OrderId")
                         .HasColumnType("integer");
 
-                    b.Property<DateTime?>("PickupDate")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18,2)");
 
@@ -348,37 +345,6 @@ namespace VivekMedicalProducts.Migrations
 
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
-
-                    b.Property<decimal?>("RefundAmount")
-                        .HasColumnType("numeric");
-
-                    b.Property<DateTime?>("RefundCompletedDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("ReturnApprovedDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("ReturnEligibleTill")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ReturnImages")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ReturnReason")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ReturnRemarks")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("ReturnRequestedDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ReturnReviewedBy")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ReturnStatus")
-                        .IsRequired()
-                        .HasColumnType("text");
 
                     b.Property<int?>("SellerId")
                         .HasColumnType("integer");
