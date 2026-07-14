@@ -43,7 +43,7 @@ export const CartProvider = ({ children }) => {
     };
 
     // 🔥 ADD TO CART (FULL REFRESH REQUIRED)
-    const addToCart = async (
+   /* const addToCart = async (
         productId,
         variantId,
         quantity = 1
@@ -98,6 +98,43 @@ export const CartProvider = ({ children }) => {
           await loadCart();
             return false;
         }
+    }; */
+
+    const addToCart = async (
+        productId,
+        variantId,
+        quantity = 1
+    ) => {
+
+        try {
+
+            await API.post("/api/cart/add", {
+
+                productId,
+
+                variantId,
+
+                quantity
+
+            });
+
+            await loadCart();
+
+            window.dispatchEvent(
+                new Event("cartUpdated")
+            );
+
+            return true;
+
+        }
+        catch (err) {
+
+            console.error(err);
+
+            return false;
+
+        }
+
     };
 
     // 🔥 UPDATE QUANTITY (OPTIMISTIC + SUMMARY REFRESH)

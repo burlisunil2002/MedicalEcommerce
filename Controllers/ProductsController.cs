@@ -1384,59 +1384,88 @@ namespace VivekMedicalProducts.Controllers
         public IActionResult GetProducts()
         {
             var products = _context.Products
-               .Include(p => p.Variants)
-               .Where(p => p.Status == "Active")
-               .Select(p => new
-               {
-                   id = p.Id,
-                   name = p.Name,
-                   brand = p.Brand,
-                   category = p.Category,
-                   imageUrl = p.ImageUrl,
-                   description = p.Description,
-                   priceType = p.PriceType,
-                   // 🔥 PRICE RANGE
-                   minPrice = p.Variants.Any()
-                                ? p.Variants.Min(v => v.Price)
-                                : 0,
+                .Include(p => p.Variants)
+                    .ThenInclude(v => v.Images)
+                .Where(p => p.Status == "Active")
+                .Select(p => new
+                {
+                    id = p.Id,
+                    name = p.Name,
+                    brand = p.Brand,
+                    category = p.Category,
+                    imageUrl = p.ImageUrl,
+                    description = p.Description,
+                    priceType = p.PriceType,
 
-                   maxPrice = p.Variants.Any()
-                                ? p.Variants.Max(v => v.Price)
-                                : 0,
+                    minPrice = p.Variants.Any()
+                        ? p.Variants.Min(v => v.Price)
+                        : 0,
 
-                   isHotDeal = p.IsHotDeal,
-                   discount = p.DiscountPercentage ?? 0,
+                    maxPrice = p.Variants.Any()
+                        ? p.Variants.Max(v => v.Price)
+                        : 0,
 
+                    isHotDeal = p.IsHotDeal,
+                    discount = p.DiscountPercentage ?? 0,
 
-                   // 🔥 VARIANTS
-                   variants = p.Variants
-                       .Where(v => v.Status == "Active")
-                       .Select(v => new
-                       {
-                           id = v.ProductVariantId,
+                    defaultVariant = p.Variants
+                        .Where(v => v.Status == "Active")
+                        .OrderBy(v => v.ProductVariantId)
+                        .Select(v => new
+                        {
+                            productVariantId = v.ProductVariantId,
 
-                           model = v.Model,
-                           size = v.Size,
-                           unit = v.Unit,
-                           packSize = v.PackSize,
+                            model = v.Model,
 
-                           price = v.Price,
-                           stock = v.StockQuantity,
+                            price = v.Price,
 
-                           minQty = v.MinQuantity,
-                           maxQty = v.MaxQuantity,
-                           stepQty = v.StepQuantity,
-                           specifications = v.Specifications.Select(s => new
-                           {
-                               key = s.Key,
-                               value = s.Value
-                           }).ToList()
-                       }).ToList()
-               })
+                            stockQuantity = v.StockQuantity,
+
+                            minQuantity = v.MinQuantity,
+
+                            maxQuantity = v.MaxQuantity,
+
+                            stepQuantity = v.StepQuantity,
+
+                            imageUrl = v.Images
+                                .OrderBy(i => i.DisplayOrder)
+                                .Select(i => i.ImageUrl)
+                                .FirstOrDefault()
+                        })
+                        .FirstOrDefault(),
+
+                    variants = p.Variants
+                        .Where(v => v.Status == "Active")
+                        .Select(v => new
+                        {
+                            productVariantId = v.ProductVariantId,
+
+                            model = v.Model,
+
+                            size = v.Size,
+
+                            unit = v.Unit,
+
+                            packSize = v.PackSize,
+
+                            price = v.Price,
+
+                            stockQuantity = v.StockQuantity,
+
+                            minQuantity = v.MinQuantity,
+
+                            maxQuantity = v.MaxQuantity,
+
+                            stepQuantity = v.StepQuantity,
+
+                            imageUrl = v.Images
+                                .OrderBy(i => i.DisplayOrder)
+                                .Select(i => i.ImageUrl)
+                                .FirstOrDefault()
+                        })
+                        .ToList()
+                })
                 .ToList();
-
-            if (products == null)
-                return NotFound();
 
             return Ok(products);
         }

@@ -263,19 +263,23 @@ public class AccountController : Controller
                 });
             }
 
-            await _signInManager.SignInAsync(
-                user,
-                isPersistent: true);
-
             await MergeCartAfterLogin(user.Id);
 
             await MergeWishlist(user.Id);
 
+            await _signInManager.SignInAsync(
+                user,
+                isPersistent: true);
+
             return Ok(new
             {
                 success = true,
-                isProfileCompleted =
-                    user.IsProfileCompleted
+
+                cartMerged = true,
+
+                wishlistMerged = true,
+
+                isProfileCompleted = user.IsProfileCompleted
             });
         }
         catch (Exception ex)
@@ -541,35 +545,48 @@ public class AccountController : Controller
         }
     }
 
-
     private async Task MergeCartAfterLogin(string userId)
     {
         var guestId = Request.Cookies["guest_id"];
 
-        if (string.IsNullOrEmpty(guestId))
+        if (string.IsNullOrWhiteSpace(guestId))
             return;
 
         var guestCart = await _context.Carts
-            .Where(c => c.GuestId == guestId)
+            .Where(x => x.GuestId == guestId)
             .ToListAsync();
 
-        foreach (var item in guestCart)
+        foreach (var guestItem in guestCart)
         {
-            var existing = await _context.Carts.FirstOrDefaultAsync(c =>
-                c.UserId == userId && c.ProductVariantId == item.ProductVariantId);
+            var existing = await _context.Carts.FirstOrDefaultAsync(x =>
+                x.UserId == userId &&
+                x.ProductId == guestItem.ProductId &&
+                x.ProductVariantId == guestItem.ProductVariantId);
 
             if (existing != null)
             {
-                existing.Quantity += item.Quantity;
+                existing.Quantity += guestItem.Quantity;
+
+                _context.Carts.Remove(guestItem);
             }
             else
             {
-                item.UserId = userId;
-                item.GuestId = null;
+                // Create a NEW user cart row
+                _context.Carts.Add(new CartModel
+                {
+                    UserId = userId,
+                    GuestId = null,
+                    ProductId = guestItem.ProductId,
+                    ProductVariantId = guestItem.ProductVariantId,
+                    Quantity = guestItem.Quantity,
+                    SellerId = guestItem.SellerId,
+                    CreatedDate = DateTime.UtcNow
+                });
+
+                // Remove the original guest row
+                _context.Carts.Remove(guestItem);
             }
         }
-
-        _context.Carts.RemoveRange(_context.Carts.Where(c => c.GuestId == guestId));
 
         await _context.SaveChangesAsync();
 

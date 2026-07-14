@@ -8,11 +8,18 @@ export default function ProductCard({ p }) {
     const navigate = useNavigate();
     const { toggleWishlist, isWishlisted } = useWishlist();
 
-    const defaultVariant =
+   /* const defaultVariant =
         p.defaultVariant ??
         (p.variants && p.variants.length > 0
             ? p.variants[0]
-            : null);
+            : null);*/
+
+    const defaultVariant =
+        p.defaultVariant;
+
+    console.log("PRODUCT", p);
+    console.log("DEFAULT VARIANT", p.defaultVariant);
+    console.log("VARIANTS", p.variants);
 
     const data = useMemo(() => {
         const id = p.id ?? p.Id;
@@ -47,6 +54,14 @@ export default function ProductCard({ p }) {
 
         const isRFQ = !isNormal;
 
+        const minQty =
+            Number(defaultVariant?.minQuantity ?? 1);
+
+        const maxQty =
+            Number(defaultVariant?.maxQuantity ?? null);
+
+        const stepQty =
+            Number(defaultVariant?.stepQuantity ?? 1);
 
         return {
             id,
@@ -54,6 +69,9 @@ export default function ProductCard({ p }) {
             brand,
             imageUrl,
             price,
+            minQty,
+            maxQty,
+            stepQty,
             finalPrice,
             discount,
             isDeal,
@@ -190,13 +208,14 @@ export default function ProductCard({ p }) {
                             Request Quote
                         </button>
                     ) : variantId > 0 ? (
-                        <AddToCartButton
-                            productId={Number(data.id)}
-                            variantId={variantId}
-                            minQty={Number(defaultVariant?.minQuantity ?? 1)}
-                            stepQty={Number(defaultVariant?.stepQuantity ?? 1)}
-                            maxQty={defaultVariant?.maxQuantity ?? null}
-                        />
+
+                    <AddToCartButton
+                        productId={Number(data.id)}
+                        variantId={defaultVariant.productVariantId}
+                        minQty={defaultVariant.minQuantity}
+                        stepQty={defaultVariant.stepQuantity}
+                        maxQty={defaultVariant.maxQuantity}
+                    />
                     ) : (
                         <button
                             onClick={() => navigate(`/product/${data.id}`)}

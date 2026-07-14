@@ -1,6 +1,7 @@
 ﻿import { Outlet } from "react-router-dom";
 import MainHeader from "../components/MainHeader";
 import MainFooter from "../components/MainFooter";
+import FloatingWhatsApp from "../components/FloatingWhatsApp";
 
 export default function MainLayout() {
     return (
@@ -11,6 +12,8 @@ export default function MainLayout() {
             <main className="flex-grow">
                 <Outlet />   {/* 🔥 THIS FIXES DOUBLE HEADER */}
             </main>
+
+            <FloatingWhatsApp />
 
             <MainFooter />
 

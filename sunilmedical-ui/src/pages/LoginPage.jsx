@@ -78,9 +78,33 @@ export default function LoginPage() {
             );
 
             if (res.data.success) {
-                window.dispatchEvent(new Event("userLoggedIn"));
 
-                navigate("/");
+                window.dispatchEvent(
+                    new Event("userLoggedIn")
+                );
+
+                window.dispatchEvent(
+                    new Event("cartUpdated")
+                );
+
+                const redirect =
+                    sessionStorage.getItem(
+                        "redirectAfterLogin"
+                    ) || "/";
+
+                sessionStorage.removeItem(
+                    "redirectAfterLogin"
+                );
+
+                navigate(
+                    redirect,
+                    {
+                        replace: true,
+                        state: {
+                            refreshCheckout: true
+                        }
+                    }
+                );
             }
 
         } catch (err) {

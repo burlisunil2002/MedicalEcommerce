@@ -328,6 +328,11 @@ export default function ReviewPage() {
                     "401 BLOCK"
                 );
 
+                sessionStorage.setItem(
+                    "redirectAfterLogin",
+                    window.location.pathname
+                );
+
                 navigate("/login");
 
                 return;

@@ -1,8 +1,9 @@
 ﻿import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import SummaryCard from "../components/SummaryCard";
 import AddressCard from "../components/checkout/AddressCard";
 import AddressForm from "../components/checkout/AddressForm";
+
 
 import {
     getCheckout,
@@ -10,9 +11,12 @@ import {
     updateAddress,
     selectAddress
 } from "../services/checkoutService";
+
 export default function CheckoutPage() {
 
     const navigate = useNavigate();
+
+    const location = useLocation();
 
     const [checkout, setCheckout] = useState(null); 
 
@@ -63,8 +67,28 @@ export default function CheckoutPage() {
     };
 
     useEffect(() => {
+
         loadCheckout();
+
     }, []);
+
+    useEffect(() => {
+
+        if (location.state?.refreshCheckout) {
+
+            loadCheckout();
+
+            navigate(
+                location.pathname,
+                {
+                    replace: true,
+                    state: null
+                }
+            );
+
+        }
+
+    }, [location.state]);
 
     const handleSaveAddress = async (form) => {
         try {
