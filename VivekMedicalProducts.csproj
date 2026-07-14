@@ -78,26 +78,39 @@
   </ItemGroup>
 
 
-	<Target Name = "ReactBuild" BeforeTargets="Build">
+	<Target Name = "PublishReact" BeforeTargets = "Publish" >
 
-		<Message Text = "Building React..." Importance="high" />
+	<Message Text = "========== Building React Application ==========" Importance = "high" />
 
-		<Exec WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui" Command="npm install" Condition="!Exists('$(MSBuildProjectDirectory)\sunilmedical-ui\node_modules')" />
+	<!--Install dependencies-->
+	<Exec
+      WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
+      Command = "npm ci"
+      Condition = "Exists('$(MSBuildProjectDirectory)\sunilmedical-ui\package-lock.json')" />
 
-		<Exec WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui" Command="npm run build" />
+	<Exec
+      WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
+      Command = "npm install"
+      Condition = "!Exists('$(MSBuildProjectDirectory)\sunilmedical-ui\package-lock.json')" />
 
-		<RemoveDir Directories = "$(ProjectDir)wwwroot\react" ContinueOnError="true" />
+	<!--Build React-->
+	<Exec
+      WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
+      Command = "npm run build" />
 
-		<MakeDir Directories = "$(ProjectDir)wwwroot\react" />
+	<!--Create publish React folder -->
+	<MakeDir Directories="$(PublishDir)wwwroot\react" />
 
+	<!-- Collect React build files -->
+	<ItemGroup>
+		<ReactBuildFiles Include="$(MSBuildProjectDirectory)\sunilmedical-ui\build\**\*" />
+	</ItemGroup>
 
-		<ItemGroup>
-
-		<ReactFiles Include="$(ProjectDir)sunilmedical-ui\build\**\*" />
-
-		</ItemGroup>
-
-		<Copy SourceFiles = "@(ReactFiles)" DestinationFiles="@(ReactFiles->'$(ProjectDir)wwwroot\react\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+	<!-- Copy React build into publish folder -->
+	<Copy
+		SourceFiles="@(ReactBuildFiles)"
+		DestinationFiles="@(ReactBuildFiles->'$(PublishDir)wwwroot\react\%(RecursiveDir)%(Filename)%(Extension)')"
+		SkipUnchangedFiles="true" />
 
 	</Target>
 
