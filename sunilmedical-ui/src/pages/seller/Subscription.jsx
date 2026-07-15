@@ -1,5 +1,7 @@
 ﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
+
 import {
     Crown,
     CheckCircle,
@@ -7,10 +9,17 @@ import {
     ShieldCheck,
     Package,
     CreditCard,
-    Loader2
+    Loader2,
+    Star,
+    BadgeCheck,
+    Zap,
+    Shield,
+    Clock,
+    ArrowRight
 } from "lucide-react";
 
 import Swal from "sweetalert2";
+
 import API from "../../services/api";
 
 export default function Subscription() {
@@ -18,118 +27,185 @@ export default function Subscription() {
     const navigate = useNavigate();
 
     const [loading, setLoading] = useState(true);
-    const [processing, setProcessing] = useState(false);
 
-    const [subscription, setSubscription] = useState(null);
+    const [processing, setProcessing] =
+        useState(false);
+
+    const [subscription, setSubscription] =
+        useState(null);
 
     const [selectedRange, setSelectedRange] =
         useState("1-5");
 
     const [selectedPlan, setSelectedPlan] =
-        useState("basic");
+        useState("pro");
 
     const [razorpayKey, setRazorpayKey] =
         useState("");
+
     const pricing = {
 
         "1-5": {
+
             basic: 2999,
+
             pro: 3999,
+
             ent: 4999
+
         },
 
         "6-10": {
+
             basic: 3999,
+
             pro: 5499,
+
             ent: 6999
+
         },
 
         "11-15": {
+
             basic: 4999,
+
             pro: 7999,
+
             ent: 8999
+
         },
 
         "16-20": {
+
             basic: 5999,
+
             pro: 9499,
+
             ent: 10999
+
         },
 
         "20+": {
+
             basic: 6999,
+
             pro: 11999,
+
             ent: 12999
+
         }
 
     };
+
     const plans = [
 
         {
+
             id: "basic",
+
             title: "Basic",
 
             years: 1,
 
+            subtitle: "Perfect for new sellers",
+
             color:
+
                 "from-blue-500 to-cyan-500",
 
             icon:
-                <Package size={34} />
+
+                <Package size={32} />,
+
+            badge: null
+
         },
 
         {
+
             id: "pro",
 
             title: "Startup",
 
             years: 2,
 
+            subtitle:
+
+                "Most popular choice",
+
             popular: true,
 
             color:
-                "from-purple-500 to-pink-500",
+
+                "from-purple-600 to-pink-500",
 
             icon:
-                <Sparkles size={34} />
+
+                <Sparkles size={32} />,
+
+            badge: "BEST VALUE"
+
         },
 
         {
+
             id: "ent",
 
             title: "Enterprise",
 
             years: 3,
 
+            subtitle:
+
+                "Maximum business growth",
+
             color:
-                "from-emerald-500 to-green-600",
+
+                "from-green-500 to-emerald-600",
 
             icon:
-                <Crown size={34} />
+
+                <Crown size={32} />,
+
+            badge: "SAVE MORE"
+
         }
 
     ];
+
     useEffect(() => {
 
         loadPage();
 
     }, []);
-    const loadPage = async () => {
+
+    async function loadPage() {
 
         try {
 
             setLoading(true);
 
-            const [status, config] =
-                await Promise.all([
+            const [
 
-                    API.get("/api/subscription/status"),
+                status,
 
-                    API.get("/api/subscription/config")
+                config
 
-                ]);
+            ] = await Promise.all([
 
-            if (status.data.subscribed) {
+                API.get(
+                    "/api/subscription/status"
+                ),
+
+                API.get(
+                    "/api/subscription/config"
+                )
+
+            ]);
+
+            if (
+                status.data.subscribed
+            ) {
 
                 setSubscription(
                     status.data.subscription
@@ -145,11 +221,16 @@ export default function Subscription() {
 
         catch {
 
-            Swal.fire(
-                "Error",
-                "Unable to load subscription.",
-                "error"
-            );
+            Swal.fire({
+
+                icon: "error",
+
+                title: "Error",
+
+                text:
+                    "Unable to load subscription."
+
+            });
 
         }
 
@@ -159,36 +240,67 @@ export default function Subscription() {
 
         }
 
-    };
+    }
 
-    if (processing) return;
+    async function payNow(plan) {
 
-    const payNow = async (plan) => {
+        if (processing)
+            return;
 
         try {
 
             setProcessing(true);
 
-            // Create Subscription
-            const { data } = await API.post(
-                "api/subscription/create",
-                {
-                    plan,
-                    productRange: selectedRange
-                }
-            );
+            const { data } =
+                await API.post(
+
+                    "/api/subscription/create",
+
+                    {
+
+                        plan,
+
+                        productRange:
+                            selectedRange
+
+                    }
+
+                );
 
             if (!data.success) {
 
+                setProcessing(false);
+
                 Swal.fire(
+
                     "Error",
+
                     data.message,
+
                     "error"
+
                 );
+
+                return;
+
+            }
+
+            if (!window.Razorpay) {
 
                 setProcessing(false);
 
+                Swal.fire(
+
+                    "Error",
+
+                    "Unable to load Razorpay.",
+
+                    "error"
+
+                );
+
                 return;
+
             }
 
             const options = {
@@ -199,125 +311,151 @@ export default function Subscription() {
 
                 currency: "INR",
 
-                order_id: data.razorpayOrderId,
+                order_id:
+                    data.razorpayOrderId,
 
-                name: "MedMarket",
+                name:
+                    "SunilMedMarket",
 
-                description: "Seller Subscription",
+                description:
+                    "Seller Subscription",
+
+                image: "/logo.png",
 
                 theme: {
+
                     color: "#2563eb"
+
                 },
 
-                handler: async function (response) {
+                handler: async function (
+                    response
+                ) {
 
                     await verifyPayment(
+
                         response,
+
                         data.subscriptionId
+
                     );
 
                 },
 
                 modal: {
 
-                    ondismiss: async () => {
+                    ondismiss:
+                        async () => {
 
-                        try {
+                            try {
 
-                            await API.post(
-                                "/api/subscription/payment-failed",
-                                data.subscriptionId
-                            );
+                                await API.post(
 
-                        } catch (e) {
+                                    "/api/subscription/payment-failed",
 
-                            console.error(e);
+                                    data.subscriptionId
 
-                        } finally {
+                                );
 
-                            setProcessing(false);
+                            }
+
+                            finally {
+
+                                setProcessing(false);
+
+                            }
 
                         }
-
-                    }
 
                 }
 
             };
 
-            const razor = new window.Razorpay(options);
+            const razor =
+                new window.Razorpay(
+                    options
+                );
 
-            razor.on("payment.failed", async function (response) {
+            razor.on(
 
-                console.log(response.error);
+                "payment.failed",
 
-                try {
+                async function (
+                    response
+                ) {
 
-                    await API.post(
-                        "/subscription/payment-failed",
-                        data.subscriptionId
-                    );
+                    try {
 
-                } catch (e) {
+                        await API.post(
 
-                    console.error("Payment Failed API Error:", e);
+                            "/api/subscription/payment-failed",
 
-                } finally {
+                            data.subscriptionId
 
-                    setProcessing(false);
+                        );
 
-                    Swal.fire(
-                        "Payment Failed",
-                        response.error.description || "Payment could not be completed.",
-                        "error"
-                    );
+                    }
+
+                    finally {
+
+                        setProcessing(false);
+
+                        Swal.fire(
+
+                            "Payment Failed",
+
+                            response.error.description,
+
+                            "error"
+
+                        );
+
+                    }
 
                 }
 
-            });
+            );
 
-            try {
+            razor.open();
 
-                razor.open();
-
-            } catch (e) {
-
-                setProcessing(false);
-
-                Swal.fire(
-                    "Error",
-                    "Unable to open Razorpay.",
-                    "error"
-                );
-
-            }
         }
 
         catch (err) {
 
             console.log(err);
 
-            Swal.fire(
-                "Error",
-                "Unable to create subscription.",
-                "error"
-            );
-
             setProcessing(false);
+
+            Swal.fire(
+
+                "Error",
+
+                err?.response?.data?.message ||
+
+                "Unable to create subscription.",
+
+                "error"
+
+            );
 
         }
 
-    };
+    }
 
-    const verifyPayment = async (
+    async function verifyPayment(
+
         response,
+
         subscriptionId
-    ) => {
+
+    ) {
 
         try {
 
             await API.post(
+
                 "/api/subscription/verify",
+
                 {
 
                     razorpay_order_id:
@@ -330,194 +468,310 @@ export default function Subscription() {
                         response.razorpay_signature
 
                 }
+
             );
 
-            pollStatus(subscriptionId);
+            pollStatus(
+                subscriptionId
+            );
 
         }
 
         catch {
 
-            Swal.fire(
-                "Error",
-                "Payment verification failed.",
-                "error"
-            );
-
             setProcessing(false);
+
+            Swal.fire(
+
+                "Verification Failed",
+
+                "Please contact support.",
+
+                "error"
+
+            );
 
         }
 
-    };
+    }
 
-    const pollStatus = (subscriptionId) => {
+    function pollStatus(
+
+        subscriptionId
+
+    ) {
 
         let attempts = 0;
 
-        const timer = setInterval(async () => {
+        const timer = setInterval(
 
-            attempts++;
+            async () => {
 
-            const { data } =
-                await API.get(
-                    `/api/subscription/payment-status?subscriptionId=${subscriptionId}`
-                );
+                attempts++;
 
-            if (data.isActive) {
+                const { data } =
+                    await API.get(
 
-                clearInterval(timer);
+                        `/api/subscription/payment-status?subscriptionId=${subscriptionId}`
 
-                Swal.fire({
-
-                    icon: "success",
-
-                    title: "Subscription Activated",
-
-                    text:
-                        "Welcome to Premium Seller.",
-
-                    confirmButtonColor:
-                        "#2563eb"
-
-                }).then(() => {
-
-                    navigate(
-                        "/seller/dashboard"
                     );
 
-                });
+                if (
+                    data.isActive
+                ) {
 
-            }
+                    clearInterval(
+                        timer
+                    );
 
-            if (attempts >= 30) {
+                    Swal.fire({
 
-                clearInterval(timer);
+                        icon:
+                            "success",
 
-                Swal.fire(
-                    "Info",
-                    "Payment is processing. Please refresh later.",
-                    "info"
-                );
+                        title:
+                            "Subscription Activated",
 
-            }
+                        text:
+                            "Welcome to Premium Seller"
 
-        }, 3000);
+                    }).then(() => {
 
-    };
+                        navigate(
+                            "/seller/dashboard"
+                        );
+
+                    });
+
+                }
+
+                if (
+                    attempts >= 30
+                ) {
+
+                    clearInterval(
+                        timer
+                    );
+
+                    setProcessing(false);
+
+                    Swal.fire(
+
+                        "Processing",
+
+                        "Payment is being verified.",
+
+                        "info"
+
+                    );
+
+                }
+
+            },
+
+            3000
+
+        );
+
+    }
 
     if (loading) {
+
         return (
 
-            <div className="h-screen flex justify-center items-center bg-slate-50">
+            <div className="min-h-[70vh] flex justify-center items-center">
 
                 <Loader2
-                    className="w-12 h-12 animate-spin text-blue-600"
+                    className="animate-spin text-blue-600"
+                    size={50}
                 />
 
             </div>
 
         );
+
     }
+
     return (
 
         <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-white">
 
-            <div className="max-w-7xl mx-auto px-6 py-10">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {/* ================= HERO ================= */}
 
-                <div className="text-center mb-12">
+                <motion.div
+                    initial={{ opacity: 0, y: 25 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: .4 }}
+                    className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-700 via-indigo-700 to-cyan-600 text-white p-6 md:p-10 shadow-2xl"
+                >
 
-                    <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-blue-100 text-blue-700 font-semibold">
+                    <div className="absolute -top-16 -right-16 w-72 h-72 bg-white/10 rounded-full blur-3xl"></div>
 
-                        <Crown size={20} />
+                    <div className="absolute bottom-0 left-0 w-60 h-60 bg-cyan-300/10 rounded-full blur-3xl"></div>
 
-                        Seller Subscription
+                    <div className="relative flex flex-col lg:flex-row justify-between items-center gap-8">
 
-                    </div>
+                        <div>
 
-                    <h1 className="text-5xl font-extrabold mt-6 text-slate-800">
+                            <span className="inline-flex items-center gap-2 bg-white/20 backdrop-blur px-4 py-2 rounded-full text-sm">
 
-                        Grow Your Medical Business
+                                <ShieldCheck size={16} />
 
-                    </h1>
+                                Trusted by Medical Sellers
 
-                    <p className="text-gray-500 mt-4 text-lg">
+                            </span>
 
-                        Choose a subscription plan that matches your business and
-                        unlock product management, order management and premium seller
-                        features.
+                            <h1 className="mt-6 text-3xl md:text-5xl font-black leading-tight">
 
-                    </p>
+                                Grow Your Medical Business
 
-                </div>
-                {
-                    subscription && (
+                            </h1>
 
-                        <div className="bg-white rounded-3xl shadow-xl border border-green-100 p-8 mb-12">
+                            <p className="mt-5 text-blue-100 text-base md:text-lg max-w-2xl">
 
-                            <div className="flex justify-between items-center">
+                                Upgrade your seller account and unlock premium
+                                features, unlimited orders, better visibility
+                                and business growth.
 
-                                <div>
+                            </p>
 
-                                    <div className="flex items-center gap-2 text-green-600 font-semibold">
+                        </div>
 
-                                        <ShieldCheck size={20} />
+                        <div className="grid grid-cols-2 gap-4">
 
-                                        Current Subscription
+                            <div className="bg-white/15 backdrop-blur-lg rounded-2xl p-5 text-center">
 
-                                    </div>
+                                <Star
+                                    className="mx-auto mb-3"
+                                    size={30}
+                                />
 
-                                    <h2 className="text-3xl font-bold mt-3">
+                                <h3 className="text-3xl font-black">
 
-                                        {subscription.years} Year Plan
+                                    3
 
-                                    </h2>
+                                </h3>
 
-                                    <p className="text-gray-500 mt-2">
+                                <p className="text-sm">
 
-                                        Product Range :
+                                    Plans
 
-                                        <strong>
+                                </p>
 
-                                            {subscription.productRange}
+                            </div>
 
-                                        </strong>
+                            <div className="bg-white/15 backdrop-blur-lg rounded-2xl p-5 text-center">
 
-                                    </p>
+                                <BadgeCheck
+                                    className="mx-auto mb-3"
+                                    size={30}
+                                />
 
-                                </div>
+                                <h3 className="text-3xl font-black">
 
-                                <div className="text-right">
+                                    100%
 
-                                    <div className="text-green-600 text-sm">
+                                </h3>
 
-                                        Active Until
+                                <p className="text-sm">
 
-                                    </div>
+                                    Secure
 
-                                    <div className="text-2xl font-bold">
-
-                                        {
-
-                                            new Date(
-
-                                                subscription.endDate
-
-                                            ).toLocaleDateString()
-
-                                        }
-
-                                    </div>
-
-                                </div>
+                                </p>
 
                             </div>
 
                         </div>
 
-                    )
+                    </div>
+
+                </motion.div>
+
+                {/* ================= CURRENT PLAN ================= */}
+
+                {
+
+                    subscription &&
+
+                    <motion.div
+
+                        initial={{ opacity: 0 }}
+
+                        animate={{ opacity: 1 }}
+
+                        className="mt-8 bg-white rounded-3xl shadow-xl p-6 md:p-8"
+
+                    >
+
+                        <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-6">
+
+                            <div>
+
+                                <div className="flex items-center gap-3">
+
+                                    <CreditCard
+                                        className="text-blue-600"
+                                        size={28}
+                                    />
+
+                                    <h2 className="text-2xl font-bold">
+
+                                        Current Subscription
+
+                                    </h2>
+
+                                </div>
+
+                                <p className="text-gray-500 mt-4">
+
+                                    Your seller account is currently subscribed.
+
+                                </p>
+
+                            </div>
+
+                            <div className="lg:text-right">
+
+                                <span className="inline-flex items-center gap-2 bg-green-100 text-green-700 px-5 py-2 rounded-full font-semibold">
+
+                                    <CheckCircle size={18} />
+
+                                    Active
+
+                                </span>
+
+                                <p className="mt-4 text-gray-500">
+
+                                    Valid Until
+
+                                </p>
+
+                                <h3 className="font-bold text-lg">
+
+                                    {
+
+                                        new Date(
+
+                                            subscription.endDate
+
+                                        ).toLocaleDateString()
+
+                                    }
+
+                                </h3>
+
+                            </div>
+
+                        </div>
+
+                    </motion.div>
 
                 }
-                <div className="bg-white rounded-3xl shadow-lg p-8 mb-12">
+
+                {/* ================= PRODUCT RANGE ================= */}
+
+                <div className="mt-10">
 
                     <h2 className="text-2xl font-bold mb-5">
 
@@ -525,70 +779,181 @@ export default function Subscription() {
 
                     </h2>
 
-                    <select
+                    <div className="bg-white rounded-3xl shadow-lg p-6">
 
-                        value={selectedRange}
+                        <div className="grid md:grid-cols-2 gap-6 items-center">
 
-                        onChange={(e) =>
+                            <div>
 
-                            setSelectedRange(
+                                <p className="text-gray-500 mb-4">
 
-                                e.target.value
+                                    Choose how many products you want to manage.
 
-                            )
+                                </p>
 
-                        }
+                                <select
 
-                        className="w-full md:w-80 border rounded-xl px-5 py-3 outline-none focus:ring-4 focus:ring-blue-100"
+                                    value={selectedRange}
 
-                    >
+                                    onChange={(e) =>
+                                        setSelectedRange(
+                                            e.target.value
+                                        )
+                                    }
 
-                        <option value="1-5">
+                                    className="w-full md:w-80 rounded-xl border border-gray-300 px-5 py-3 focus:outline-none focus:ring-4 focus:ring-blue-100"
 
-                            1-5 Products
+                                >
 
-                        </option>
+                                    <option value="1-5">
 
-                        <option value="6-10">
+                                        1 - 5 Products
 
-                            6-10 Products
+                                    </option>
 
-                        </option>
+                                    <option value="6-10">
 
-                        <option value="11-15">
+                                        6 - 10 Products
 
-                            11-15 Products
+                                    </option>
 
-                        </option>
+                                    <option value="11-15">
 
-                        <option value="16-20">
+                                        11 - 15 Products
 
-                            16-20 Products
+                                    </option>
 
-                        </option>
+                                    <option value="16-20">
 
-                        <option value="20+">
+                                        16 - 20 Products
 
-                            20+ Products
+                                    </option>
 
-                        </option>
+                                    <option value="20+">
 
-                    </select>
+                                        20+ Products
+
+                                    </option>
+
+                                </select>
+
+                            </div>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+                                <div className="bg-blue-50 rounded-2xl p-4 text-center">
+
+                                    <Package
+                                        className="mx-auto text-blue-600"
+                                        size={28}
+                                    />
+
+                                    <h4 className="mt-3 font-bold">
+
+                                        Products
+
+                                    </h4>
+
+                                </div>
+
+                                <div className="bg-green-50 rounded-2xl p-4 text-center">
+
+                                    <Shield
+                                        className="mx-auto text-green-600"
+                                        size={28}
+                                    />
+
+                                    <h4 className="mt-3 font-bold">
+
+                                        Secure
+
+                                    </h4>
+
+                                </div>
+
+                                <div className="bg-purple-50 rounded-2xl p-4 text-center">
+
+                                    <Zap
+                                        className="mx-auto text-purple-600"
+                                        size={28}
+                                    />
+
+                                    <h4 className="mt-3 font-bold">
+
+                                        Fast
+
+                                    </h4>
+
+                                </div>
+
+                                <div className="bg-orange-50 rounded-2xl p-4 text-center">
+
+                                    <Clock
+                                        className="mx-auto text-orange-600"
+                                        size={28}
+                                    />
+
+                                    <h4 className="mt-3 font-bold">
+
+                                        24×7
+
+                                    </h4>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
 
                 </div>
-                <div className="grid lg:grid-cols-3 gap-8">
 
-                    {
+                {/* ================= PRICING CARDS START ================= */}
 
-                        plans.map(plan => (
+                <div className="mt-12">
 
-                            <div
+                    <h2 className="text-3xl font-black text-center">
 
-                                key={plan.id}
+                        Choose Your Subscription Plan
 
-                                onClick={() => setSelectedPlan(plan.id)}
+                    </h2>
 
-                                className={`
+                    <p className="text-center text-gray-500 mt-3">
+
+                        Flexible pricing for every medical business.
+
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 mt-10">
+                        {
+
+                            plans.map((plan) => {
+
+                                const price =
+                                    pricing[selectedRange][plan.id];
+
+                                return (
+
+                                    <motion.div
+
+                                        key={plan.id}
+
+                                        whileHover={{
+
+                                            y: -8,
+
+                                            scale: 1.02
+
+                                        }}
+
+                                        transition={{
+
+                                            duration: .25
+
+                                        }}
+
+                                        className={`
 
 relative
 
@@ -596,51 +961,45 @@ rounded-3xl
 
 overflow-hidden
 
-cursor-pointer
-
-transition-all
-
-duration-300
-
-hover:-translate-y-3
-
-hover:shadow-2xl
-
-border-4
-
-${selectedPlan === plan.id
-
-                                        ?
-
-                                        "border-blue-600"
-
-                                        :
-
-                                        "border-transparent"
-
-                                    }
+shadow-xl
 
 bg-white
 
+border-2
+
+transition-all
+
+${selectedPlan === plan.id
+
+                                                ? "border-blue-600"
+
+                                                : "border-transparent"
+
+                                            }
+
 `}
 
-                            >
+                                    >
 
-                                {
+                                        {
 
-                                    plan.popular && (
+                                            plan.badge &&
 
-                                        <div className="absolute top-5 right-5 bg-pink-500 text-white text-xs px-3 py-1 rounded-full">
+                                            <div
 
-                                            Most Popular
+                                                className="absolute top-5 right-5 bg-gradient-to-r from-orange-500 to-pink-600 text-white px-4 py-1 rounded-full text-xs font-bold shadow"
 
-                                        </div>
+                                            >
 
-                                    )
+                                                {plan.badge}
 
-                                }
+                                            </div>
 
-                                <div className={`
+                                        }
+
+                                        <div
+
+                                            className={`
 
 bg-gradient-to-r
 
@@ -650,150 +1009,932 @@ text-white
 
 p-8
 
-`}>
+text-center
 
-                                    <div className="flex justify-between">
+`}
 
-                                        {plan.icon}
+                                        >
 
-                                        <div>
+                                            <div className="flex justify-center">
 
-                                            <h2 className="text-3xl font-bold">
+                                                {plan.icon}
 
-                                                ₹{
+                                            </div>
 
-                                                    pricing[selectedRange][plan.id]
+                                            <h2 className="text-3xl font-black mt-5">
 
-                                                }
+                                                {plan.title}
 
                                             </h2>
 
-                                            <p>
+                                            <p className="mt-2 opacity-90">
 
-                                                {plan.years} Year
+                                                {plan.subtitle}
 
                                             </p>
 
                                         </div>
 
-                                    </div>
+                                        <div className="p-8">
 
-                                </div>
+                                            <div className="text-center">
 
-                                <div className="p-8">
+                                                <span className="text-gray-400">
 
-                                    <h3 className="text-2xl font-bold">
+                                                    Starting From
 
-                                        {plan.title}
+                                                </span>
 
-                                    </h3>
+                                                <h1 className="text-5xl font-black mt-3 text-slate-800">
 
-                                    <ul className="mt-6 space-y-3">
+                                                    ₹{price.toLocaleString()}
 
-                                        {
+                                                </h1>
 
-                                            [
+                                                <p className="text-gray-500 mt-3">
 
-                                                "Unlimited Orders",
+                                                    {plan.years} Year Subscription
 
-                                                "Seller Dashboard",
+                                                </p>
 
-                                                "Product Management",
+                                            </div>
 
-                                                "Order Management",
+                                            <div className="my-8 border-t"></div>
 
-                                                "Secure Payments"
+                                            <div className="space-y-4">
 
-                                            ]
+                                                {[
 
-                                                .map(feature => (
+                                                    "Unlimited Orders",
 
-                                                    <li
+                                                    "Seller Dashboard",
+
+                                                    "Product Management",
+
+                                                    "Inventory Management",
+
+                                                    "Order Tracking",
+
+                                                    "Secure Razorpay Payments",
+
+                                                    "Email Notifications",
+
+                                                    "Priority Support",
+
+                                                    "Automatic Updates"
+
+                                                ].map(feature => (
+
+                                                    <div
 
                                                         key={feature}
 
-                                                        className="flex items-center gap-3"
+                                                        className="flex items-start gap-3"
 
                                                     >
 
                                                         <CheckCircle
 
-                                                            size={18}
+                                                            className="text-green-500 mt-1"
 
-                                                            className="text-green-500"
+                                                            size={18}
 
                                                         />
 
-                                                        {feature}
+                                                        <span className="text-gray-700">
 
-                                                    </li>
+                                                            {feature}
+
+                                                        </span>
+
+                                                    </div>
 
                                                 ))
+                                                }
 
-                                        }
+                                        </div>
 
-                                    </ul>
 
-                                    <button
+                                            <button
 
-                                        onClick={() => payNow(plan.id)}
+                                                onClick={() => {
 
-                                        disabled={processing}
+                                                    setSelectedPlan(plan.id);
 
-                                        className={`
+                                                    payNow(plan.id);
 
-mt-8
+                                                }}
+
+                                                disabled={processing}
+
+                                                className={`
+
+mt-10
 
 w-full
 
-rounded-xl
+rounded-2xl
 
-py-3
+py-4
 
 font-bold
 
 text-white
 
-bg-gradient-to-r
+transition-all
 
-${plan.color}
+duration-300
 
-hover:scale-105
+shadow-lg
 
-transition
+hover:shadow-xl
+
+flex
+
+justify-center
+
+items-center
+
+gap-3
+
+${plan.id === "basic"
+
+                                                        ? "bg-gradient-to-r from-blue-500 to-cyan-500"
+
+                                                        : plan.id === "pro"
+
+                                                            ? "bg-gradient-to-r from-purple-600 to-pink-500"
+
+                                                            : "bg-gradient-to-r from-green-500 to-emerald-600"
+
+                                                    }
+
+disabled:opacity-60
+
+disabled:cursor-not-allowed
 
 `}
 
-                                    >
+                                            >
 
-                                        {
+                                                {
 
-                                            processing
+                                                    processing &&
 
-                                                ?
+                                                    selectedPlan === plan.id &&
 
-                                                "Processing..."
+                                                    <Loader2
 
-                                                :
+                                                        className="animate-spin"
 
-                                                "Subscribe Now"
+                                                        size={18}
 
-                                        }
+                                                    />
 
-                                    </button>
+                                                }
 
-                                </div>
+                                                {
+
+                                                    processing &&
+
+                                                        selectedPlan === plan.id
+
+                                                        ? "Processing..."
+
+                                                        : "Subscribe Now"
+
+                                                }
+
+                                                {
+
+                                                    !processing &&
+
+                                                    <ArrowRight size={18} />
+
+                                                }
+
+                                            </button>
+
+                                        </div>
+
+                                    </motion.div>
+
+                                );
+
+                            })
+
+                        }
+
+                    </div>
+
+                </div>
+
+
+                {/* =======================================================
+                            WHY CHOOSE MEDMARKET
+            ======================================================== */}
+
+                <section className="mt-20">
+
+                    <div className="text-center">
+
+                        <span className="inline-flex items-center gap-2 rounded-full bg-blue-100 px-5 py-2 text-blue-700 font-semibold">
+
+                            <Sparkles size={18} />
+
+                            Premium Seller Benefits
+
+                        </span>
+
+                        <h2 className="mt-6 text-3xl md:text-5xl font-black text-slate-800">
+
+                            Why Choose MedMarket?
+
+                        </h2>
+
+                        <p className="mt-5 max-w-3xl mx-auto text-gray-500 leading-8">
+
+                            Build your medical business on a secure,
+                            scalable and powerful marketplace.
+                            Enjoy premium seller tools,
+                            secure payments,
+                            priority support
+                            and unlimited business opportunities.
+
+                        </p>
+
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8 mt-14">
+
+                        {/* CARD 1 */}
+
+                        <motion.div
+
+                            whileHover={{
+                                y: -8,
+                                scale: 1.02
+                            }}
+
+                            transition={{
+                                duration: .25
+                            }}
+
+                            className="bg-white rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-300 p-8"
+
+                        >
+
+                            <div className="w-16 h-16 rounded-2xl bg-blue-100 flex items-center justify-center">
+
+                                <ShieldCheck
+                                    size={34}
+                                    className="text-blue-600"
+                                />
 
                             </div>
 
-                        ))
+                            <h3 className="mt-6 text-xl font-bold">
 
-                    }
+                                Secure Payments
 
-                </div>
+                            </h3>
+
+                            <p className="mt-4 text-gray-500 leading-7">
+
+                                Powered by Razorpay with
+                                enterprise-grade encryption,
+                                ensuring every payment is
+                                completely secure.
+
+                            </p>
+
+                        </motion.div>
+
+                        {/* CARD 2 */}
+
+                        <motion.div
+
+                            whileHover={{
+                                y: -8,
+                                scale: 1.02
+                            }}
+
+                            transition={{
+                                duration: .25
+                            }}
+
+                            className="bg-white rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-300 p-8"
+
+                        >
+
+                            <div className="w-16 h-16 rounded-2xl bg-green-100 flex items-center justify-center">
+
+                                <BadgeCheck
+                                    size={34}
+                                    className="text-green-600"
+                                />
+
+                            </div>
+
+                            <h3 className="mt-6 text-xl font-bold">
+
+                                Verified Seller
+
+                            </h3>
+
+                            <p className="mt-4 text-gray-500 leading-7">
+
+                                Become a trusted seller
+                                and increase customer confidence
+                                with verified business status.
+
+                            </p>
+
+                        </motion.div>
+
+                        {/* CARD 3 */}
+
+                        <motion.div
+
+                            whileHover={{
+                                y: -8,
+                                scale: 1.02
+                            }}
+
+                            transition={{
+                                duration: .25
+                            }}
+
+                            className="bg-white rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-300 p-8"
+
+                        >
+
+                            <div className="w-16 h-16 rounded-2xl bg-orange-100 flex items-center justify-center">
+
+                                <Zap
+                                    size={34}
+                                    className="text-orange-600"
+                                />
+
+                            </div>
+
+                            <h3 className="mt-6 text-xl font-bold">
+
+                                Faster Business Growth
+
+                            </h3>
+
+                            <p className="mt-4 text-gray-500 leading-7">
+
+                                Sell more products,
+                                reach more buyers
+                                and grow your revenue
+                                with premium seller tools.
+
+                            </p>
+
+                        </motion.div>
+
+                        {/* CARD 4 */}
+
+                        <motion.div
+
+                            whileHover={{
+                                y: -8,
+                                scale: 1.02
+                            }}
+
+                            transition={{
+                                duration: .25
+                            }}
+
+                            className="bg-white rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-300 p-8"
+
+                        >
+
+                            <div className="w-16 h-16 rounded-2xl bg-purple-100 flex items-center justify-center">
+
+                                <Package
+                                    size={34}
+                                    className="text-purple-600"
+                                />
+
+                            </div>
+
+                            <h3 className="mt-6 text-xl font-bold">
+
+                                Unlimited Products
+
+                            </h3>
+
+                            <p className="mt-4 text-gray-500 leading-7">
+
+                                Easily manage products,
+                                variants,
+                                specifications
+                                and inventory
+                                from one dashboard.
+
+                            </p>
+
+                        </motion.div>
+
+                    </div>
+
+                </section>
+
+                {/* =======================================================
+                                FAQ SECTION
+            ======================================================== */}
+
+                <section className="mt-24">
+
+                    <div className="text-center">
+
+                        <span className="inline-flex items-center gap-2 rounded-full bg-green-100 text-green-700 px-5 py-2 font-semibold">
+
+                            <BadgeCheck size={18} />
+
+                            Frequently Asked Questions
+
+                        </span>
+
+                        <h2 className="mt-6 text-3xl md:text-5xl font-black text-slate-800">
+
+                            Have Questions?
+
+                        </h2>
+
+                        <p className="mt-5 max-w-2xl mx-auto text-gray-500 leading-8">
+
+                            Everything you need to know before purchasing
+                            your seller subscription.
+
+                        </p>
+
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-14">
+
+                        <motion.div
+
+                            whileHover={{ y: -5 }}
+
+                            className="bg-white rounded-3xl shadow-lg p-8"
+
+                        >
+
+                            <h3 className="text-xl font-bold text-slate-800">
+
+                                How long is my subscription valid?
+
+                            </h3>
+
+                            <p className="mt-4 text-gray-500 leading-7">
+
+                                Depending on your selected plan,
+                                your subscription remains active for
+                                1 Year, 2 Years or 3 Years.
+
+                            </p>
+
+                        </motion.div>
+
+                        <motion.div
+
+                            whileHover={{ y: -5 }}
+
+                            className="bg-white rounded-3xl shadow-lg p-8"
+
+                        >
+
+                            <h3 className="text-xl font-bold text-slate-800">
+
+                                Can I upgrade my plan later?
+
+                            </h3>
+
+                            <p className="mt-4 text-gray-500 leading-7">
+
+                                Yes.
+                                You can upgrade your subscription
+                                at any time from the Seller Dashboard.
+
+                            </p>
+
+                        </motion.div>
+
+                        <motion.div
+
+                            whileHover={{ y: -5 }}
+
+                            className="bg-white rounded-3xl shadow-lg p-8"
+
+                        >
+
+                            <h3 className="text-xl font-bold text-slate-800">
+
+                                Which payment methods are accepted?
+
+                            </h3>
+
+                            <p className="mt-4 text-gray-500 leading-7">
+
+                                We support UPI,
+                                Debit Cards,
+                                Credit Cards,
+                                Net Banking
+                                and Wallets through Razorpay.
+
+                            </p>
+
+                        </motion.div>
+
+                        <motion.div
+
+                            whileHover={{ y: -5 }}
+
+                            className="bg-white rounded-3xl shadow-lg p-8"
+
+                        >
+
+                            <h3 className="text-xl font-bold text-slate-800">
+
+                                What happens after payment?
+
+                            </h3>
+
+                            <p className="mt-4 text-gray-500 leading-7">
+
+                                Your subscription gets activated
+                                automatically after payment verification
+                                and you'll immediately gain access
+                                to premium seller features.
+
+                            </p>
+
+                        </motion.div>
+
+                    </div>
+
+                </section>
+
+                {/* =======================================================
+                                SUPPORT SECTION
+            ======================================================== */}
+
+                <section className="mt-24">
+
+                    <motion.div
+
+                        initial={{ opacity: 0, y: 30 }}
+
+                        whileInView={{ opacity: 1, y: 0 }}
+
+                        viewport={{ once: true }}
+
+                        className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-700 via-indigo-700 to-cyan-600 text-white shadow-2xl"
+
+                    >
+
+                        <div className="absolute -top-20 -right-20 w-72 h-72 bg-white/10 rounded-full blur-3xl"></div>
+
+                        <div className="absolute bottom-0 left-0 w-60 h-60 bg-cyan-300/10 rounded-full blur-3xl"></div>
+
+                        <div className="relative px-8 py-12 lg:px-16 lg:py-16 flex flex-col lg:flex-row justify-between items-center gap-10">
+
+                            <div>
+
+                                <span className="inline-flex items-center gap-2 bg-white/20 px-4 py-2 rounded-full">
+
+                                    <ShieldCheck size={18} />
+
+                                    Dedicated Seller Support
+
+                                </span>
+
+                                <h2 className="mt-6 text-3xl lg:text-5xl font-black">
+
+                                    Need Help Choosing a Plan?
+
+                                </h2>
+
+                                <p className="mt-5 max-w-xl text-blue-100 leading-8">
+
+                                    Our team is available to help you
+                                    choose the best subscription,
+                                    resolve payment issues,
+                                    manage products
+                                    and grow your medical business.
+
+                                </p>
+
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row gap-4">
+
+                                <button
+
+                                    onClick={() =>
+                                        navigate("/seller/dashboard")
+                                    }
+
+                                    className="rounded-2xl bg-white text-blue-700 font-bold px-8 py-4 hover:shadow-xl transition"
+
+                                >
+
+                                    Seller Dashboard
+
+                                </button>
+
+                                <button
+
+                                    onClick={() =>
+                                        window.location.href =
+                                        "mailto:support@sunilmedicalproducts.online"
+                                    }
+
+                                    className="rounded-2xl border border-white px-8 py-4 font-bold hover:bg-white hover:text-blue-700 transition"
+
+                                >
+
+                                    Contact Support
+
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                    </motion.div>
+
+                </section>
+                {/* ================= SUPPORT CTA ================= */}
+
+                <motion.section
+
+                    initial={{ opacity: 0, y: 20 }}
+
+                    whileInView={{ opacity: 1, y: 0 }}
+
+                    viewport={{ once: true }}
+
+                    className="mt-20"
+
+                >
+
+                    <div className="rounded-3xl overflow-hidden bg-gradient-to-r from-blue-700 via-indigo-700 to-cyan-600 text-white shadow-2xl">
+
+                        <div className="px-8 py-12 lg:px-16 lg:py-16 flex flex-col lg:flex-row justify-between items-center gap-10">
+
+                            <div>
+
+                                <h2 className="text-3xl lg:text-5xl font-black">
+
+                                    Need Assistance?
+
+                                </h2>
+
+                                <p className="mt-5 text-blue-100 max-w-xl leading-7">
+
+                                    Our dedicated seller support team is available to
+                                    assist you with subscriptions, payments, product
+                                    listings and business growth.
+
+                                </p>
+
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row gap-4">
+
+                                <button
+
+                                    onClick={() => navigate("/seller/dashboard")}
+
+                                    className="px-8 py-4 rounded-2xl bg-white text-blue-700 font-bold hover:shadow-xl transition"
+
+                                >
+
+                                    Dashboard
+
+                                </button>
+
+                                <button
+
+                                    onClick={() => window.location.href = "mailto:support@sunilmedicalproducts.online"}
+
+                                    className="px-8 py-4 rounded-2xl border border-white hover:bg-white hover:text-blue-700 transition font-bold"
+
+                                >
+
+                                    Contact Support
+
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </motion.section>
+
+                {/* ================= TRUST BADGES ================= */}
+
+                <section className="mt-20">
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+
+                        <div className="bg-white rounded-3xl p-8 text-center shadow-lg">
+
+                            <ShieldCheck
+
+                                size={40}
+
+                                className="mx-auto text-green-600"
+
+                            />
+
+                            <h3 className="font-bold mt-5">
+
+                                100% Secure
+
+                            </h3>
+
+                            <p className="text-sm text-gray-500 mt-2">
+
+                                SSL Protected
+
+                            </p>
+
+                        </div>
+
+                        <div className="bg-white rounded-3xl p-8 text-center shadow-lg">
+
+                            <CreditCard
+
+                                size={40}
+
+                                className="mx-auto text-blue-600"
+
+                            />
+
+                            <h3 className="font-bold mt-5">
+
+                                Razorpay
+
+                            </h3>
+
+                            <p className="text-sm text-gray-500 mt-2">
+
+                                Trusted Payments
+
+                            </p>
+
+                        </div>
+
+                        <div className="bg-white rounded-3xl p-8 text-center shadow-lg">
+
+                            <BadgeCheck
+
+                                size={40}
+
+                                className="mx-auto text-indigo-600"
+
+                            />
+
+                            <h3 className="font-bold mt-5">
+
+                                Verified
+
+                            </h3>
+
+                            <p className="text-sm text-gray-500 mt-2">
+
+                                Seller Program
+
+                            </p>
+
+                        </div>
+
+                        <div className="bg-white rounded-3xl p-8 text-center shadow-lg">
+
+                            <Zap
+
+                                size={40}
+
+                                className="mx-auto text-orange-500"
+
+                            />
+
+                            <h3 className="font-bold mt-5">
+
+                                Fast Setup
+
+                            </h3>
+
+                            <p className="text-sm text-gray-500 mt-2">
+
+                                Instant Activation
+
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                </section>
+
+                {/* ================= FOOTER ================= */}
+
+                <footer className="mt-20 border-t border-slate-200 py-10">
+
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+
+                        <div>
+
+                            <h3 className="text-2xl font-black text-slate-800">
+
+                                SunilMedMarket
+
+                            </h3>
+
+                            <p className="text-gray-500 mt-2">
+
+                                Seller Subscription Portal
+
+                            </p>
+
+                        </div>
+
+                        <div className="flex flex-wrap justify-center gap-8 text-gray-500">
+
+                            <button
+
+                                onClick={() => navigate("/seller/dashboard")}
+
+                                className="hover:text-blue-600"
+
+                            >
+
+                                Dashboard
+
+                            </button>
+
+                            <button
+
+                                onClick={() => navigate("/seller/products")}
+
+                                className="hover:text-blue-600"
+
+                            >
+
+                                Products
+
+                            </button>
+
+                            <button
+
+                                onClick={() => navigate("/seller/orders")}
+
+                                className="hover:text-blue-600"
+
+                            >
+
+                                Orders
+
+                            </button>
+
+                            <button
+
+                                onClick={() => navigate("/seller/subscription")}
+
+                                className="hover:text-blue-600"
+
+                            >
+
+                                Subscription
+
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                    <div className="mt-10 text-center text-gray-400 text-sm">
+
+                        © {new Date().getFullYear()} SunilMedMarket.
+
+                        All Rights Reserved.
+
+                    </div>
+
+                </footer>
+
             </div>
+
         </div>
+        
+
     );
-
-}
-
+  }

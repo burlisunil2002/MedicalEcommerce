@@ -69,6 +69,11 @@ export default function SellerLogin() {
 
             if (response.data.success) {
 
+                localStorage.setItem(
+                    "seller",
+                    JSON.stringify(response.data.seller)
+                );
+
                 setSuccess(true);
 
                 setMessage(response.data.message);
@@ -77,7 +82,7 @@ export default function SellerLogin() {
 
                     navigate("/seller/dashboard");
 
-                }, 1000);
+                }, 800);
 
             }
 
@@ -586,13 +591,13 @@ export default function SellerLogin() {
 
                 <p className="mt-4 text-sm">
 
-                    support@medmarket.com
+                    support@sunilmedicalproducts.com
 
                 </p>
 
                 <p className="mt-2 text-sm">
 
-                    +91 9876543210
+                    +91 9014060858
 
                 </p>
 
@@ -602,7 +607,7 @@ export default function SellerLogin() {
 
         <div className="border-t border-slate-700 mt-10 pt-6 text-center text-sm">
 
-            © 2026 MedMarket. All Rights Reserved.
+            © 2026 SunilMedMarket. All Rights Reserved.
 
         </div>
 

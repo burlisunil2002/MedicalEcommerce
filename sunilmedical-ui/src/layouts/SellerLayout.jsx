@@ -1,6 +1,13 @@
 ﻿import { useState } from "react";
-import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import {
+    Outlet,
+    useNavigate,
+    useLocation
+} from "react-router-dom";
+
 import { motion } from "framer-motion";
+
+import Swal from "sweetalert2";
 
 import {
     LayoutDashboard,
@@ -8,91 +15,142 @@ import {
     ShoppingCart,
     CreditCard,
     Bell,
-    User,
     LogOut,
     Menu,
-    Search
+    ChevronRight,
+    BadgeCheck
 } from "lucide-react";
-
 export default function SellerLayout() {
 
     const navigate = useNavigate();
 
     const location = useLocation();
 
-    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [sidebarOpen, setSidebarOpen] =
+        useState(false);
+
+    const seller =
+        JSON.parse(
+            localStorage.getItem("seller")
+        );
 
     const titles = {
-        "/seller/dashboard": "Dashboard",
-        "/seller/products": "Product Management",
-        "/seller/orders": "Order Management",
-        "/seller/subscription": "Subscription"
+
+        "/seller/dashboard":
+            "Dashboard",
+
+        "/seller/products":
+            "Product Management",
+
+        "/seller/orders":
+            "Order Management",
+
+        "/seller/subscription":
+            "Subscription"
+
     };
 
     const menuItems = [
 
         {
+
             name: "Dashboard",
+
             icon: LayoutDashboard,
+
             path: "/seller/dashboard"
+
         },
 
         {
+
             name: "Product Management",
+
             icon: Package,
+
             path: "/seller/products"
+
         },
 
         {
+
             name: "Order Management",
+
             icon: ShoppingCart,
+
             path: "/seller/orders"
+
         },
 
         {
+
             name: "Subscription",
+
             icon: CreditCard,
+
             path: "/seller/subscription"
+
         }
 
     ];
 
     const logout = () => {
 
-        localStorage.removeItem("seller");
-        localStorage.removeItem("token");
-        sessionStorage.clear();
+        Swal.fire({
 
-        navigate("/seller-login");
+            title: "Logout?",
+
+            text: "Are you sure you want to logout?",
+
+            icon: "question",
+
+            showCancelButton: true,
+
+            confirmButtonText: "Logout",
+
+            confirmButtonColor: "#2563eb"
+
+        }).then(result => {
+
+            if (!result.isConfirmed)
+                return;
+
+            localStorage.clear();
+
+            sessionStorage.clear();
+
+            navigate("/seller-login");
+
+        });
 
     };
-
-    const seller =
-        JSON.parse(localStorage.getItem("seller"));
 
     return (
 
         <div className="min-h-screen bg-slate-100">
-
-            {/* Mobile Overlay */}
 
             {
                 sidebarOpen &&
 
                 <div
 
-                    onClick={() => setSidebarOpen(false)}
+                    onClick={() =>
+                        setSidebarOpen(false)
+                    }
 
-                    className="fixed inset-0 bg-black/40 z-40 lg:hidden"
+                    className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden"
 
                 />
 
             }
+
             <motion.aside
 
-                initial={{ x: -300 }}
+                initial={{ x: -350 }}
 
                 animate={{ x: 0 }}
+
+                transition={{ duration: .35 }}
 
                 className={`
 
@@ -106,40 +164,70 @@ h-screen
 
 w-72
 
+max-w-[85vw]
+
 bg-white
 
 shadow-2xl
 
 z-50
 
-transition-all
+transform
+
+transition-transform
 
 duration-300
 
-${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+${sidebarOpen
+                        ? "translate-x-0"
+                        : "-translate-x-full"}
 
 lg:translate-x-0
+
+flex
+
+flex-col
 
 `}
 
             >
 
-                <div className="p-8 border-b">
+                {/* Logo */}
 
-                    <h1 className="text-2xl font-black text-blue-600">
+                <div className="p-6 border-b">
 
-                        MedMarket
+                    <div className="flex items-center gap-3">
 
-                    </h1>
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 flex items-center justify-center text-white font-bold text-xl">
 
-                    <p className="text-gray-500 mt-2">
+                            M
 
-                        Seller Portal
+                        </div>
 
-                    </p>
+                        <div>
+
+                            <h2 className="font-black text-xl text-blue-600">
+
+                                SunilMedMarket 
+
+                            </h2>
+
+                            <p className="text-gray-500 text-sm">
+
+                                Seller Portal
+
+                            </p>
+
+                        </div>
+
+                    </div>
 
                 </div>
-                <nav className="p-5 space-y-2">
+                
+
+                {/* Menu */}
+
+                <nav className="flex-1 p-4 overflow-y-auto">
 
                     {
 
@@ -169,29 +257,33 @@ lg:translate-x-0
 
 w-full
 
+mb-2
+
 flex
 
 items-center
 
-gap-4
+justify-between
 
-px-5
+px-4
 
 py-3
 
 rounded-xl
 
-transition
+transition-all
+
+duration-300
 
 ${active
 
                                             ?
 
-                                            "bg-blue-600 text-white"
+                                            "bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-lg"
 
                                             :
 
-                                            "text-gray-600 hover:bg-blue-50"
+                                            "hover:bg-slate-100 text-slate-700"
 
                                         }
 
@@ -199,9 +291,15 @@ ${active
 
                                 >
 
-                                    <Icon size={20} />
+                                    <div className="flex items-center gap-3">
 
-                                    {item.name}
+                                        <Icon size={20} />
+
+                                        {item.name}
+
+                                    </div>
+
+                                    <ChevronRight size={18} />
 
                                 </button>
 
@@ -212,17 +310,19 @@ ${active
                     }
 
                 </nav>
-                <div className="absolute bottom-6 left-0 w-full px-5">
+                {/* Logout */}
+
+                <div className="p-4 border-t bg-white">
 
                     <button
 
                         onClick={logout}
 
-                        className="w-full flex items-center justify-center gap-3 bg-red-500 text-white py-3 rounded-xl hover:bg-red-600 transition"
+                        className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white py-3 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl"
 
                     >
 
-                        <LogOut />
+                        <LogOut size={20} />
 
                         Logout
 
@@ -231,60 +331,98 @@ ${active
                 </div>
 
             </motion.aside>
-            <div className="lg:ml-72">
 
-                <header className="sticky top-0 bg-white shadow-sm z-30">
+            {/* ==========================
+                Main Content
+            ========================== */}
 
-                    <div className="flex items-center justify-between px-6 py-4">
+            <div className="lg:ml-72 flex flex-col min-h-screen">
+
+                {/* Header */}
+
+                <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b shadow-sm">
+
+                    <div className="flex items-center justify-between px-4 md:px-8 h-20">
+
+                        {/* Left */}
 
                         <div className="flex items-center gap-4">
 
                             <button
 
-                                onClick={() => setSidebarOpen(true)}
+                                onClick={() =>
+                                    setSidebarOpen(true)
+                                }
 
-                                className="lg:hidden"
+                                className="lg:hidden p-2 rounded-lg hover:bg-slate-100"
 
                             >
 
-                                <Menu />
+                                <Menu size={24} />
 
                             </button>
 
-                            <h2 className="font-bold text-xl">
-                                {titles[location.pathname] || "Seller Portal"}
-                            </h2>
+                            <div>
+
+                                <h1 className="text-xl md:text-3xl font-bold text-slate-800">
+
+                                    {titles[location.pathname] || "Seller Portal"}
+
+                                </h1>
+
+                                <p className="text-sm text-slate-500 hidden md:block">
+
+                                    Welcome back 👋
+
+                                </p>
+
+                            </div>
 
                         </div>
-                        <div className="flex items-center gap-5">
 
-                            
+                        {/* Right */}
+
+                        <div className="flex items-center gap-4">
+
+                            {/* Notification */}
+
+                            <button className="relative p-3 rounded-xl bg-slate-100 hover:bg-blue-50 transition">
+
+                                <Bell size={22} />
+
+                                <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center">
+
+                                    0
+
+                                </span>
+
+                            </button>
+
+                            {/* Seller */}
 
                             <div className="hidden md:flex items-center gap-3">
 
-                                <div>
+                                <div className="text-right">
 
-                                    <p className="font-semibold">
+                                    <h3 className="font-semibold text-slate-800">
 
-                                        <p className="font-semibold">
-                                            {seller?.businessName || "Seller"}
-                                        </p>
+                                        {seller?.businessName || "Seller"}
 
-                                    </p>
+                                    </h3>
 
-                                    <p className="text-sm text-gray-500">
+                                    <p className="text-xs text-slate-500">
 
-                                        <p className="text-sm text-gray-500">
-                                            {seller?.status || "Verified"}
-                                        </p>
+                                        {seller?.email || "seller@medmarket.com"}
 
                                     </p>
 
                                 </div>
 
-                                <div className="w-11 h-11 rounded-full bg-blue-600 text-white flex items-center justify-center">
+                                <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 text-white flex items-center justify-center font-bold text-lg shadow">
 
-                                    <User />
+                                    {seller?.businessName
+                                        ?.charAt(0)
+                                        ?.toUpperCase() || "S"}
 
                                 </div>
 
@@ -295,11 +433,56 @@ ${active
                     </div>
 
                 </header>
-                <main className="p-8">
 
-                    <Outlet />
+                {/* Page Content */}
+
+                <main className="flex-1 p-4 md:p-8">
+
+                    <motion.div
+
+                        initial={{
+                            opacity: 0,
+                            y: 25
+                        }}
+
+                        animate={{
+                            opacity: 1,
+                            y: 0
+                        }}
+
+                        transition={{
+                            duration: .35
+                        }}
+
+                    >
+
+                        <Outlet />
+
+                    </motion.div>
 
                 </main>
+
+                {/* Footer */}
+
+                <footer className="border-t bg-white px-6 py-4">
+
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-2">
+
+                        <p className="text-sm text-slate-500">
+
+                            © {new Date().getFullYear()} MedMarket Seller Portal
+
+                        </p>
+
+                        <p className="text-sm text-slate-400">
+
+                            Powered by Sunil Medical Products
+
+                        </p>
+
+                    </div>
+
+                </footer>
 
             </div>
 
