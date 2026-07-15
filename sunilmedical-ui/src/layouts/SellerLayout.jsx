@@ -1,4 +1,5 @@
-﻿import { useState } from "react";
+﻿import { useState, useEffect } from "react";
+
 import {
     Outlet,
     useNavigate,
@@ -18,7 +19,8 @@ import {
     LogOut,
     Menu,
     ChevronRight,
-    BadgeCheck
+    BadgeCheck,
+    X
 } from "lucide-react";
 export default function SellerLayout() {
 
@@ -125,6 +127,28 @@ export default function SellerLayout() {
 
     };
 
+    useEffect(() => {
+
+        if (sidebarOpen) {
+
+            document.body.style.overflow = "hidden";
+
+        }
+
+        else {
+
+            document.body.style.overflow = "auto";
+
+        }
+
+        return () => {
+
+            document.body.style.overflow = "auto";
+
+        };
+
+    }, [sidebarOpen]);
+
     return (
 
         <div className="min-h-screen bg-slate-100">
@@ -162,7 +186,7 @@ left-0
 
 h-screen
 
-w-72
+w-72 sm:w-80
 
 max-w-[85vw]
 
@@ -175,8 +199,8 @@ z-50
 transform
 
 transition-transform
-
 duration-300
+ease-in-out
 
 ${sidebarOpen
                         ? "translate-x-0"
@@ -194,25 +218,18 @@ flex-col
 
                 {/* Logo */}
 
-                <div className="p-6 border-b">
 
-                    <div className="flex items-center gap-3">
-
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 flex items-center justify-center text-white font-bold text-xl">
-
-                            M
-
-                        </div>
+                    <div className="p-6 border-b flex items-center justify-between">
 
                         <div>
 
-                            <h2 className="font-black text-xl text-blue-600">
+                            <h1 className="text-2xl font-black text-blue-600">
 
-                                SunilMedMarket 
+                                SunilMedMarket
 
-                            </h2>
+                            </h1>
 
-                            <p className="text-gray-500 text-sm">
+                            <p className="text-gray-500 text-sm mt-1">
 
                                 Seller Portal
 
@@ -220,9 +237,19 @@ flex-col
 
                         </div>
 
-                    </div>
+                        <button
 
-                </div>
+                            className="lg:hidden p-2 rounded-lg hover:bg-gray-100"
+
+                            onClick={() => setSidebarOpen(false)}
+
+                        >
+
+                            <X size={24} />
+
+                        </button>
+
+                    </div>
                 
 
                 {/* Menu */}
