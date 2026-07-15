@@ -28,8 +28,9 @@ export default function SellerLayout() {
 
     const location = useLocation();
 
-    const [sidebarOpen, setSidebarOpen] =
-        useState(false);
+    const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
+
+    const [desktopCollapsed, setDesktopCollapsed] = useState(false);
 
     const seller =
         JSON.parse(
@@ -127,6 +128,20 @@ export default function SellerLayout() {
 
     };
 
+    const toggleSidebar = () => {
+
+        if (window.innerWidth >= 1024) {
+
+            setDesktopCollapsed(prev => !prev);
+
+        } else {
+
+            setSidebarOpen(prev => !prev);
+
+        }
+
+    };
+
     useEffect(() => {
 
         if (sidebarOpen) {
@@ -149,6 +164,16 @@ export default function SellerLayout() {
 
     }, [sidebarOpen]);
 
+    useEffect(() => {
+
+        if (window.innerWidth >= 1024) {
+
+            setSidebarOpen(true);
+
+        }
+
+    }, []);
+
     return (
 
         <div className="min-h-screen bg-slate-100">
@@ -169,57 +194,42 @@ export default function SellerLayout() {
             }
 
             <motion.aside
-
-                initial={{ x: -350 }}
-
-                animate={{ x: 0 }}
-
-                transition={{ duration: .35 }}
-
+                initial={false}
+                animate={{
+                    x: sidebarOpen ? 0 : -320
+                }}
+                transition={{
+                    duration: 0.3
+                }}
                 className={`
-
 fixed
-
 top-0
-
 left-0
-
 h-screen
-
-w-72 sm:w-80
-
-max-w-[85vw]
-
 bg-white
-
 shadow-2xl
-
 z-50
-
-transform
-
-transition-transform
+transition-all
 duration-300
 ease-in-out
 
-${sidebarOpen
-                        ? "translate-x-0"
-                        : "-translate-x-full"}
+${desktopCollapsed ? "lg:w-20" : "lg:w-72"}
+
+w-72
+
+${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
 
 lg:translate-x-0
-
-flex
-
-flex-col
-
-`}
-
-            >
+`}            >
 
                 {/* Logo */}
 
 
-                    <div className="p-6 border-b flex items-center justify-between">
+                <div className="flex items-center justify-between p-6 border-b">
+
+                    {
+
+                        !desktopCollapsed &&
 
                         <div>
 
@@ -229,7 +239,7 @@ flex-col
 
                             </h1>
 
-                            <p className="text-gray-500 text-sm mt-1">
+                            <p className="text-sm text-gray-500">
 
                                 Seller Portal
 
@@ -237,19 +247,33 @@ flex-col
 
                         </div>
 
-                        <button
+                    }
 
-                            className="lg:hidden p-2 rounded-lg hover:bg-gray-100"
+                    <button
 
-                            onClick={() => setSidebarOpen(false)}
+                        onClick={toggleSidebar}
 
-                        >
+                        className="p-2 rounded-lg hover:bg-gray-100"
 
-                            <X size={24} />
+                    >
 
-                        </button>
+                        {
 
-                    </div>
+                            (window.innerWidth >= 1024)
+
+                                ?
+
+                                (desktopCollapsed ? <Menu size={22} /> : <X size={22} />)
+
+                                :
+
+                                <X size={22} />
+
+                        }
+
+                    </button>
+
+                </div>
                 
 
                 {/* Menu */}
@@ -322,8 +346,11 @@ ${active
 
                                         <Icon size={20} />
 
-                                        {item.name}
+                                        {
 
+                                            !desktopCollapsed && item.name
+
+                                        }
                                     </div>
 
                                     <ChevronRight size={18} />
@@ -351,8 +378,13 @@ ${active
 
                         <LogOut size={20} />
 
-                        Logout
+                        {
 
+                            !desktopCollapsed &&
+
+                            "Logout"
+
+                        }
                     </button>
 
                 </div>
@@ -363,8 +395,13 @@ ${active
                 Main Content
             ========================== */}
 
-            <div className="lg:ml-72 flex flex-col min-h-screen">
-
+            <div
+                className={`
+transition-all
+duration-300
+${desktopCollapsed ? "lg:ml-20" : "lg:ml-72"}
+`}
+            >
                 {/* Header */}
 
                 <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b shadow-sm">
@@ -427,33 +464,37 @@ ${active
 
                             {/* Seller */}
 
-                            <div className="hidden md:flex items-center gap-3">
+                            {
 
-                                <div className="text-right">
+                                !desktopCollapsed &&
 
-                                    <h3 className="font-semibold text-slate-800">
+                                <div className="hidden md:flex items-center gap-3">
+                                    <div className="text-right">
 
-                                        {seller?.businessName || "Seller"}
+                                        <h3 className="font-semibold text-slate-800">
 
-                                    </h3>
+                                            {seller?.businessName || "Seller"}
 
-                                    <p className="text-xs text-slate-500">
+                                        </h3>
 
-                                        {seller?.email || "seller@medmarket.com"}
+                                        <p className="text-xs text-slate-500">
 
-                                    </p>
+                                            {seller?.email || "seller@medmarket.com"}
+
+                                        </p>
+
+                                    </div>
+
+                                    <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 text-white flex items-center justify-center font-bold text-lg shadow">
+
+                                        {seller?.businessName
+                                            ?.charAt(0)
+                                            ?.toUpperCase() || "S"}
+
+                                    </div>
 
                                 </div>
-
-                                <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 text-white flex items-center justify-center font-bold text-lg shadow">
-
-                                    {seller?.businessName
-                                        ?.charAt(0)
-                                        ?.toUpperCase() || "S"}
-
-                                </div>
-
-                            </div>
+                            }
 
                         </div>
 
