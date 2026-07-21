@@ -93,7 +93,16 @@ export default function AdminDashboard() {
                             }
                             className="w-full text-left px-4 py-3 rounded-xl hover:bg-slate-700"
                         >
-                            🛒 Order Management
+                            🛒 Orders Management
+                        </button>
+
+                        <button
+                            onClick={() =>
+                                navigate("/admin/returns")
+                            }
+                            className="w-full text-left px-4 py-3 rounded-xl hover:bg-slate-700"
+                        >
+                            🛒 Return Orders Management
                         </button>
 
                         <button

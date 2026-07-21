@@ -1,40 +1,134 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-public class PaymentSession
+
+namespace VivekMedicalProducts.Models
 {
-    [Key]
-    public int Id { get; set; }
+    public class PaymentSession
+    {
+        [Key]
+        public int Id { get; set; }
 
-    public int CheckoutSessionId { get; set; }
+        //--------------------------------------------------
+        // Checkout
+        //--------------------------------------------------
 
-    public string RazorpayOrderId { get; set; } = string.Empty;
+        public int CheckoutSessionId { get; set; }
 
-    public string? RazorpayPaymentId { get; set; }
+        public string? UserId { get; set; }
 
-    public string? RazorpaySignature { get; set; }
+        public string? GuestId { get; set; }
 
-    public string? UserId { get; set; }
+        //--------------------------------------------------
+        // Payment Provider
+        //--------------------------------------------------
 
-    public string? GuestId { get; set; }
+        public string PaymentGateway { get; set; } = "Razorpay";
 
-    public decimal Amount { get; set; }
+        public string PaymentMethod { get; set; } = "Online";
+        // Online, COD, Card, UPI, Wallet
 
-    public string Currency { get; set; } = "INR";
+        public string RazorpayOrderId { get; set; } = string.Empty;
 
-    public string PaymentStatus { get; set; } = "Initiated";
+        public string? RazorpayPaymentId { get; set; }
 
-    public bool IsCompleted { get; set; }
+        public string? RazorpaySignature { get; set; }
 
-    public string? FailureReason { get; set; }
+        //--------------------------------------------------
+        // Financial Snapshot
+        //--------------------------------------------------
 
-    public string? IpAddress { get; set; }
+        public decimal SubTotal { get; set; }
 
-    public string? UserAgent { get; set; }
+        public decimal ProductDiscount { get; set; }
 
-    public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
+        public decimal CouponDiscount { get; set; }
 
-    public DateTime? PaymentCompletedDate { get; set; }
+        public decimal ShippingCharge { get; set; }
 
-    public DateTime ExpiryDate { get; set; } =
-        DateTime.UtcNow.AddMinutes(30);
+        public decimal TaxableAmount { get; set; }
+
+        public decimal GSTAmount { get; set; }
+
+        public decimal Amount { get; set; }
+
+        public string Currency { get; set; } = "INR";
+
+        //--------------------------------------------------
+        // Coupon Snapshot
+        //--------------------------------------------------
+
+        public int? CouponId { get; set; }
+
+        [MaxLength(100)]
+        public string? CouponCode { get; set; }
+
+        //--------------------------------------------------
+        // Payment Status
+        //--------------------------------------------------
+
+        public string PaymentStatus { get; set; } = "Initiated";
+        // Initiated
+        // Pending
+        // Completed
+        // Failed
+        // Cancelled
+        // Refunded
+
+        public bool IsCompleted { get; set; }
+
+        public bool IsVerified { get; set; }
+
+        //--------------------------------------------------
+        // Failure
+        //--------------------------------------------------
+
+        public string? FailureReason { get; set; }
+
+        //--------------------------------------------------
+        // Refund
+        //--------------------------------------------------
+
+        public bool RefundInitiated { get; set; }
+
+        public bool RefundCompleted { get; set; }
+
+        public decimal RefundAmount { get; set; }
+
+        public string? RefundTransactionId { get; set; }
+
+        public DateTime? RefundDate { get; set; }
+
+        //--------------------------------------------------
+        // Audit
+        //--------------------------------------------------
+
+        public string? IpAddress { get; set; }
+
+        public string? UserAgent { get; set; }
+
+        public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
+
+        public DateTime? PaymentCompletedDate { get; set; }
+
+        public DateTime? UpdatedDate { get; set; }
+
+        public DateTime ExpiryDate { get; set; }
+            = DateTime.UtcNow.AddMinutes(30);
+
+        //--------------------------------------------------
+        // Retry Information
+        //--------------------------------------------------
+
+        public int RetryCount { get; set; }
+
+        public DateTime? LastRetryDate { get; set; }
+
+        //--------------------------------------------------
+        // Soft Delete
+        //--------------------------------------------------
+
+        public bool IsDeleted { get; set; }
+
+        public DateTime? DeletedDate { get; set; }
+    }
 }

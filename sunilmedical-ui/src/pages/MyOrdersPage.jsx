@@ -1,18 +1,24 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
-import API from "../services/api";
+import axios from "axios";
+import { toast } from "react-toastify";
 
 import OrderHero from "../components/orders/OrderHero";
-import LoadingOrders from "../components/orders/LoadingOrders";
-import EmptyOrders from "../components/orders/EmptyOrders";
+import OrderFilters from "../components/orders/OrderFilters";
 import OrderCard from "../components/orders/OrderCard";
+import EmptyOrders from "../components/orders/EmptyOrders";
+import LoadingOrders from "../components/orders/LoadingOrders";
 import CancelDialog from "../components/orders/CancelDialog";
 import ReturnDialog from "../components/orders/ReturnDialog";
+import SmallCubeLoader from "../components/loader/SmallCubeLoader";
 
 export default function MyOrdersPage() {
 
     const navigate = useNavigate();
+
+    //--------------------------------------------------
+    // State
+    //--------------------------------------------------
 
     const [orders, setOrders] = useState([]);
 
@@ -20,17 +26,30 @@ export default function MyOrdersPage() {
 
     const [search, setSearch] = useState("");
 
-    const [selectedOrder, setSelectedOrder] =
-        useState(null);
+    const [selectedFilter, setSelectedFilter] = useState("All");
 
-    const [showCancelDialog, setShowCancelDialog] =
-        useState(false);
+    const [selectedItem, setSelectedItem] = useState(null);
 
-    const [showReturnDialog, setShowReturnDialog] =
-        useState(false);
+    //--------------------------------------------------
+    // Cancel Dialog
 
-    const [processing, setProcessing] =
-        useState(false);
+    //--------------------------------------------------
+
+    const [cancelOpen, setCancelOpen] = useState(false);
+
+    const [cancelLoading, setCancelLoading] = useState(false);
+
+    //--------------------------------------------------
+    // Return Dialog
+    //--------------------------------------------------
+
+    const [returnOpen, setReturnOpen] = useState(false);
+
+    const [returnLoading, setReturnLoading] = useState(false);
+
+    //--------------------------------------------------
+    // Load Orders
+    //--------------------------------------------------
 
     useEffect(() => {
 
@@ -38,326 +57,435 @@ export default function MyOrdersPage() {
 
     }, []);
 
-    //----------------------------------------------------
-    // LOAD ORDERS
-    //----------------------------------------------------
-
-    const loadOrders = async () => {
+    async function loadOrders() {
 
         try {
 
             setLoading(true);
 
-            const { data } =
-                await API.get("/api/order/my-orders");
+            const response = await axios.get("/api/order/my-orders");
 
-            setOrders(
+            let data = [];
 
-                data.orders ??
+            // Case 1: API returns an array
+            if (Array.isArray(response.data)) {
 
-                []
+                data = response.data;
 
-            );
+            }
+
+            // Case 2: API returns { data: [...] }
+            else if (Array.isArray(response.data?.data)) {
+
+                data = response.data.data;
+
+            }
+
+            // Case 3: API returns { orders: [...] }
+            else if (Array.isArray(response.data?.orders)) {
+
+                data = response.data.orders;
+
+            }
+
+            // Unknown response
+            else {
+
+                console.error("Unexpected API Response:", response.data);
+
+                toast.error("Invalid response received from server.");
+
+                data = [];
+
+            }
+
+            console.log("Orders Array:", data);
+
+            setOrders(data);
 
         }
+        catch (error) {
 
-        catch (err) {
+            console.error("Load Orders Error:", error);
 
-            console.log(err);
+            toast.error("Unable to load your orders.");
 
-            if (err.response?.status === 401)
-
-                navigate("/login");
+            setOrders([]);
 
         }
-
         finally {
 
             setLoading(false);
 
         }
 
-    };
+    }
 
-    //----------------------------------------------------
-    // SEARCH
-    //----------------------------------------------------
+    //--------------------------------------------------
+    // Overall Status
+    //--------------------------------------------------
+
+    function getOverallStatus(order) {
+
+        const statuses = order.items.map(x => x.itemStatus);
+
+        if (statuses.every(x => x === "Cancelled"))
+            return "Cancelled";
+
+        if (statuses.every(x => x === "Delivered"))
+            return "Delivered";
+
+        if (statuses.includes("OutForDelivery"))
+            return "Out For Delivery";
+
+        if (statuses.includes("Shipped"))
+            return "Shipped";
+
+        if (statuses.includes("Packed"))
+            return "Packed";
+
+        if (statuses.includes("Pending"))
+            return "Pending";
+
+        return "Processing";
+
+    }
+
+    //--------------------------------------------------
+    // Filter Orders
+    //--------------------------------------------------
 
     const filteredOrders = useMemo(() => {
 
-        const term = search.toLowerCase();
+        if (!Array.isArray(orders)) {
 
-        return orders.filter(order =>
+            console.error("Orders is not an array:", orders);
 
-            order.orderNumber
-                ?.toLowerCase()
-                .includes(term)
+            return [];
 
-            ||
+        }
 
-            order.orderStatus
-                ?.toLowerCase()
-                .includes(term)
+        return orders.filter(order => {
 
-            ||
+            const status = getOverallStatus(order);
 
-            order.items.some(item =>
+            const searchText = search.trim().toLowerCase();
 
-                item.productName
-                    ?.toLowerCase()
-                    .includes(term)
+            const matchesSearch =
 
-            )
+                !searchText ||
 
-        );
+                order.orderNumber?.toLowerCase().includes(searchText)
 
-    }, [orders, search]);
+                ||
 
-    //----------------------------------------------------
-    // CANCEL ORDER
-    //----------------------------------------------------
+                order.paymentStatus?.toLowerCase().includes(searchText)
 
-    const confirmCancelOrder = async () => {
+                ||
 
-        if (!selectedOrder)
+                getOverallStatus(order).toLowerCase().includes(searchText)
 
-            return;
+                ||
 
-        try {
+                order.items.some(item =>
 
-            setProcessing(true);
+                    item.productName?.toLowerCase().includes(searchText)
 
-            const { data } =
-                await API.put(
+                    ||
 
-                    `/api/order/cancel/${selectedOrder.orderId}`
+                    item.variantName?.toLowerCase().includes(searchText)
 
                 );
 
-            alert(data.message);
+            let matchesFilter = true;
 
-            setShowCancelDialog(false);
+            switch (selectedFilter) {
 
-            setSelectedOrder(null);
+                case "Active":
 
-            await loadOrders();
+                    matchesFilter =
+                        status !== "Delivered" &&
+                        status !== "Cancelled";
 
-        }
+                    break;
 
-        catch (err) {
+                case "Delivered":
 
-            alert(
+                    matchesFilter =
+                        status === "Delivered";
 
-                err.response?.data?.message ??
+                    break;
 
-                "Unable to cancel order."
+                case "Cancelled":
 
-            );
+                    matchesFilter =
+                        status === "Cancelled";
 
-        }
+                    break;
 
-        finally {
+                case "Pending":
 
-            setProcessing(false);
+                    matchesFilter =
+                        status === "Pending";
 
-        }
+                    break;
 
-    };
+                case "Returns":
 
-    //----------------------------------------------------
-    // RETURN ORDER
-    //----------------------------------------------------
+                    matchesFilter =
+                        order.items.some(x =>
+                            x.returnStatus &&
+                            x.returnStatus !== "None"
+                        );
 
-    const submitReturnRequest = async (payload) => {
+                    break;
 
-        try {
+                default:
 
-            setProcessing(true);
+                    matchesFilter = true;
 
-            const body = {
-
-                orderId:
-
-                    payload.order.orderId,
-
-                reason:
-
-                    payload.reason,
-
-                remarks:
-
-                    payload.remarks
-
-            };
-
-            const { data } =
-                await API.post(
-
-                    "/api/order/request-return",
-
-                    body
-
-                );
-
-            alert(data.message);
-
-            setShowReturnDialog(false);
-
-            setSelectedOrder(null);
-
-            await loadOrders();
-
-        }
-
-        catch (err) {
-
-            alert(
-
-                err.response?.data?.message ??
-
-                "Unable to submit return."
-
-            );
-
-        }
-
-        finally {
-
-            setProcessing(false);
-
-        }
-
-    };
-
-    //----------------------------------------------------
-    // BUY AGAIN
-    //----------------------------------------------------
-
-    const handleBuyAgain = async (order) => {
-
-        try {
-
-            for (const item of order.items) {
-
-                await API.post(
-
-                    "/api/cart/add",
-
-                    {
-
-                        productId:
-
-                            item.productId,
-
-                        variantId:
-
-                            item.variantId,
-
-                        quantity:
-
-                            item.quantity
-
-                    }
-
-                );
+                    break;
 
             }
 
-            alert("Items added to cart.");
+            return matchesSearch && matchesFilter;
 
-            navigate("/cart");
+        });
+
+    }, [
+
+        orders,
+
+        search,
+
+        selectedFilter
+
+    ]);
+
+    //--------------------------------------------------
+    // Handlers
+    //--------------------------------------------------
+
+    function handleTrack(item) {
+
+        if (!item.trackingNumber) {
+
+            toast.info("Tracking details are not available yet.");
+
+            return;
 
         }
 
-        catch {
+        navigate(`/track/${item.trackingNumber}`);
 
-            alert("Unable to add items.");
+    }
 
-        }
+    //--------------------------------------------------
 
-    };
-
-    //----------------------------------------------------
-    // HELP
-    //----------------------------------------------------
-
-    const handleHelp = () => {
+    function handleInvoice(order) {
 
         window.open(
 
-            "https://wa.me/919014060858",
+            `/invoice/${order.orderId}`,
 
             "_blank"
 
         );
 
-    };
-    //----------------------------------------------------
-    // ACTIONS
-    //----------------------------------------------------
+    }
 
-    const handleCancel = (order) => {
+    //--------------------------------------------------
 
-        setSelectedOrder(order);
+    function handleReview(item) {
 
-        setShowCancelDialog(true);
+        navigate(`/review/${item.orderItemId}`);
 
-    };
+    }
 
-    const handleReturn = (order) => {
+    //--------------------------------------------------
 
-        setSelectedOrder(order);
+    async function handleBuyAgain(item) {
 
-        setShowReturnDialog(true);
+        try {
 
-    };
+            await axios.post(
 
-    const handleInvoice = (order) => {
+                "/api/cart/add",
 
-        navigate(`/invoice/${order.orderId}`);
+                {
 
-    };
+                    productId: item.productId,
 
-    const handleTrack = (order) => {
+                    variantId: item.variantId,
 
-        document
-            .getElementById(`tracker-${order.orderId}`)
-            ?.scrollIntoView({
-                behavior: "smooth",
-                block: "center"
-            });
+                    quantity: 1
 
-    };
+                }
 
-    //----------------------------------------------------
-    // LOADING
-    //----------------------------------------------------
+            );
+
+            toast.success("Added to cart.");
+
+        }
+
+        catch {
+
+            toast.error("Unable to add product.");
+
+        }
+
+    }
+
+    //--------------------------------------------------
+
+    function handleHelp() {
+
+        navigate("/contact-us");
+
+    }
+
+    //--------------------------------------------------
+    // Cancel
+    //--------------------------------------------------
+
+    function handleCancel(item) {
+
+        setSelectedItem(item);
+
+        setCancelOpen(true);
+
+    }
+
+    async function confirmCancel(data) {
+
+        try {
+
+            setCancelLoading(true);
+
+            await axios.put(
+
+                `/api/order/cancel-item/${selectedItem.orderItemId}`,
+
+                {
+                    reasonType: data.reason,
+                    remarks: data.remarks
+                }
+
+            );
+
+            toast.success("Order cancelled successfully.");
+
+            await loadOrders();
+
+        }
+
+        catch {
+
+            toast.error("Unable to cancel order.");
+
+        }
+
+        finally {
+
+            setCancelLoading(false);
+
+            setCancelOpen(false);
+
+        }
+
+    }
+
+    //--------------------------------------------------
+    // Return
+    //--------------------------------------------------
+
+    function handleReturn(item) {
+
+        setSelectedItem(item);
+
+        setReturnOpen(true);
+
+    }
+
+    async function submitReturn(data) {
+
+        try {
+
+            setReturnLoading(true);
+
+            const formData = new FormData();
+
+            formData.append("OrderItemId", selectedItem.orderItemId);
+            formData.append("Reason", data.reason);
+            formData.append("Remarks", data.remarks);
+
+            if (data.files[0])
+                formData.append("Image1", data.files[0]);
+
+            if (data.files[1])
+                formData.append("Image2", data.files[1]);
+
+            if (data.files[2])
+                formData.append("Image3", data.files[2]);
+
+            await axios.post(
+
+                `/api/order/request-return/${selectedItem.orderItemId}`,
+
+                formData,
+
+                {
+
+                    headers: {
+
+                        "Content-Type": "multipart/form-data"
+
+                    }
+
+                }
+
+            );
+
+            toast.success("Return request submitted.");
+
+            await loadOrders();
+
+        }
+
+        catch {
+
+            toast.error("Unable to submit return request.");
+
+        }
+
+        finally {
+
+            setReturnLoading(false);
+
+            setReturnOpen(false);
+
+        }
+
+    }
 
     if (loading) {
-
-        return <LoadingOrders />;
-
+        return (
+            <SmallCubeLoader
+                title="Loading MyOrders"
+                subtitle="Loading your all orders..."
+            />
+        );
     }
 
-    //----------------------------------------------------
-    // EMPTY
-    //----------------------------------------------------
-
-    if (!loading && filteredOrders.length === 0) {
-
-        return <EmptyOrders />;
-
-    }
-
-    //----------------------------------------------------
-    // PAGE
-    //----------------------------------------------------
+    //--------------------------------------------------
+    // UI
+    //--------------------------------------------------
 
     return (
 
-        <div className="min-h-screen bg-slate-50">
+        <div className="min-h-screen bg-slate-100">
 
-            <div className="max-w-7xl mx-auto px-4 lg:px-6 py-8">
+            <div className="mx-auto max-w-7xl px-4 py-8">
 
                 {/* Hero */}
 
@@ -369,89 +497,139 @@ export default function MyOrdersPage() {
 
                     totalOrders={orders.length}
 
+                    onContinueShopping={() => navigate("/products")}
+
                 />
 
-                {/* Orders */}
+                {/* Filters */}
 
-                <div className="space-y-8">
+                <OrderFilters
 
-                    {
+                    selected={selectedFilter}
 
-                        filteredOrders.map(order => (
+                    onChange={setSelectedFilter}
 
-                            <OrderCard
+                />
 
-                                key={order.orderId}
+                {/* Loading */}
 
-                                order={order}
+                {
 
-                                onCancel={handleCancel}
+                    loading && (
 
-                                onReturn={handleReturn}
+                        <div className="mt-8">
 
-                                onInvoice={handleInvoice}
+                            <LoadingOrders />
 
-                                onTrack={handleTrack}
+                        </div>
 
-                                onBuyAgain={handleBuyAgain}
+                    )
 
-                                onHelp={handleHelp}
+                }
+
+                {/* Empty */}
+
+                {
+
+                    !loading && filteredOrders.length === 0 && (
+
+                        <div className="mt-8">
+
+                            <EmptyOrders
+
+                                onContinueShopping={() =>
+
+                                    navigate("/products")
+
+                                }
 
                             />
 
-                        ))
+                        </div>
 
-                    }
+                    )
 
-                </div>
-                {/* Cancel Dialog */}
+                }
 
-                <CancelDialog
+                {/* Orders */}
 
-                    open={showCancelDialog}
+                {
 
-                    order={selectedOrder}
+                    !loading && filteredOrders.length > 0 && (
 
-                    loading={processing}
+                        <div className="mt-8 space-y-8">
 
-                    onClose={() => {
+                            {
 
-                        setShowCancelDialog(false);
+                                filteredOrders.map(order => (
 
-                        setSelectedOrder(null);
+                                    <OrderCard
 
-                    }}
+                                        key={order.orderId}
 
-                    onConfirm={confirmCancelOrder}
+                                        order={order}
 
-                />
+                                        overallStatus={getOverallStatus(order)}
 
-                {/* Return Dialog */}
+                                        onInvoice={handleInvoice}
 
-                <ReturnDialog
+                                        onTrack={handleTrack}
 
-                    open={showReturnDialog}
+                                        onCancel={handleCancel}
 
-                    order={selectedOrder}
+                                        onReturn={handleReturn}
 
-                    loading={processing}
+                                        onReview={handleReview}
 
-                    onClose={() => {
+                                        onBuyAgain={handleBuyAgain}
 
-                        setShowReturnDialog(false);
+                                        onHelp={handleHelp}
 
-                        setSelectedOrder(null);
+                                    />
 
-                    }}
+                                ))
 
-                    onSubmit={submitReturnRequest}
+                            }
 
-                />
+                        </div>
+
+                    )
+
+                }
 
             </div>
 
+            {/* Cancel Dialog */}
+
+            <CancelDialog
+
+                open={cancelOpen}
+
+                loading={cancelLoading}
+
+                onClose={() => setCancelOpen(false)}
+
+                onConfirm={confirmCancel}
+
+            />
+
+            {/* Return Dialog */}
+
+            <ReturnDialog
+
+                open={returnOpen}
+
+                loading={returnLoading}
+
+                onClose={() => setReturnOpen(false)}
+
+                onSubmit={submitReturn}
+
+            />
+
         </div>
 
-    );
-
+    )
 }
+
+      

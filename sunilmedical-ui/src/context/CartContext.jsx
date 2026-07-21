@@ -42,64 +42,6 @@ export const CartProvider = ({ children }) => {
         }
     };
 
-    // 🔥 ADD TO CART (FULL REFRESH REQUIRED)
-   /* const addToCart = async (
-        productId,
-        variantId,
-        quantity = 1
-    ) => {
-        const productKey = Number(productId);
-        const variantKey = Number(variantId);
-        const qtyToAdd = Number(quantity) || 1;
-
-        setItems(prev => {
-            const existing = prev.find(
-                x =>
-                    Number(x.productId) === productKey &&
-                    Number(x.variantId) === variantKey
-            );
-
-            if (existing) {
-                return prev.map(x =>
-                    Number(x.productId) === productKey &&
-                        Number(x.variantId) === variantKey
-                        ? {
-                            ...x,
-                            quantity:
-                                Number(x.quantity || 0) + qtyToAdd
-                        }
-                        : x
-                );
-            }
-
-            return [
-                ...prev,
-                {
-                    productId: productKey,
-                    variantId: variantKey,
-                    quantity: qtyToAdd
-                }
-            ];
-        });
-
-        refreshSummaryOnly(qtyToAdd);
-
-
-        try {
-            await API.post("/api/cart/add", {
-                productId: productKey,
-                variantId: variantKey,
-                quantity: qtyToAdd
-            });
-
-         await loadCart();
-            return true;
-        } catch (err) {
-          await loadCart();
-            return false;
-        }
-    }; */
-
     const addToCart = async (
         productId,
         variantId,

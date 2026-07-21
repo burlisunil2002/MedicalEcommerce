@@ -1,0 +1,304 @@
+﻿/* ===========================================
+   SUNIL SPINNER LOADER
+=========================================== */
+
+.spinner-loader {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: #fff;
+    padding: 24px;
+}
+
+/* ===========================================
+   Spinner
+=========================================== */
+
+.sunil-spinner {
+    position: relative;
+    width: 110px;
+    height: 110px;
+    animation: spinnerRotate 1.6s linear infinite;
+}
+
+/* ===========================================
+   Ring
+=========================================== */
+
+.spinner-ring {
+    position: absolute;
+    inset: 12px;
+    border-radius: 50%;
+    border: 4px solid #dbeafe;
+    border-top: 4px solid #2563eb;
+    border-right: 4px solid #3b82f6;
+    box-shadow: 0 0 20px rgba(59,130,246,.18);
+}
+
+/* ===========================================
+   Letters
+=========================================== */
+
+.spinner-letter {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: white;
+    color: #2563eb;
+    font-weight: 700;
+    font-size: 13px;
+    border: 1px solid #dbeafe;
+    box-shadow: 0 8px 18px rgba(0,0,0,.08), 0 0 12px rgba(37,99,235,.12);
+    animation: counterRotate 1.6s linear infinite;
+}
+
+/* ===========================================
+   Positions
+=========================================== */
+
+.top {
+    left: 50%;
+    top: -2px;
+    transform: translateX(-50%);
+}
+
+.leftTop {
+    left: 4px;
+    top: 28px;
+}
+
+.rightTop {
+    right: 4px;
+    top: 28px;
+}
+
+.leftBottom {
+    left: 10px;
+    bottom: 6px;
+}
+
+.rightBottom {
+    right: 10px;
+    bottom: 6px;
+}
+
+/* ===========================================
+   CONTENT
+=========================================== */
+
+.spinner-content {
+    margin-top: 28px;
+    text-align: center;
+    max-width: 320px;
+}
+
+    .spinner-content h3 {
+        margin: 0;
+        font-size: 26px;
+        font-weight: 700;
+        color: #1e293b;
+    }
+
+    .spinner-content p {
+        margin-top: 10px;
+        color: #64748b;
+        font-size: 15px;
+        line-height: 1.6;
+    }
+
+/* ===========================================
+   LOADING DOTS
+=========================================== */
+
+.spinner-dots {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin-top: 22px;
+}
+
+    .spinner-dots span {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #3b82f6;
+        animation: dotPulse 1.2s infinite ease-in-out;
+    }
+
+        .spinner-dots span:nth-child(2) {
+            animation-delay: .2s;
+        }
+
+        .spinner-dots span:nth-child(3) {
+            animation-delay: .4s;
+        }
+
+/* ===========================================
+   GLOW
+=========================================== */
+
+.sunil-spinner::before {
+    content: "";
+    position: absolute;
+    inset: 18px;
+    border-radius: 50%;
+    background: rgba(59,130,246,.08);
+    filter: blur(18px);
+    z-index: -1;
+}
+
+/* ===========================================
+   Letter Holder
+=========================================== */
+
+.letter-holder {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 0;
+    height: 0;
+    transform: rotate(var(--angle)) translateY(-42px);
+    transform-origin: center;
+}
+
+/* ===========================================
+   ANIMATIONS
+=========================================== */
+
+
+/* Keep letters upright while the ring rotates */
+
+@keyframes counterRotate {
+
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(-360deg);
+    }
+}
+
+@keyframes dotPulse {
+
+    0%,100% {
+        opacity: .35;
+        transform: scale(.9);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1.25);
+    }
+}
+
+@keyframes spinnerRotate {
+
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+
+@keyframes ringPulse {
+
+    0%,100% {
+        box-shadow: 0 0 12px rgba(37,99,235,.15);
+    }
+
+    50% {
+        box-shadow: 0 0 28px rgba(37,99,235,.35);
+    }
+}
+
+/* ===========================================
+   RESPONSIVE
+=========================================== */
+
+@media(max-width:768px) {
+
+    .sunil-spinner {
+        position: relative;
+        width: 110px;
+        height: 110px;
+        animation: spinnerRotate 1.5s linear infinite;
+    }
+
+    .spinner-ring {
+        inset: 10px;
+        border-width: 3px;
+    }
+
+    .spinner-letter {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 28px;
+        height: 28px;
+        margin-left: -14px;
+        margin-top: -14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: #fff;
+        color: #2563eb;
+        font-weight: 700;
+        font-size: 13px;
+        border: 1px solid #dbeafe;
+        box-shadow: 0 8px 18px rgba(37,99,235,.18);
+    }
+
+    .spinner-content h3 {
+        font-size: 22px;
+    }
+
+    .spinner-content p {
+        font-size: 14px;
+    }
+}
+
+@media(max-width:480px) {
+
+    .spinner-loader {
+        padding: 16px;
+    }
+
+    .sunil-spinner {
+        position: relative;
+        width: 110px;
+        height: 110px;
+        animation: spinnerRotate 1.4s linear infinite;
+    }
+
+    .spinner-letter {
+        width: 20px;
+        height: 20px;
+        font-size: 10px;
+        border-radius: 6px;
+    }
+
+    .spinner-ring {
+        inset: calc(var(--spinner-size) * 0.10);
+        border-width: clamp(3px, 0.4vw, 4px);
+    }
+
+    .spinner-content h3 {
+        font-size: clamp(22px, 3vw, 30px);
+    }
+
+    .spinner-content p {
+        font-size: clamp(13px, 1.5vw, 16px);
+    }
+}

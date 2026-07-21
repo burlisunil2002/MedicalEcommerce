@@ -4,6 +4,7 @@ import { getCheckout } from "../services/checkoutService";
 import SummaryCard from "../components/SummaryCard";
 import { useCart } from "../context/CartContext";
 import API from "../services/api";
+import SmallCubeLoader from "../components/loader/SmallCubeLoader";
 
 export default function ReviewPage() {
     const navigate = useNavigate();
@@ -13,11 +14,17 @@ export default function ReviewPage() {
     const [selectedAddress, setSelectedAddress] = useState(null);
     const [paymentMethod, setPaymentMethod] = useState("ONLINE");
 
-    const [pageLoading, setPageLoading] = useState(true);
-    const [processing, setProcessing] = useState(false);
 
     const [message, setMessage] = useState("");
     const [messageType, setMessageType] = useState("");
+
+    const [pageLoading, setPageLoading] = useState(true);
+
+    const [processing, setProcessing] = useState(false);
+
+    const [paymentOpening, setPaymentOpening] = useState(false);
+
+    const [redirecting, setRedirecting] = useState(false);
 
     const showToast = (text, type = "success") => {
         setMessage(text);
@@ -30,9 +37,10 @@ export default function ReviewPage() {
     };
 
     const loadReview = async () => {
-        try {
 
-            setPageLoading(true);
+        setPageLoading(true);
+
+        try {
 
             const { data } = await getCheckout();
 
@@ -42,63 +50,52 @@ export default function ReviewPage() {
 
             if (addresses.length > 0) {
 
-                // Use the address saved in CheckoutSession
                 let selected =
                     addresses.find(
                         x => x.id === data.selectedAddressId
                     );
 
-                // Fallbacks
                 if (!selected)
-                    selected = addresses.find(x => x.isDefault);
+                    selected =
+                        addresses.find(x => x.isDefault);
 
                 if (!selected)
-                    selected = addresses[0];
+                    selected =
+                        addresses[0];
 
                 setSelectedAddress({
+
                     id: selected.id,
 
-                    fullName: selected.fullName || "",
+                    fullName: selected.fullName,
 
-                    phoneNumber: selected.mobileNumber || "",
+                    phoneNumber: selected.mobileNumber,
 
                     address:
-                        `${selected.addressLine1 || ""} ${selected.addressLine2 || ""}`.trim(),
+                        `${selected.addressLine1} ${selected.addressLine2}`,
 
-                    city: selected.city || "",
+                    city: selected.city,
 
-                    state: selected.state || "",
+                    state: selected.state,
 
-                    pincode: selected.pincode || ""
+                    pincode: selected.pincode
+
                 });
+
             }
 
         }
         catch (err) {
 
-            if (err.response?.status === 401) {
+            console.log(err);
 
-                navigate("/login", {
-                    replace: true,
-                    state: {
-                        message:
-                            "Please login to continue checkout."
-                    }
-                });
-
-                return;
-            }
-
-            showToast(
-                "Unable to load checkout.",
-                "error"
-            );
         }
         finally {
 
             setPageLoading(false);
 
         }
+
     };
 
     const startPolling = (razorpayOrderId) => {
@@ -117,20 +114,23 @@ export default function ReviewPage() {
 
                 if (data.success) {
 
-                    await loadCart();
-
                     clearInterval(interval);
+
+                    await loadCart();
 
                     window.dispatchEvent(new Event("cartUpdated"));
 
                     setProcessing(false);
 
-                    navigate(`/success-order/${data.orderId}`, {
-                        
-                        state: {
-                            successMessage: "🎉 Payment Successful"
-                        }
-                    });
+                    setRedirecting(true);
+
+                    setTimeout(() => {
+
+                        navigate(`/success-order/${data.orderId}`, {
+                            replace: true
+                        });
+
+                    }, 1200);
 
                     return;
                 }
@@ -166,11 +166,7 @@ export default function ReviewPage() {
 
         if (processing) return;
 
-        setProcessing(true);
-
         if (!selectedAddress) {
-
-            setProcessing(false);
 
             showToast(
                 "Please select delivery address",
@@ -180,153 +176,179 @@ export default function ReviewPage() {
             return;
         }
 
+        setProcessing(true);
+
         const payload = {
             checkout: true
         };
 
         try {
-            setProcessing(true);
 
-            // COD
+            // ===========================
+            // CASH ON DELIVERY
+            // ===========================
+
             if (paymentMethod === "COD") {
+
+                
 
                 const { data } = await API.post(
                     "/api/order/place-cod",
                     payload
                 );
 
-                if (data.success) {
 
-                    await loadCart();
+                if (!data.success) {
 
-                    navigate(`/success-order/${data.orderId}`, {
-                        replace: true
-                    });
+                    showToast(
+                        data.message || "Order failed",
+                        "error"
+                    );
 
                     return;
                 }
 
-                showToast(
-                    data.message || "Order failed",
-                    "error"
-                );
+                    clearInterval(interval);
 
-                setProcessing(false);
+                    await loadCart();
 
-                return;
+                    window.dispatchEvent(new Event("cartUpdated"));
+
+                    setProcessing(false);
+
+                    setRedirecting(true);
+
+                    setTimeout(() => {
+
+                        navigate(`/success-order/${data.orderId}`, {
+                            replace: true
+                        });
+
+                    }, 1200);
+
+                    return;
             }
 
-            // ONLINE
-            const { data: order } =
-                await API.post(
-                    "/api/order/create",
-                    payload
-                );
+            // ===========================
+            // CREATE ONLINE ORDER
+            // ===========================
+
+            
+            const { data: order } = await API.post(
+                "/api/order/create",
+                payload
+            );
 
             if (!order.success) {
-                setProcessing(false);
+
 
                 showToast(
-                    order.message ||
-                    "Payment failed",
+                    order.message || "Unable to create payment.",
                     "error"
                 );
 
                 return;
             }
 
-            const razorpay =
-                new window.Razorpay({
-                    key: order.razorpayKey,
-                    amount: order.amount,
-                    currency: order.currency,
-                    order_id: order.razorpayOrderId,
+            setPaymentOpening(true);
 
-                    handler: async function (
-                        response
-                    ) {
-                        try {
-                            setProcessing(true);
 
-                            const { data: verify } =
-                                await API.post(
-                                    "/api/order/verify-payment",
-                                    {
-                                        razorpay_payment_id:
-                                            response.razorpay_payment_id,
+            const razorpay = new window.Razorpay({
 
-                                        razorpay_order_id:
-                                            response.razorpay_order_id,
+                key: order.razorpayKey,
 
-                                        razorpay_signature:
-                                            response.razorpay_signature
-                                    }
-                                );
+                amount: order.amount,
 
-                            if (verify.success) {
-                                localStorage.removeItem("cart");
-                                await loadCart();
+                currency: order.currency,
 
-                                window.dispatchEvent(new Event("cartUpdated"));
+                order_id: order.razorpayOrderId,
 
-                                startPolling(order.razorpayOrderId);
-                            } else {
-                                setProcessing(false);
+                handler: async function (response) {
 
-                                showToast(
-                                    verify.message ||
-                                    "Payment verification failed",
-                                    "error"
-                                );
-                            }
-                        } catch (err) {
+                    try {
 
-                            console.log(err);
+                        const { data: verify } =
+                            await API.post(
+                                "/api/order/verify-payment",
+                                {
+                                    razorpay_payment_id:
+                                        response.razorpay_payment_id,
 
-                            setProcessing(false);
+                                    razorpay_order_id:
+                                        response.razorpay_order_id,
+
+                                    razorpay_signature:
+                                        response.razorpay_signature
+                                }
+                            );
+
+                        if (!verify.success) {
+
+                            setPaymentOpening(false);
 
                             showToast(
-                                err.response?.data?.message ??
-                                "Payment verification failed",
+                                verify.message || "Payment verification failed.",
                                 "error"
                             );
 
+                            return;
                         }
-                    },
 
-                    modal: {
-                        confirm_close: false,
+                        setPaymentOpening(false);
+                        setRedirecting(true);
 
-                        ondismiss: () => {
+                        localStorage.removeItem("cart");
 
-                            console.log("Razorpay closed");
+                        await loadCart();
 
-                            setProcessing(false);
+                        window.dispatchEvent(new Event("cartUpdated"));
 
-                            // Optional
-                            // showToast("Payment cancelled", "info");
-                        }
-                    },
-                });
+                        startPolling(order.razorpayOrderId);
 
-            razorpay.open();
+                    }
+                    catch (err) {
+
+                        showToast(
+                            err.response?.data?.message ??
+                            "Payment verification failed.",
+                            "error"
+                        );
+                    }
+                },
+
+                modal: {
+
+                    confirm_close: false,
+
+                    ondismiss: () => {
+
+                        setPaymentOpening(false);
+
+                        showToast(
+                            "Payment cancelled.",
+                            "error"
+                        );
+                    }
+
+                }
+
+            });
+
+            setTimeout(() => {
+
+                setPaymentOpening(false);
+
+                razorpay.open();
+
+            }, 250);
         }
         catch (err) {
-            console.log(
-                "INSIDE CATCH"
-            );
 
-            console.log(
-                "STATUS:",
-                err.response?.status
-            );
+            setPaymentOpening(false);
 
-            if (
-                err.response?.status === 401
-            ) {
-                console.log(
-                    "401 BLOCK"
-                );
+            console.log(err);
+
+            if (err.response?.status === 401) {
 
                 sessionStorage.setItem(
                     "redirectAfterLogin",
@@ -337,40 +359,57 @@ export default function ReviewPage() {
 
                 return;
             }
+
+            showToast(
+                err.response?.data?.message ||
+                "Something went wrong.",
+                "error"
+            );
         }
         finally {
-            if (paymentMethod === "COD")
-                setProcessing(false);
+
+            setProcessing(false);
+
         }
+
     };
 
     useEffect(() => {
         loadReview();
     }, []);
 
+   
+
     if (pageLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="w-14 h-14 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
-            </div>
+            <SmallCubeLoader
+                title="Preparing Review"
+                subtitle="Loading your order summary..."
+            />
         );
     }
 
+    if (paymentOpening) {
+        return (
+            <SmallCubeLoader
+                title="Opening Payment Gateway"
+                subtitle="Please wait while we connect to Razorpay..."
+            />
+        );
+    }
+
+    if (redirecting) {
+        return (
+            <SmallCubeLoader
+                title="Confirming Your Order"
+                subtitle="Redirecting to your order details..."
+            />
+        );
+    }
+
+
     return (
         <>
-            {processing && (
-                <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center">
-
-                    <div className="bg-white rounded-3xl px-10 py-8 text-center shadow-2xl">
-                        <div className="w-12 h-12 mx-auto border-4 border-green-600 border-t-transparent rounded-full animate-spin"></div>
-
-                        <p className="mt-4 font-semibold">
-                            Processing your order...
-                        </p>
-                    </div>
-
-                </div>
-            )}
 
             {message && (
                 <div
@@ -466,19 +505,13 @@ export default function ReviewPage() {
 
                     <div className="lg:sticky lg:top-24 h-fit">
                         <SummaryCard
-                            summary={
-                                checkout.summary
-                            }
+                            summary={checkout?.summary || {}}
                             showCoupon={false}
                             loading={processing}
                             buttonText={
-                                processing
-                                    ? "Processing..."
-                                    : "Place Order"
+                                processing ? "Processing..." : "Place Order"
                             }
-                            onButtonClick={
-                                handlePlaceOrder
-                            }
+                            onButtonClick={handlePlaceOrder}
                         />
                     </div>
 

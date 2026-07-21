@@ -28,6 +28,7 @@ import Subscription from "./pages/seller/Subscription";
 import SellerForgotPassword from "./pages/SellerForgotPassword";
 import SellerResetPassword from "./pages/SellerResetPassword";
 import OrderSuccessPage from "./pages/OrderSuccessPage";
+import ReturnOrdersPage from "./pages/ReturnOrdersPage";
 
 
 
@@ -60,6 +61,11 @@ function App() {
                     <Route
                         path="/admin/admin-dashboard"
                         element={<AdminDashboard />}
+                    />
+
+                    <Route
+                        path="/admin/returns"
+                        element={<ReturnOrdersPage />}
                     />
 
                     {/* ?? MAIN APP WITH HEADER */}
@@ -149,7 +155,7 @@ function App() {
                             element={<SellerResetPassword />}
                         />
                         <Route
-                            path="/success-order/:id"
+                            path="success-order/:id"
                             element={<OrderSuccessPage />}
                         />
 
@@ -181,6 +187,13 @@ function App() {
                             path="subscription"
                             element={<Subscription />}
                         />
+
+
+                        <Route
+                            path="returns"
+                            element={<ReturnOrdersPage />}
+                        />
+
 
                     </Route>
 

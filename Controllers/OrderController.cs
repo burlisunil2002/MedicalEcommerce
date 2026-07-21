@@ -14,6 +14,7 @@ using VivekMedicalProducts.Data;
 using VivekMedicalProducts.DTOs;
 using VivekMedicalProducts.Models;
 using VivekMedicalProducts.Services;
+using VivekMedicalProducts.Services.Storage;
 using VivekMedicalProducts.ViewModels;
 
 
@@ -30,9 +31,10 @@ namespace VivekMedicalProducts.Controllers
         private readonly InvoiceService _invoiceService;
         private readonly EmailService _emailService;
         private readonly ICartCalculationService _calc;
+        private readonly IFileStorageService _fileStorageService;
 
 
-        public OrderController(IConfiguration config, ApplicationDbContext context, IUserContextService userContext, InvoiceService invoiceService, EmailService emailService, ICartCalculationService calc)
+        public OrderController(IConfiguration config, ApplicationDbContext context, IUserContextService userContext, IFileStorageService fileStorageService, InvoiceService invoiceService, EmailService emailService, ICartCalculationService calc)
         {
             _config = config;
             _context = context;
@@ -40,6 +42,7 @@ namespace VivekMedicalProducts.Controllers
             _invoiceService = invoiceService;
             _emailService = emailService;
             _calc = calc;
+            _fileStorageService = fileStorageService;
         }
 
         private string GetOrCreateGuestId()
@@ -147,19 +150,13 @@ namespace VivekMedicalProducts.Controllers
                 {
                     UserId = userId,
 
-                    SellerId = sellerId,
-
                     UserAddressId = address.Id,
 
-                    OrderNumber =
-                        $"ORD-{DateTime.UtcNow.Ticks}",
+                    OrderNumber = $"ORD-{DateTime.UtcNow.Ticks}",
 
-                    GrandTotal =
-                        totals.Total,
+                    GrandTotal = totals.Total,
 
                     Currency = "INR",
-
-                    OrderStatus = "Placed",
 
                     PaymentStatus = "Cash On Delivery",
 
@@ -174,13 +171,10 @@ namespace VivekMedicalProducts.Controllers
                     CreatedBy = userId,
 
                     IpAddress =
-                        HttpContext.Connection
-                            .RemoteIpAddress?
-                            .ToString(),
+        HttpContext.Connection.RemoteIpAddress?.ToString(),
 
                     UserAgent =
-                        Request.Headers["User-Agent"]
-                            .ToString()
+        Request.Headers["User-Agent"].ToString()
                 };
 
                 _context.Orders.Add(order);
@@ -254,6 +248,8 @@ namespace VivekMedicalProducts.Controllers
                     {
                         OrderId = order.OrderId,
 
+                        SellerId = item.SellerId,
+
                         ProductId = item.ProductId,
 
                         ProductVariantId = item.ProductVariantId,
@@ -265,30 +261,87 @@ namespace VivekMedicalProducts.Controllers
                         Price = Math.Round(originalPrice, 2),
 
                         DiscountAmount =
-                            Math.Round(discountAmount, 2),
+         Math.Round(discountAmount, 2),
+
+                        CouponDiscountAmount =
+         Math.Round(couponShare, 2),
 
                         TaxableAmount =
-                            Math.Round(taxableAmount, 2),
+         Math.Round(taxableAmount, 2),
 
                         GSTPercentage = gstPercent,
 
                         GSTAmount =
-                            Math.Round(gstAmount, 2),
+         Math.Round(gstAmount, 2),
 
-                        CouponDiscountAmount =
-                            Math.Round(couponShare, 2),
+                        NetAmount =
+         Math.Round(finalPaidAmount, 2),
 
                         FinalPaidAmount =
-                            Math.Round(finalPaidAmount, 2),
+         Math.Round(finalPaidAmount, 2),
 
                         LineTotal =
-                            Math.Round(finalPaidAmount, 2),
+         Math.Round(finalPaidAmount, 2),
 
-                        SellerId = item.SellerId,
+                        OrderItemStatus = "Placed",
 
-                        ItemStatus = "Placed",
+                        CreatedAt = DateTime.UtcNow,
 
-                        CreatedAt = DateTime.UtcNow
+                        UpdatedAt = DateTime.UtcNow,
+
+                        ItemOrderModifiedDate = DateTime.UtcNow,
+
+                        // Delivery
+
+                        PackedDate = null,
+
+                        ShippedDate = null,
+
+                        OutForDeliveryDate = null,
+
+                        DeliveredDate = null,
+
+                        // Return
+
+                        IsReturnEligible = false,
+
+                        ReturnEligibleTill = null,
+
+                        ReturnStatus = "None",
+
+                        ReturnReason = null,
+
+                        ReturnRemarks = null,
+
+                        ReturnRequestedDate = null,
+
+                        ReturnApprovedDate = null,
+
+                        PickupDate = null,
+
+                        // Refund
+
+                        RefundAmount = null,
+
+                        RefundStatus = "None",
+
+                        RefundCompletedDate = null,
+
+                        // Cancellation
+
+                        CancelledAt = null,
+
+                        CancelledReason = null,
+
+                        CancelledBy = null,
+
+                        // Logistics
+
+                        TrackingNumber = null,
+
+                        CourierPartner = null,
+
+                        ReturnReviewedBy = null
                     };
 
                 }).ToList();
@@ -325,7 +378,12 @@ namespace VivekMedicalProducts.Controllers
 
                     paymentStatus = order.PaymentStatus,
 
-                    orderStatus = order.OrderStatus,
+                    items = orderItems.Select(x => new
+                    {
+                        orderItemId = x.OrderItemId,
+                        productId = x.ProductId,
+                        itemStatus = x.OrderItemStatus
+                    }),
 
                     message = "Order placed successfully."
                 });
@@ -353,20 +411,21 @@ namespace VivekMedicalProducts.Controllers
             {
                 var userId = _userContext.GetUserId();
 
-                if (string.IsNullOrEmpty(userId))
+                if (string.IsNullOrWhiteSpace(userId))
                 {
                     return Unauthorized(new
                     {
                         success = false,
                         redirect = "/login",
-                        message = "Please login first"
+                        message = "Please login first."
                     });
                 }
 
+                // Active Checkout Session
                 var checkoutSession = await _context.CheckoutSessions
-    .FirstOrDefaultAsync(x =>
-        x.UserId == userId &&
-        x.IsActive);
+                    .FirstOrDefaultAsync(x =>
+                        x.UserId == userId &&
+                        x.IsActive);
 
                 if (checkoutSession == null)
                 {
@@ -377,10 +436,11 @@ namespace VivekMedicalProducts.Controllers
                     });
                 }
 
+                // Selected Address
                 var address = await _context.UserAddresses
-    .FirstOrDefaultAsync(x =>
-        x.Id == checkoutSession.SelectedAddressId &&
-        x.UserId == userId);
+                    .FirstOrDefaultAsync(x =>
+                        x.Id == checkoutSession.SelectedAddressId &&
+                        x.UserId == userId);
 
                 if (address == null)
                 {
@@ -403,76 +463,92 @@ namespace VivekMedicalProducts.Controllers
                     return BadRequest(new
                     {
                         success = false,
-                        message = "Cart is empty"
+                        message = "Your cart is empty."
                     });
                 }
 
-                // Totals
+                // Recalculate totals
                 var totals = await _calc.CalculateAsync(
-    userId,
-    null,
-    checkoutSession.CouponCode);
+                    userId,
+                    null,
+                    checkoutSession.CouponCode);
 
-                if (totals.Total != checkoutSession.GrandTotal)
+                // Keep checkout session synchronized
+                if (checkoutSession.GrandTotal != totals.Total ||
+                    checkoutSession.SubTotal != totals.Subtotal ||
+                    checkoutSession.GSTAmount != totals.GST ||
+                    checkoutSession.CouponDiscount != totals.CouponDiscount ||
+                    checkoutSession.ShippingCharge != totals.Delivery)
                 {
-                    checkoutSession.GrandTotal = totals.Total;
                     checkoutSession.SubTotal = totals.Subtotal;
                     checkoutSession.GSTAmount = totals.GST;
                     checkoutSession.CouponDiscount = totals.CouponDiscount;
                     checkoutSession.ShippingCharge = totals.Delivery;
+                    checkoutSession.GrandTotal = totals.Total;
 
                     await _context.SaveChangesAsync();
                 }
 
+                // Razorpay Amount (Paise)
                 var amountInPaise =
-                    (int)Math.Round(totals.Total * 100);
+                    Convert.ToInt32(Math.Round(totals.Total * 100));
 
+                // Razorpay Client
                 var client = new RazorpayClient(
                     _config["Razorpay:Key"],
                     _config["Razorpay:Secret"]);
 
+                // Unique Receipt Number
                 var receipt =
-                    $"ORD-{DateTime.UtcNow.Ticks}";
+                    $"PAY-{Guid.NewGuid():N}"
+                    .Substring(0, 20)
+                    .ToUpper();
 
+                // Create Razorpay Order
                 var razorpayOrder =
-                    client.Order.Create(
-                        new Dictionary<string, object>
-                        {
-                    { "amount", amountInPaise },
-                    { "currency", "INR" },
-                    { "receipt", receipt }
-                        });
+                    client.Order.Create(new Dictionary<string, object>
+                    {
+                { "amount", amountInPaise },
+                { "currency", "INR" },
+                { "receipt", receipt }
+                    });
 
                 var razorpayOrderId =
                     razorpayOrder["id"].ToString();
 
-                // Remove any old pending session
-                var oldSession =
-                    await _context.PaymentSessions
-                    .FirstOrDefaultAsync(x =>
+                // Close any previous pending payment session
+                var oldSessions = await _context.PaymentSessions
+                    .Where(x =>
                         x.UserId == userId &&
-                        !x.IsCompleted);
+                        !x.IsCompleted)
+                    .ToListAsync();
 
-                if (oldSession != null)
+                foreach (var old in oldSessions)
                 {
-                    oldSession.IsCompleted = true;
-                    oldSession.PaymentStatus = "Cancelled";
-                    oldSession.FailureReason = "Superseded by new payment session";
+                    old.IsCompleted = true;
+                    old.PaymentStatus = "Cancelled";
+                    old.FailureReason =
+                        "Superseded by new payment session.";
                 }
 
-                // Save Payment Session
-
+                // Create Payment Session
                 var session = new PaymentSession
                 {
                     CheckoutSessionId = checkoutSession.Id,
 
-                    RazorpayOrderId = razorpayOrderId,
-
                     UserId = userId,
 
-                    Amount = checkoutSession.GrandTotal,
+                    RazorpayOrderId = razorpayOrderId,
+
+                    Amount = totals.Total,
 
                     Currency = checkoutSession.Currency,
+
+                    CouponCode = checkoutSession.CouponCode,
+
+                    CouponDiscount = totals.CouponDiscount,
+
+                    PaymentStatus = "Created",
 
                     CreatedDate = DateTime.UtcNow,
 
@@ -480,9 +556,11 @@ namespace VivekMedicalProducts.Controllers
 
                     IsCompleted = false,
 
-                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                    IpAddress =
+                        HttpContext.Connection.RemoteIpAddress?.ToString(),
 
-                    UserAgent = Request.Headers["User-Agent"].ToString()
+                    UserAgent =
+                        Request.Headers["User-Agent"].ToString()
                 };
 
                 _context.PaymentSessions.Add(session);
@@ -499,7 +577,11 @@ namespace VivekMedicalProducts.Controllers
 
                     amount = amountInPaise,
 
-                    razorpayKey = _config["Razorpay:Key"]
+                    currency = checkoutSession.Currency,
+
+                    razorpayKey = _config["Razorpay:Key"],
+
+                    expiresAt = session.ExpiryDate
                 });
             }
             catch (Exception ex)
@@ -507,7 +589,6 @@ namespace VivekMedicalProducts.Controllers
                 return BadRequest(new
                 {
                     success = false,
-
                     message =
                         ex.InnerException?.Message ??
                         ex.Message
@@ -652,57 +733,43 @@ namespace VivekMedicalProducts.Controllers
 
                 var sellerId = carts.FirstOrDefault()?.SellerId;
                 // Create Order
-                var order =
-                    new OrderModel
-                    {
-                        UserId = userId,
+                var order = new OrderModel
+                {
+                    UserId = userId,
 
-                        SellerId = sellerId,
+                    UserAddressId = address.Id,
 
-                        UserAddressId = address.Id,
+                    OrderNumber = $"ORD-{DateTime.UtcNow.Ticks}",
 
-                        OrderNumber =
-                            $"ORD-{DateTime.UtcNow.Ticks}",
+                    GrandTotal = totals.Total,
 
-                        GrandTotal = checkoutSession.GrandTotal,
+                    Currency = checkoutSession.Currency,
 
-                        Currency = checkoutSession.Currency,
+                    PaymentStatus = "Completed",
 
-                        PaymentStatus = "Completed",
+                    RazorpayOrderId = model.razorpay_order_id,
 
-                        OrderStatus = "Placed",
+                    RazorpayPaymentId = model.razorpay_payment_id,
 
-                        RazorpayOrderId =
-                            model.razorpay_order_id,
+                    RazorpaySignature = model.razorpay_signature,
 
-                        RazorpayPaymentId =
-                            model.razorpay_payment_id,
+                    IsPaymentVerified = true,
 
-                        RazorpaySignature =
-                            model.razorpay_signature,
+                    PaymentVerifiedAt = DateTime.UtcNow,
 
-                        PaymentVerifiedAt =
-                            DateTime.UtcNow,
+                    OrderDate = DateTime.UtcNow,
 
-                        IsPaymentVerified = true,
+                    OrderModifiedDate = DateTime.UtcNow,
 
-                        OrderDate =
-                            DateTime.UtcNow,
+                    CreatedBy = userId,
 
-                        OrderModifiedDate =
-                            DateTime.UtcNow,
+                    IpAddress = HttpContext.Connection
+        .RemoteIpAddress?
+        .ToString(),
 
-                        CreatedBy = userId,
-
-                        IpAddress =
-                            HttpContext.Connection
-                                .RemoteIpAddress?
-                                .ToString(),
-
-                        UserAgent =
-                            Request.Headers["User-Agent"]
-                                .ToString()
-                    };
+                    UserAgent = Request.Headers["User-Agent"]
+        .ToString()
+                };
 
                 _context.Orders.Add(order);
 
@@ -775,6 +842,8 @@ namespace VivekMedicalProducts.Controllers
                     {
                         OrderId = order.OrderId,
 
+                        SellerId = item.SellerId,
+
                         ProductId = item.ProductId,
 
                         ProductVariantId = item.ProductVariantId,
@@ -785,31 +854,39 @@ namespace VivekMedicalProducts.Controllers
 
                         Price = Math.Round(originalPrice, 2),
 
-                        DiscountAmount =
-                            Math.Round(discountAmount, 2),
+                        DiscountAmount = Math.Round(discountAmount, 2),
+
+                        CouponDiscountAmount =
+         Math.Round(couponShare, 2),
 
                         TaxableAmount =
-                            Math.Round(taxableAmount, 2),
+         Math.Round(taxableAmount, 2),
 
                         GSTPercentage = gstPercent,
 
                         GSTAmount =
-                            Math.Round(gstAmount, 2),
+         Math.Round(gstAmount, 2),
 
-                        CouponDiscountAmount =
-                            Math.Round(couponShare, 2),
+                        NetAmount =
+         Math.Round(finalPaidAmount, 2),
 
                         FinalPaidAmount =
-                            Math.Round(finalPaidAmount, 2),
+         Math.Round(finalPaidAmount, 2),
 
                         LineTotal =
-                            Math.Round(finalPaidAmount, 2),
+         Math.Round(finalPaidAmount, 2),
 
-                        SellerId = item.SellerId,
+                        OrderItemStatus = "Placed",
 
-                        ItemStatus = "Placed",
+                        CreatedAt = DateTime.UtcNow,
 
-                        CreatedAt = DateTime.UtcNow
+                        UpdatedAt = DateTime.UtcNow,
+
+                        ItemOrderModifiedDate = DateTime.UtcNow,
+
+                        IsReturnEligible = false,
+
+                        ReturnStatus = "None"
                     };
 
                 }).ToList();
@@ -984,8 +1061,10 @@ namespace VivekMedicalProducts.Controllers
             }
         }
 
-        [HttpPut("cancel/{orderId}")]
-        public async Task<IActionResult> CancelOrder(int orderId)
+        [HttpPut("cancel-item/{orderItemId}")]
+        public async Task<IActionResult> CancelOrderItem(
+      int orderItemId,
+      [FromBody] CancelOrderRequest request)
         {
             using var transaction =
                 await _context.Database.BeginTransactionAsync();
@@ -994,7 +1073,7 @@ namespace VivekMedicalProducts.Controllers
             {
                 var userId = _userContext.GetUserId();
 
-                if (string.IsNullOrEmpty(userId))
+                if (string.IsNullOrWhiteSpace(userId))
                 {
                     return Unauthorized(new
                     {
@@ -1003,63 +1082,95 @@ namespace VivekMedicalProducts.Controllers
                     });
                 }
 
-                var order = await _context.Orders
+                var orderItem = await _context.OrderItems
+                    .Include(x => x.Order)
                     .FirstOrDefaultAsync(x =>
-                        x.OrderId == orderId &&
-                        x.UserId == userId);
+                        x.OrderItemId == orderItemId &&
+                        x.Order.UserId == userId);
 
-                if (order == null)
+                if (orderItem == null)
                 {
                     return NotFound(new
                     {
                         success = false,
-                        message = "Order not found."
+                        message = "Order item not found."
                     });
                 }
 
-                if (order.OrderStatus == "Cancelled")
+                if (orderItem.OrderItemStatus == "Cancelled")
                 {
                     return BadRequest(new
                     {
                         success = false,
-                        message = "Order already cancelled."
+                        message = "Item is already cancelled."
                     });
                 }
 
-                if (order.OrderStatus != "Placed" &&
-                    order.OrderStatus != "Packed")
+                if (orderItem.OrderItemStatus != "Placed" &&
+                    orderItem.OrderItemStatus != "Accepted" &&
+                    orderItem.OrderItemStatus != "Packed")
                 {
                     return BadRequest(new
                     {
                         success = false,
-                        message = "Order cannot be cancelled after shipping."
+                        message = "This item cannot be cancelled after shipment."
                     });
                 }
 
-                order.OrderStatus = "Cancelled";
-                order.OrderModifiedDate = DateTime.UtcNow;
+                // Cancel Item
 
-                var items = await _context.OrderItems
-                    .Where(x => x.OrderId == orderId)
-                    .ToListAsync();
+                orderItem.OrderItemStatus = "Cancelled";
 
-                foreach (var item in items)
+                orderItem.CancelledAt = DateTime.UtcNow;
+
+                orderItem.CancelledBy = userId;
+                orderItem.CancelledReason = request.ReasonType;
+
+                orderItem.ReturnRemarks = request.Remarks;
+
+                orderItem.UpdatedAt =
+                    DateTime.UtcNow;
+
+                orderItem.ItemOrderModifiedDate =
+                    DateTime.UtcNow;
+
+                // Refund (Prepaid Orders)
+
+                if (orderItem.Order.PaymentStatus == "Completed")
                 {
-                    item.ItemStatus = "Cancelled";
+                    orderItem.RefundStatus = "Initiated";
+
+                    orderItem.RefundAmount =
+                        orderItem.FinalPaidAmount;
                 }
 
-                if (order.PaymentStatus == "Completed")
-                {
-                    order.PaymentStatus = "Refund Pending";
+                // Check if all items are cancelled
 
-                    // TODO:
-                    // Razorpay Refund API
+                var remainingItems =
+                    await _context.OrderItems
+                    .Where(x =>
+                        x.OrderId == orderItem.OrderId &&
+                        x.OrderItemStatus != "Cancelled")
+                    .CountAsync();
 
-                    // order.PaymentStatus = "Refunded";
-                }
-                else
+                if (remainingItems == 0)
                 {
-                    order.PaymentStatus = "Cancelled";
+                    if (orderItem.Order.PaymentStatus == "Completed")
+                    {
+                        orderItem.Order.PaymentStatus =
+                            "PartiallyRefunded";
+                    }
+                    else
+                    {
+                        orderItem.Order.PaymentStatus =
+                            "Cancelled";
+                    }
+
+                    orderItem.Order.OrderModifiedDate =
+                        DateTime.UtcNow;
+
+                    orderItem.Order.UpdatedBy =
+                        userId;
                 }
 
                 await _context.SaveChangesAsync();
@@ -1069,9 +1180,10 @@ namespace VivekMedicalProducts.Controllers
                 return Ok(new
                 {
                     success = true,
-                    message = order.PaymentStatus == "Refund Pending"
-                        ? "Order cancelled successfully. Refund will be processed within 2 business days."
-                        : "Order cancelled successfully."
+                    message =
+                                       orderItem.Order.PaymentStatus == "Completed"
+                    ? "Item cancelled successfully. Refund has been initiated."
+                    : "Item cancelled successfully."
                 });
             }
             catch (Exception ex)
@@ -1086,53 +1198,103 @@ namespace VivekMedicalProducts.Controllers
             }
         }
 
+        public class CancelOrderRequest
+        {
+            public string ReasonType { get; set; } = "";
+            // Customer Changed Mind
+            // Ordered by Mistake
+            // Price Too High
+            // Found Better Product
+            // Expected Delivery Too Late
+            // Other
+
+            public string? Remarks { get; set; }
+        }
+
+
+
         [HttpGet("check-payment-status/{razorpayOrderId}")]
         public async Task<IActionResult> CheckPaymentStatus(string razorpayOrderId)
         {
-            var session = await _context.PaymentSessions
-                .FirstOrDefaultAsync(x =>
-                    x.RazorpayOrderId == razorpayOrderId);
-
-            if (session == null)
+            try
             {
+                var session = await _context.PaymentSessions
+                    .FirstOrDefaultAsync(x =>
+                        x.RazorpayOrderId == razorpayOrderId);
+
+                if (session == null)
+                {
+                    return Ok(new
+                    {
+                        success = false,
+                        message = "Payment session not found."
+                    });
+                }
+
+                // Payment not completed yet
+                if (!session.IsCompleted)
+                {
+                    return Ok(new
+                    {
+                        success = false,
+                        paymentStatus = session.PaymentStatus,
+                        message = "Payment is still processing."
+                    });
+                }
+
+                // Order created after payment verification
+                var order = await _context.Orders
+                    .Include(x => x.OrderItems)
+                    .FirstOrDefaultAsync(x =>
+                        x.RazorpayOrderId == razorpayOrderId);
+
+                if (order == null)
+                {
+                    return Ok(new
+                    {
+                        success = false,
+                        paymentStatus = session.PaymentStatus,
+                        message = "Order is being created."
+                    });
+                }
+
+                // Item summary
+                var itemSummary = order.OrderItems
+                    .GroupBy(x => x.OrderItemStatus)
+                    .Select(x => new
+                    {
+                        status = x.Key,
+                        count = x.Count()
+                    })
+                    .ToList();
+
                 return Ok(new
                 {
-                    success = false,
-                    message = "Payment session not found"
+                    success = true,
+
+                    orderId = order.OrderId,
+
+                    orderNumber = order.OrderNumber,
+
+                    paymentStatus = order.PaymentStatus,
+
+                    isPaymentVerified = order.IsPaymentVerified,
+
+                    totalItems = order.OrderItems.Count,
+
+                    itemStatuses = itemSummary,
+
+                    redirect = $"/order-success/{order.OrderId}"
                 });
             }
-
-            if (!session.IsCompleted)
+            catch (Exception ex)
             {
-                return Ok(new
+                return BadRequest(new
                 {
                     success = false,
-                    paymentStatus = session.PaymentStatus,
-                    message = "Payment is still processing"
+                    message = ex.InnerException?.Message ?? ex.Message
                 });
             }
-
-            var order = await _context.Orders
-                .FirstOrDefaultAsync(x =>
-                    x.RazorpayOrderId == razorpayOrderId);
-
-            if (order == null)
-            {
-                return Ok(new
-                {
-                    success = false,
-                    paymentStatus = session.PaymentStatus,
-                    message = "Order is being created"
-                });
-            }
-
-            return Ok(new
-            {
-                success = true,
-                orderId = order.OrderId,
-                paymentStatus = order.PaymentStatus,
-                orderStatus = order.OrderStatus
-            });
         }
 
 
@@ -1144,21 +1306,23 @@ namespace VivekMedicalProducts.Controllers
             {
                 var userId = _userContext.GetUserId();
 
-                if (string.IsNullOrEmpty(userId))
-                    return Unauthorized();
+                if (string.IsNullOrWhiteSpace(userId))
+                {
+                    return Unauthorized(new
+                    {
+                        success = false,
+                        message = "Please login first."
+                    });
+                }
 
                 var order = await _context.Orders
                     .AsNoTracking()
-
                     .Include(x => x.UserAddress)
-
                     .Include(x => x.OrderItems)
                         .ThenInclude(x => x.Product)
-
                     .Include(x => x.OrderItems)
                         .ThenInclude(x => x.ProductVariant)
                             .ThenInclude(x => x.Images)
-
                     .FirstOrDefaultAsync(x =>
                         x.OrderId == id &&
                         x.UserId == userId);
@@ -1171,6 +1335,33 @@ namespace VivekMedicalProducts.Controllers
                         message = "Order not found."
                     });
                 }
+
+                //------------------------------------------------------
+                // Derive Overall Order Status
+                //------------------------------------------------------
+
+                string orderStatus = "Placed";
+
+                var statuses = order.OrderItems
+                    .Select(x => x.OrderItemStatus)
+                    .ToList();
+
+                if (statuses.All(x => x == "Cancelled"))
+                    orderStatus = "Cancelled";
+                else if (statuses.All(x => x == "Delivered"))
+                    orderStatus = "Delivered";
+                else if (statuses.Any(x => x == "OutForDelivery"))
+                    orderStatus = "Out For Delivery";
+                else if (statuses.Any(x => x == "Shipped"))
+                    orderStatus = "Shipped";
+                else if (statuses.Any(x => x == "Packed"))
+                    orderStatus = "Packed";
+                else
+                    orderStatus = "Placed";
+
+                //------------------------------------------------------
+                // Response
+                //------------------------------------------------------
 
                 return Ok(new
                 {
@@ -1186,12 +1377,15 @@ namespace VivekMedicalProducts.Controllers
 
                         paymentStatus = order.PaymentStatus,
 
-                        orderStatus = order.OrderStatus,
+                        paymentMethod = order.PaymentMethod,
+
+                        orderStatus = orderStatus,
 
                         grandTotal = order.GrandTotal,
 
-                        estimatedDelivery =
-                            order.OrderDate.AddDays(4),
+                        currency = order.Currency,
+
+                        estimatedDelivery = order.OrderDate.AddDays(4),
 
                         customer = new
                         {
@@ -1200,8 +1394,7 @@ namespace VivekMedicalProducts.Controllers
                             mobile = order.UserAddress?.MobileNumber,
 
                             address =
-                                $"{order.UserAddress?.AddressLine1}, " +
-                                $"{order.UserAddress?.AddressLine2}",
+                                $"{order.UserAddress?.AddressLine1}, {order.UserAddress?.AddressLine2}",
 
                             city = order.UserAddress?.City,
 
@@ -1213,19 +1406,23 @@ namespace VivekMedicalProducts.Controllers
                         items = order.OrderItems
                             .Select(i => new
                             {
+                                orderItemId = i.OrderItemId,
+
+                                sellerId = i.SellerId,
+
                                 productId = i.ProductId,
 
                                 productName = i.ProductName,
 
+                                variantName = i.ProductVariant?.Model ?? "",
+
                                 image =
                                     i.ProductVariant != null &&
                                     i.ProductVariant.Images.Any()
-
                                         ? i.ProductVariant.Images
                                             .OrderBy(x => x.DisplayOrder)
                                             .Select(x => x.ImageUrl)
                                             .FirstOrDefault()
-
                                         : i.Product.ImageUrl,
 
                                 quantity = i.Quantity,
@@ -1234,80 +1431,132 @@ namespace VivekMedicalProducts.Controllers
 
                                 discount = i.DiscountAmount,
 
+                                taxableAmount = i.TaxableAmount,
+
+                                gstPercentage = i.GSTPercentage,
+
                                 gst = i.GSTAmount,
 
-                                total = i.LineTotal
+                                couponDiscount = i.CouponDiscountAmount,
+
+                                finalPaidAmount = i.FinalPaidAmount,
+
+                                total = i.LineTotal,
+
+                                itemStatus = i.OrderItemStatus,
+
+                                packedDate = i.PackedDate,
+
+                                shippedDate = i.ShippedDate,
+
+                                outForDeliveryDate = i.OutForDeliveryDate,
+
+                                deliveredDate = i.DeliveredDate,
+
+                                trackingNumber = i.TrackingNumber,
+
+                                courierPartner = i.CourierPartner,
+
+                                returnStatus = i.ReturnStatus,
+
+                                isReturnEligible = i.IsReturnEligible,
+
+                                returnEligibleTill = i.ReturnEligibleTill,
+
+                                cancelledAt = i.CancelledAt
                             })
                             .ToList()
                     }
                 });
-
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     success = false,
-                    message = ex.Message
+                    message = ex.Message,
+                    inner = ex.InnerException?.Message
                 });
             }
         }
 
-        [Authorize]
-        [HttpPost("request-return")]
-        public async Task<IActionResult> RequestReturn(
-    RequestReturnDto dto)
-        {
-            try
+
+            [Authorize]
+            [HttpPost("request-return/{orderItemId}")]
+            public async Task<IActionResult> RequestReturn(
+    int orderItemId,
+    [FromForm] RequestReturnDto dto)
             {
+                dto.OrderItemId = orderItemId;
+
+                try
+                {
                 var userId = _userContext.GetUserId();
 
-                if (string.IsNullOrEmpty(userId))
-                    return Unauthorized();
+                if (string.IsNullOrWhiteSpace(userId))
+                {
+                    return Unauthorized(new
+                    {
+                        success = false,
+                        message = "Please login first."
+                    });
+                }
 
-                var order = await _context.Orders
+                if (dto.OrderItemId <= 0)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Invalid order item."
+                    });
+                }
+
+                var orderItem = await _context.OrderItems
+                    .Include(x => x.Order)
                     .FirstOrDefaultAsync(x =>
-                        x.OrderId == dto.OrderId &&
-                        x.UserId == userId);
+                        x.OrderItemId == dto.OrderItemId &&
+                        x.Order.UserId == userId);
 
-                if (order == null)
+                if (orderItem == null)
+                {
                     return NotFound(new
                     {
                         success = false,
-                        message = "Order not found."
+                        message = "Order item not found."
                     });
+                }
 
-                //------------------------------------------------
-                // Delivered?
-                //------------------------------------------------
-
-                if (order.OrderStatus != "Delivered")
+                // Only delivered items can be returned
+                if (orderItem.OrderItemStatus != "Delivered")
                 {
                     return BadRequest(new
                     {
                         success = false,
-                        message = "Only delivered orders can be returned."
+                        message = "Only delivered items can be returned."
                     });
                 }
 
-                //------------------------------------------------
-                // 15 Days Validation
-                //------------------------------------------------
-
-                if (!order.DeliveredDate.HasValue)
+                // Return eligibility
+                if (!orderItem.IsReturnEligible)
                 {
                     return BadRequest(new
                     {
                         success = false,
-                        message = "Delivery date not available."
+                        message = "This item is not eligible for return."
                     });
                 }
 
-                var days =
-                    (DateTime.UtcNow -
-                    order.DeliveredDate.Value).Days;
+                // Return window
+                if (!orderItem.ReturnEligibleTill.HasValue)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Return window information is unavailable."
+                    });
+                }
 
-                if (days > 15)
+                if (DateTime.UtcNow > orderItem.ReturnEligibleTill.Value)
                 {
                     return BadRequest(new
                     {
@@ -1316,67 +1565,270 @@ namespace VivekMedicalProducts.Controllers
                     });
                 }
 
-                //------------------------------------------------
-                // Already Requested?
-                //------------------------------------------------
-
-                bool exists =
-                    await _context.OrderReturns
-                    .AnyAsync(x =>
-                        x.OrderId == dto.OrderId);
-
-                if (exists)
+                // Already requested
+                if (!string.IsNullOrWhiteSpace(orderItem.ReturnStatus) &&
+                    orderItem.ReturnStatus != "None")
                 {
                     return BadRequest(new
                     {
                         success = false,
-                        message = "Return request already submitted."
+                        message = "A return request has already been submitted for this item."
                     });
                 }
 
-                //------------------------------------------------
+                // Double check in Return table
+                bool alreadyExists = await _context.OrderReturns
+                    .AnyAsync(x =>
+                        x.OrderItemId == dto.OrderItemId &&
+                        x.Status != "Rejected");
 
-                var request =
-                    new OrderReturnModel
+                if (alreadyExists)
+                {
+                    return BadRequest(new
                     {
-                        OrderId = dto.OrderId,
+                        success = false,
+                        message = "A return request already exists for this item."
+                    });
+                }
 
-                        UserId = userId,
+                string? image1 = null;
+                string? image2 = null;
+                string? image3 = null;
 
-                        Reason = dto.Reason,
+                if (dto.Image1 != null)
+                {
+                    image1 = await _fileStorageService.UploadAsync(dto.Image1, "ReturnImages");
+                }
 
-                        Remarks = dto.Remarks,
+                if (dto.Image2 != null)
+                {
+                    image2 = await _fileStorageService.UploadAsync(dto.Image2, "ReturnImages");
+                }
 
-                        Image1 = dto.Image1,
+                if (dto.Image3 != null)
+                {
+                    image3 = await _fileStorageService.UploadAsync(dto.Image3, "ReturnImages");
+                }
 
-                        Image2 = dto.Image2,
+                // Create Return Request
+                var returnRequest = new OrderReturnModel
+                {
+                    OrderId = orderItem.OrderId,
+                    OrderItemId = orderItem.OrderItemId,
+                    UserId = userId,
 
-                        Image3 = dto.Image3,
+                    Reason = dto.Reason,
+                    Remarks = dto.Remarks,
 
-                        Status = "Requested"
-                    };
+                    Image1 = image1,
+                    Image2 = image2,
+                    Image3 = image3,
 
-                _context.OrderReturns.Add(request);
+                    Status = "Requested",
+                    RequestedDate = DateTime.UtcNow
+                };
 
-                order.ReturnStatus = "Requested";
+                _context.OrderReturns.Add(returnRequest);
+
+                // Update Order Item
+                orderItem.ReturnStatus = "Requested";
+                orderItem.ReturnReason = dto.Reason;
+                orderItem.ReturnRemarks = dto.Remarks;
+                orderItem.ReturnRequestedDate = DateTime.UtcNow;
+
+                orderItem.UpdatedAt = DateTime.UtcNow;
+                orderItem.ItemOrderModifiedDate = DateTime.UtcNow;
 
                 await _context.SaveChangesAsync();
 
                 return Ok(new
                 {
                     success = true,
-                    message = "Return request submitted successfully."
+                    message = "Return request submitted successfully.",
+                    returnId = returnRequest.ReturnId,
+                    status = returnRequest.Status,
+                    requestedDate = returnRequest.RequestedDate
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(500,
-                    new
-                    {
-                        success = false,
-                        message = ex.Message
-                    });
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    success = false,
+                    message = ex.Message,
+                    inner = ex.InnerException?.Message
+                });
             }
+        }
+
+        [Authorize(Roles = "Admin,Seller")]
+        [HttpGet("returns")]
+        public async Task<IActionResult> GetReturns(
+     int page = 1,
+     int pageSize = 10,
+     string? search = null,
+     string? status = null)
+        {
+            var isAdmin = User.IsInRole("Admin");
+
+            var query = _context.OrderReturns
+                .Include(r => r.Order)
+                    .ThenInclude(o => o.UserAddress)
+                .Include(r => r.OrderItem)
+                    .ThenInclude(i => i.Product)
+                .Include(r => r.OrderItem)
+                    .ThenInclude(i => i.ProductVariant)
+                .AsQueryable();
+
+            if (!isAdmin)
+            {
+                var userId = _userContext.GetUserId();
+
+                var sellerId = await _context.Sellers
+                    .Where(s => s.UserId == userId)
+                    .Select(s => s.SellerId)
+                    .FirstOrDefaultAsync();
+
+                query = query.Where(r => r.OrderItem.SellerId == sellerId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                search = search.Trim().ToLower();
+
+                query = query.Where(r =>
+                    r.Order.OrderNumber.ToLower().Contains(search) ||
+                    r.Order.UserAddress.FullName.ToLower().Contains(search) ||
+                    r.Order.UserAddress.MobileNumber.Contains(search) ||
+                    r.OrderItem.ProductName.ToLower().Contains(search));
+            }
+
+            if (!string.IsNullOrWhiteSpace(status) && status != "All")
+            {
+                query = query.Where(r => r.Status == status);
+            }
+
+            var totalRecords = await query.CountAsync();
+
+            var data = await query
+                .OrderByDescending(r => r.RequestedDate)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(r => new
+                {
+                    r.ReturnId,
+                    r.OrderId,
+                    r.OrderItemId,
+
+                    OrderNumber = r.Order.OrderNumber,
+
+                    CustomerName = r.Order.UserAddress.FullName,
+                    MobileNumber = r.Order.UserAddress.MobileNumber,
+
+                    ProductName = r.OrderItem.ProductName,
+
+                    ProductImage = r.OrderItem.Product.ImageUrl,
+
+                    VariantName = r.OrderItem.ProductVariant != null
+                        ? r.OrderItem.ProductVariant.Model
+                        : "",
+
+                    Quantity = r.OrderItem.Quantity,
+
+                    r.Reason,
+                    r.Remarks,
+
+                    r.Image1,
+                    r.Image2,
+                    r.Image3,
+
+                    r.Status,
+                    r.RequestedDate,
+
+                    RefundStatus = r.OrderItem.RefundStatus,
+                    RefundAmount = r.OrderItem.RefundAmount
+                })
+                .ToListAsync();
+
+            return Ok(new
+            {
+                currentPage = page,
+                pageSize,
+                totalRecords,
+                totalPages = (int)Math.Ceiling((double)totalRecords / pageSize),
+                data
+            });
+        }
+
+
+        [Authorize(Roles = "Admin,Seller")]
+        [HttpPut("returns/{returnId}")]
+        public async Task<IActionResult> UpdateReturnStatus(
+     int returnId,
+     UpdateReturnStatusDto dto)
+        {
+            var userId = _userContext.GetUserId();
+
+            bool isAdmin = User.IsInRole("Admin");
+
+            int? sellerId = null;
+
+            if (!isAdmin)
+            {
+                sellerId = await _context.Sellers
+                    .Where(x => x.UserId == userId)
+                    .Select(x => (int?)x.SellerId)
+                    .FirstOrDefaultAsync();
+            }
+
+            var query = _context.OrderReturns
+                .Include(x => x.OrderItem)
+                    .ThenInclude(x => x.Product)
+                .AsQueryable();
+
+            if (!isAdmin)
+            {
+                query = query.Where(x =>
+                    x.OrderItem.Product.SellerId == sellerId);
+            }
+
+            var item = await query.FirstOrDefaultAsync(x => x.ReturnId == returnId);
+
+            if (item == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Return request not found."
+                });
+            }
+
+            item.Status = dto.Status;
+            item.Remarks = dto.Remarks;
+
+            item.OrderItem.ReturnStatus = dto.Status;
+
+            if (dto.Status == "RefundCompleted")
+            {
+                item.OrderItem.RefundStatus = "Completed";
+                item.OrderItem.RefundCompletedDate = DateTime.UtcNow;
+
+                if (dto.RefundAmount.HasValue)
+                {
+                    item.OrderItem.RefundAmount = dto.RefundAmount.Value;
+                }
+            }
+
+            item.OrderItem.UpdatedAt = DateTime.UtcNow;
+            item.OrderItem.ItemOrderModifiedDate = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                success = true,
+                message = "Return status updated successfully."
+            });
         }
 
         // ================= HELPERS =================
@@ -1388,122 +1840,6 @@ namespace VivekMedicalProducts.Controllers
             return Convert.ToHexString(hash).ToLowerInvariant();
         }
 
-      /*  [Authorize]
-        [HttpGet("my-orders")]
-        public async Task<IActionResult> GetMyOrders()
-        {
-            try
-            {
-                var userId = _userContext.GetUserId();
-
-                if (string.IsNullOrEmpty(userId))
-                {
-                    return Unauthorized(new
-                    {
-                        success = false,
-                        message = "Please login to view orders.",
-                        redirect = "/login"
-                    });
-                }
-
-                var orders = await _context.Orders
-                    .AsNoTracking()
-                    .Include(o => o.OrderItems)
-                        .ThenInclude(i => i.Product)
-                    .Include(o => o.OrderItems)
-                        .ThenInclude(i => i.ProductVariant)
-                            .ThenInclude(v => v.Images)
-                    .Where(o => o.UserId == userId)
-                    .OrderByDescending(o => o.OrderDate)
-                    .Select(o => new
-                    {
-                        orderId = o.OrderId,
-                        orderNumber = o.OrderNumber,
-                        orderDate = o.OrderDate,
-
-                        grandTotal = o.GrandTotal,
-                        orderStatus = o.OrderStatus,
-                        paymentStatus = o.PaymentStatus,
-
-                        itemCount =
-                            o.OrderItems.Count,
-
-                        items =
-                            o.OrderItems.Select(i => new
-                            {
-                                productId =
-                                    i.ProductId,
-
-                                variantId =
-                                    i.ProductVariantId,
-
-                                productName =
-                                    i.ProductName,
-
-                                variantName =
-                                    i.ProductVariant != null
-                                        ? i.ProductVariant.Model
-                                        : "",
-
-                                productImage =
-                                    i.ProductVariant != null &&
-                                    i.ProductVariant.Images.Any()
-                                        ? i.ProductVariant.Images
-                                            .OrderBy(x =>
-                                                x.DisplayOrder)
-                                            .Select(x =>
-                                                x.ImageUrl)
-                                            .FirstOrDefault()
-                                        : !string.IsNullOrEmpty(
-                                            i.Product.ImageUrl)
-                                            ? i.Product.ImageUrl
-                                            : "/images/no-image.png",
-
-                                productImages =
-                                    i.ProductVariant != null
-                                        ? i.ProductVariant.Images
-                                            .OrderBy(x =>
-                                                x.DisplayOrder)
-                                            .Select(x =>
-                                                x.ImageUrl)
-                                            .ToList()
-                                        : new List<string>(),
-
-                                quantity =
-                                    i.Quantity,
-
-                                price =
-                                    i.Price,
-
-                                finalPaidAmount =
-                                    i.FinalPaidAmount,
-
-                                itemTotal =
-                                    i.LineTotal
-                            }).ToList()
-                    })
-                    .ToListAsync();
-
-                return Ok(new
-                {
-                    success = true,
-                    orders
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new
-                {
-                    success = false,
-                    message =
-                        "Failed to load orders.",
-                    error =
-                        ex.InnerException?.Message ??
-                        ex.Message
-                });
-            }
-        }*/
-
         [Authorize]
         [HttpGet("my-orders")]
         public async Task<IActionResult> GetMyOrders()
@@ -1512,120 +1848,206 @@ namespace VivekMedicalProducts.Controllers
             {
                 var userId = _userContext.GetUserId();
 
-                if (string.IsNullOrEmpty(userId))
+                if (string.IsNullOrWhiteSpace(userId))
                 {
                     return Unauthorized(new
                     {
                         success = false,
-                        message = "Please login to view orders.",
+                        message = "Please login to view your orders.",
                         redirect = "/login"
                     });
                 }
 
                 var orders = await _context.Orders
-                    .AsNoTracking()
-                    .Include(o => o.OrderItems)
-                        .ThenInclude(i => i.Product)
-                    .Include(o => o.OrderItems)
-                        .ThenInclude(i => i.ProductVariant)
-                            .ThenInclude(v => v.Images)
-                    .Where(o => o.UserId == userId)
-                    .OrderByDescending(o => o.OrderDate)
-                    .ToListAsync();
+     .AsNoTracking()
 
-                var response = orders.Select(o =>
+     .Include(o => o.UserAddress)
+
+     .Include(o => o.OrderItems)
+         .ThenInclude(i => i.Product)
+
+     .Include(o => o.OrderItems)
+         .ThenInclude(i => i.ProductVariant)
+             .ThenInclude(v => v.Images)
+
+     .Where(o => o.UserId == userId)
+
+     .OrderByDescending(o => o.OrderDate)
+
+     .ToListAsync();
+
+                var response = orders.Select(order =>
                 {
-                    bool isReturnEligible = false;
+                    var itemStatuses = order.OrderItems
+                        .Select(x => x.OrderItemStatus)
+                        .ToList();
 
-                    int remainingReturnDays = 0;
+                    // Derived Status (Not Stored in DB)
+                    string orderStatus;
 
-                    if (o.OrderStatus == "Delivered" &&
-                        o.DeliveredDate.HasValue &&
-                        o.ReturnStatus == "None")
-                    {
-                        remainingReturnDays =
-                            15 - (DateTime.UtcNow - o.DeliveredDate.Value).Days;
-
-                        isReturnEligible =
-                            remainingReturnDays >= 0;
-                    }
+                    if (itemStatuses.All(x => x == "Cancelled"))
+                        orderStatus = "Cancelled";
+                    else if (itemStatuses.All(x => x == "Delivered"))
+                        orderStatus = "Delivered";
+                    else if (itemStatuses.Any(x => x == "OutForDelivery"))
+                        orderStatus = "Out For Delivery";
+                    else if (itemStatuses.Any(x => x == "Shipped"))
+                        orderStatus = "Shipped";
+                    else if (itemStatuses.Any(x => x == "Packed"))
+                        orderStatus = "Packed";
+                    else
+                        orderStatus = "Placed";
 
                     return new
                     {
-                        orderId = o.OrderId,
+                        orderId = order.OrderId,
 
-                        orderNumber = o.OrderNumber,
+                        orderNumber = order.OrderNumber,
 
-                        orderDate = o.OrderDate,
+                        orderDate = order.OrderDate,
 
-                        grandTotal = o.GrandTotal,
+                        grandTotal = order.GrandTotal,
 
-                        orderStatus = o.OrderStatus,
+                        paymentStatus = order.PaymentStatus,
 
-                        paymentStatus = o.PaymentStatus,
+                        deliveryAddress = order.UserAddress == null
+    ? null
+    : new
+    {
+        id = order.UserAddress.Id,
 
-                        returnStatus = o.ReturnStatus,
+        fullName = order.UserAddress.FullName,
 
-                        isReturnEligible,
+        mobileNumber = order.UserAddress.MobileNumber,
 
-                        remainingReturnDays =
-                            Math.Max(remainingReturnDays, 0),
+        addressLine1 = order.UserAddress.AddressLine1,
 
-                        itemCount = o.OrderItems.Count,
+        addressLine2 = order.UserAddress.AddressLine2,
 
-                        items = o.OrderItems.Select(i => new
+        landmark = order.UserAddress.Landmark,
+
+        city = order.UserAddress.City,
+
+        state = order.UserAddress.State,
+
+        pincode = order.UserAddress.Pincode,
+
+        addressType = order.UserAddress.AddressType
+    },
+
+                        orderStatus,
+
+                        itemCount = order.OrderItems.Count,
+
+                        items = order.OrderItems.Select(item => new
                         {
-                            productId = i.ProductId,
+                            orderItemId = item.OrderItemId,
 
-                            variantId = i.ProductVariantId,
+                            orderDate = order.OrderDate,
 
-                            productName = i.ProductName,
+                            sellerId = item.SellerId,
+
+                            productId = item.ProductId,
+
+                            variantId = item.ProductVariantId,
+
+                            productName = item.ProductName,
 
                             variantName =
-                                i.ProductVariant != null
-                                    ? i.ProductVariant.Model
-                                    : "",
+                                item.ProductVariant?.Model ?? "",
 
                             productImage =
-                                i.ProductVariant != null &&
-                                i.ProductVariant.Images.Any()
-                                    ? i.ProductVariant.Images
-                                        .OrderBy(x => x.DisplayOrder)
-                                        .Select(x => x.ImageUrl)
-                                        .FirstOrDefault()
-                                    : !string.IsNullOrEmpty(i.Product.ImageUrl)
-                                        ? i.Product.ImageUrl
-                                        : "/images/no-image.png",
+                                item.ProductVariant != null &&
+                                item.ProductVariant.Images.Any()
+                                ? item.ProductVariant.Images
+                                    .OrderBy(x => x.DisplayOrder)
+                                    .Select(x => x.ImageUrl)
+                                    .FirstOrDefault()
+                                : !string.IsNullOrWhiteSpace(item.Product.ImageUrl)
+                                    ? item.Product.ImageUrl
+                                    : "/images/no-image.png",
 
                             productImages =
-                                i.ProductVariant != null
-                                    ? i.ProductVariant.Images
-                                        .OrderBy(x => x.DisplayOrder)
-                                        .Select(x => x.ImageUrl)
-                                        .ToList()
-                                    : new List<string>(),
+                                item.ProductVariant != null
+                                ? item.ProductVariant.Images
+                                    .OrderBy(x => x.DisplayOrder)
+                                    .Select(x => x.ImageUrl)
+                                    .ToList()
+                                : new List<string>(),
 
-                            quantity = i.Quantity,
+                            quantity = item.Quantity,
 
-                            price = i.Price,
+                            price = item.Price,
 
-                            finalPaidAmount = i.FinalPaidAmount,
+                            finalPaidAmount = item.FinalPaidAmount,
 
-                            itemTotal = i.LineTotal,
+                            itemTotal = item.LineTotal,
 
-                            returnStatus = i.ReturnStatus,
+                            itemStatus = item.OrderItemStatus,
 
                             isReturnEligible =
-        o.OrderStatus == "Delivered"
-        && i.ReturnStatus == "None"
-        && DateTime.UtcNow <= i.CreatedAt.AddDays(15),
+                                item.IsReturnEligible,
+
+                            returnStatus =
+                                item.ReturnStatus,
 
                             remainingReturnDays =
-        o.OrderStatus == "Delivered"
-            ? Math.Max(
-                0,
-                (i.CreatedAt.AddDays(15) - DateTime.UtcNow).Days)
-            : 0
+                                item.ReturnEligibleTill.HasValue
+                                ? Math.Max(
+                                    0,
+                                    (item.ReturnEligibleTill.Value - DateTime.UtcNow).Days)
+                                : 0,
+
+                            packedDate =
+                                item.PackedDate,
+
+                            shippedDate =
+                                item.ShippedDate,
+
+                            outForDeliveryDate =
+                                item.OutForDeliveryDate,
+
+                            deliveredDate =
+                                item.DeliveredDate,
+
+                            cancelledAt =
+                        item.CancelledAt,
+
+                            cancelledReason =
+                        item.CancelledReason,
+
+                            trackingNumber =
+                        item.TrackingNumber,
+
+                            courierPartner =
+                        item.CourierPartner,
+
+                            refundAmount =
+                        item.RefundAmount,
+
+                            refundStatus =
+                        item.RefundStatus,
+
+                            returnReason =
+                        item.ReturnReason,
+
+                            returnRemarks =
+                        item.ReturnRemarks,
+
+                            returnRequestedDate =
+                        item.ReturnRequestedDate,
+
+                            returnApprovedDate =
+                        item.ReturnApprovedDate,
+
+                            pickupDate =
+                        item.PickupDate,
+
+                            refundCompletedDate =
+                        item.RefundCompletedDate,
+
+                            returnImages =
+                        item.ReturnImages
                         }).ToList()
                     };
                 }).ToList();
@@ -1654,46 +2076,73 @@ namespace VivekMedicalProducts.Controllers
         {
             try
             {
-                var userId =
-                    _userContext.GetUserId();
+                var userId = _userContext.GetUserId();
+
+                if (string.IsNullOrWhiteSpace(userId))
+                {
+                    return Unauthorized(new
+                    {
+                        success = false,
+                        message = "Please login first."
+                    });
+                }
 
                 var order = await _context.Orders
-    .Include(o => o.UserAddress)
-    .Include(o => o.OrderItems)
-        .ThenInclude(i => i.Product)
-    .Include(o => o.OrderItems)
-        .ThenInclude(i => i.ProductVariant)
-    .FirstOrDefaultAsync(o =>
-        o.OrderId == id &&
-        o.UserId == userId);
+                    .Include(o => o.UserAddress)
+                    .Include(o => o.OrderItems)
+                        .ThenInclude(i => i.Product)
+                    .Include(o => o.OrderItems)
+                        .ThenInclude(i => i.ProductVariant)
+                    .FirstOrDefaultAsync(o =>
+                        o.OrderId == id &&
+                        o.UserId == userId);
 
                 if (order == null)
                 {
                     return NotFound(new
                     {
                         success = false,
-                        message = "Order not found"
+                        message = "Order not found."
                     });
                 }
 
-                if (
-                    order.PaymentStatus != "Completed" ||
-                    order.OrderStatus != "Delivered"
-                )
+                //------------------------------------------------
+                // Payment Validation
+                //------------------------------------------------
+
+                if (!order.IsPaymentVerified ||
+                    order.PaymentStatus != "Completed")
                 {
                     return BadRequest(new
                     {
                         success = false,
-                        message = "Invoice available after successful payment"
+                        message = "Invoice is available only after successful payment."
                     });
                 }
 
-                var model =
-                    BuildInvoiceModel(order);
+                //------------------------------------------------
+                // Optional Safety Check
+                //------------------------------------------------
+
+                if (!order.OrderItems.Any())
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "No items found for this order."
+                    });
+                }
+
+                //------------------------------------------------
+                // Build Invoice
+                //------------------------------------------------
+
+                var model = BuildInvoiceModel(order);
 
                 return Ok(new
                 {
                     success = true,
+
                     invoice = model
                 });
             }
@@ -1702,7 +2151,7 @@ namespace VivekMedicalProducts.Controllers
                 return StatusCode(500, new
                 {
                     success = false,
-                    message = ex.Message
+                    message = ex.InnerException?.Message ?? ex.Message
                 });
             }
         }
@@ -1774,125 +2223,165 @@ namespace VivekMedicalProducts.Controllers
         {
             var address = order.UserAddress;
 
-            decimal subtotal =
-     order.OrderItems.Sum(x =>
-         x.Price * x.Quantity);
+            decimal subtotal = order.OrderItems.Sum(x =>
+                x.Price * x.Quantity);
 
-            decimal productDiscount =
-                order.OrderItems.Sum(x =>
-                    x.DiscountAmount * x.Quantity);
+            decimal productDiscount = order.OrderItems.Sum(x =>
+                x.DiscountAmount * x.Quantity);
 
-            decimal taxableAmount =
-                order.OrderItems.Sum(x =>
-                    x.TaxableAmount);
+            decimal taxableAmount = order.OrderItems.Sum(x =>
+                x.TaxableAmount);
 
-            decimal couponDiscount =
-                order.OrderItems.Sum(x =>
-                    x.CouponDiscountAmount);
+            decimal couponDiscount = order.OrderItems.Sum(x =>
+                x.CouponDiscountAmount);
 
-            decimal gstTotal =
-                order.OrderItems.Sum(x =>
-                    x.GSTAmount);
+            decimal gstTotal = order.OrderItems.Sum(x =>
+                x.GSTAmount);
 
-            decimal finalPaid =
-                order.OrderItems.Sum(x =>
-                    x.FinalPaidAmount);
+            decimal finalPaid = order.OrderItems.Sum(x =>
+                x.FinalPaidAmount);
+
+            // Derived Order Status (not stored in DB)
+            var statuses = order.OrderItems
+                .Select(x => x.OrderItemStatus)
+                .ToList();
+
+            string orderStatus;
+
+            if (statuses.All(x => x == "Cancelled"))
+                orderStatus = "Cancelled";
+            else if (statuses.All(x => x == "Delivered"))
+                orderStatus = "Delivered";
+            else if (statuses.Any(x => x == "OutForDelivery"))
+                orderStatus = "Out For Delivery";
+            else if (statuses.Any(x => x == "Shipped"))
+                orderStatus = "Shipped";
+            else if (statuses.Any(x => x == "Packed"))
+                orderStatus = "Packed";
+            else
+                orderStatus = "Placed";
 
             return new OrderInvoiceViewModel
             {
                 OrderId = order.OrderId,
 
                 InvoiceNumber =
-        $"INV-{order.OrderNumber}",
+                    $"INV-{order.OrderNumber}",
 
                 Date = order.OrderDate,
 
                 CompanyName =
-        "Sunil Medical Products Pvt Ltd",
+                    "Sunil Medical Products Pvt Ltd",
 
                 CompanyGST =
-        "37ABCDE1234F1Z5",
+                    "37ABCDE1234F1Z5",
 
                 CompanyAddress =
-        "Visakhapatnam, Andhra Pradesh, India",
+                    "Visakhapatnam, Andhra Pradesh, India",
 
                 CompanyPhone =
-        "9014060858",
+                    "9014060858",
 
                 CustomerName =
-        address?.FullName ?? "",
+                    address?.FullName ?? "",
 
                 Address =
-        $"{address?.AddressLine1}, {address?.AddressLine2}",
+                    $"{address?.AddressLine1}, {address?.AddressLine2}",
 
                 City =
-        address?.City ?? "",
+                    address?.City ?? "",
 
                 Pincode =
-        address?.Pincode ?? "",
+                    address?.Pincode ?? "",
 
                 Phone =
-        address?.MobileNumber ?? "",
+                    address?.MobileNumber ?? "",
 
-                PaymentId = order.RazorpayPaymentId ?? "",
+                PaymentId =
+                    order.RazorpayPaymentId ?? "",
 
-                OrderStatus = order.OrderStatus ?? "",
+                PaymentStatus =
+                    order.PaymentStatus,
 
-                SubTotal = subtotal,
+                OrderStatus =
+                    orderStatus,
 
-                DiscountTotal = productDiscount,
+                Currency =
+                    order.Currency,
 
-                TaxableAmount = taxableAmount,
+                SubTotal =
+                    subtotal,
 
-                CouponDiscount = couponDiscount,
+                DiscountTotal =
+                    productDiscount,
+                TaxableAmount =
+            taxableAmount,
 
-                GSTTotal = gstTotal,
+                CouponDiscount =
+            couponDiscount,
 
-                FinalPaidAmount = finalPaid,
+                GSTTotal =
+            gstTotal,
 
-                GrandTotal = order.GrandTotal,
+                FinalPaidAmount =
+            finalPaid,
 
-                Items = order.OrderItems.Select(item =>
-    new InvoiceItemViewModel
-    {
-        ProductName =
-            item.ProductName,
+                GrandTotal =
+            order.GrandTotal,
 
-        VariantName =
-            item.ProductVariant?.Model ?? "",
+                Items = order.OrderItems
+            .Select(item => new InvoiceItemViewModel
+            {
+                ProductName =
+                    item.ProductName,
 
-        Quantity =
-            item.Quantity,
+                VariantName =
+                    item.ProductVariant?.Model ?? "",
 
-        Price =
-            item.Price,
+                Quantity =
+                    item.Quantity,
 
-        DiscountAmount =
-            item.DiscountAmount,
+                Price =
+                    item.Price,
 
-        TaxableAmount =
-            item.TaxableAmount,
+                DiscountAmount =
+                    item.DiscountAmount,
 
-        GSTPercentage =
-            item.GSTPercentage,
+                TaxableAmount =
+                    item.TaxableAmount,
 
-        GSTAmount =
-            item.GSTAmount,
+                GSTPercentage =
+                    item.GSTPercentage,
 
-        CouponDiscountAmount =
-            item.CouponDiscountAmount,
+                GSTAmount =
+                    item.GSTAmount,
 
-        FinalPaidAmount =
-            item.FinalPaidAmount,
+                CouponDiscountAmount =
+                    item.CouponDiscountAmount,
 
-        Total =
-            item.LineTotal
-    }).ToList()
+                FinalPaidAmount =
+                    item.FinalPaidAmount,
+
+                Total =
+                    item.LineTotal,
+
+                // Optional Item Details
+                ItemStatus =
+                    item.OrderItemStatus,
+
+                SellerId =
+                    item.SellerId,
+
+                ReturnStatus =
+                    item.ReturnStatus
+            })
+            .ToList()
             };
         }
 
 
-      
+
+
 
         public static string GetDisplayName(ApplicationUser user)
         {
@@ -1906,13 +2395,14 @@ namespace VivekMedicalProducts.Controllers
         [Authorize]
         [HttpGet("admin-orders")]
         public async Task<IActionResult> AdminOrders(
-      string search = "",
-      DateTime? fromDate = null,
-      DateTime? toDate = null,
-      string paymentStatus = "",
-      string orderStatus = "",
-      int page = 1,
-      int pageSize = 50)
+     string search = "",
+     DateTime? fromDate = null,
+     DateTime? toDate = null,
+     string paymentStatus = "",
+     string orderStatus = "",
+     string returnStatus = "",
+     int page = 1,
+     int pageSize = 50)
         {
             try
             {
@@ -1949,68 +2439,137 @@ namespace VivekMedicalProducts.Controllers
                     isSubscribed = true;
                 }
 
-                    var query =
-                    from i in _context.OrderItems
-                    join o in _context.Orders
-                        on i.OrderId equals o.OrderId
-                    join p in _context.Products
-                        on i.ProductId equals p.Id
-                    join u in _context.Users
-                        on o.UserId equals u.Id
+                // Base Query
+                var query =
+                    from item in _context.OrderItems
+
+                    join order in _context.Orders
+                        on item.OrderId equals order.OrderId
+
+                    join product in _context.Products
+                        on item.ProductId equals product.Id
+
+                    join user in _context.Users
+                        on order.UserId equals user.Id
+
                     select new AdminOrderModel
                     {
-                        OrderId = o.OrderId,
-                        OrderItemId = i.OrderItemId,
-                        OrderDate = o.OrderDate,
+                        // Order
+                        OrderId = order.OrderId,
+                        OrderItemId = item.OrderItemId,
+                        OrderNumber = order.OrderNumber,
+                        OrderDate = order.OrderDate,
 
-                        Customer =
-                            !string.IsNullOrEmpty(u.CustomerName)
-                                ? u.CustomerName
-                                : u.UserName,
+                        // Customer
+                        Customer = !string.IsNullOrWhiteSpace(user.CustomerName)
+                            ? user.CustomerName
+                            : user.UserName,
 
-                        ProductName = p.Name,
-                        Quantity = i.Quantity,
-                        GrandTotal = o.GrandTotal,
+                        // Seller
+                        SellerId = item.SellerId,
 
-                        RazorpayPaymentId =
-                            o.RazorpayPaymentId ?? "-",
+                        // Product
+                        ProductId = item.ProductId,
+                        ProductName = item.ProductName,
 
-                        PaymentStatus =
-                            o.PaymentStatus ?? "Pending",
+                        VariantName = item.ProductVariant != null
+                            ? item.ProductVariant.Model
+                            : "",
 
-                        OrderStatus =
-                            o.OrderStatus ?? "Pending",
+                        Quantity = item.Quantity,
+                        Price = item.Price,
 
-                        SellerId = i.SellerId
+                        // Pricing
+                        DiscountAmount = item.DiscountAmount,
+                        CouponDiscountAmount = item.CouponDiscountAmount,
+                        TaxableAmount = item.TaxableAmount,
+                        GSTPercentage = item.GSTPercentage,
+                        GSTAmount = item.GSTAmount,
+                        FinalPaidAmount = item.FinalPaidAmount,
+                        LineTotal = item.LineTotal,
+
+                        // Payment
+                        PaymentStatus = order.PaymentStatus ?? "Pending",
+                        RazorpayPaymentId = order.RazorpayPaymentId ?? "-",
+
+                        // Item Status
+                        OrderStatus = item.OrderItemStatus,
+
+                        PackedDate = item.PackedDate,
+                        ShippedDate = item.ShippedDate,
+                        OutForDeliveryDate = item.OutForDeliveryDate,
+                        DeliveredDate = item.DeliveredDate,
+
+                        // Return
+                        ReturnStatus = item.ReturnStatus,
+                        IsReturnEligible = item.IsReturnEligible,
+                        ReturnEligibleTill = item.ReturnEligibleTill,
+
+                        // Cancellation
+                        CancelledAt = item.CancelledAt,
+
+                        // Tracking
+                        TrackingNumber = item.TrackingNumber,
+                        CourierPartner = item.CourierPartner,
+
+                        // Order Total
+                        GrandTotal = order.GrandTotal
                     };
 
+                //----------------------------------------------------
                 // Seller Filter
+                //----------------------------------------------------
+
                 if (!isAdmin)
                 {
                     query = query.Where(x =>
                         x.SellerId == sellerId);
                 }
 
+                //----------------------------------------------------
                 // Search
+                //----------------------------------------------------
+
                 if (!string.IsNullOrWhiteSpace(search))
                 {
                     search = search.Trim().ToLower();
 
                     query = query.Where(x =>
+
                         (x.ProductName ?? "")
                             .ToLower()
                             .Contains(search)
+
                         ||
+
                         (x.Customer ?? "")
                             .ToLower()
                             .Contains(search)
+
                         ||
+
+                        (x.OrderNumber ?? "")
+                            .ToLower()
+                            .Contains(search)
+
+                        ||
+
                         x.OrderId
                             .ToString()
-                            .Contains(search));
+                            .Contains(search)
+
+                        ||
+
+                        (x.RazorpayPaymentId ?? "")
+                            .ToLower()
+                            .Contains(search)
+                    );
                 }
 
-                // Date Filters
+                //----------------------------------------------------
+                // Date Filter
+                //----------------------------------------------------
+
                 if (fromDate.HasValue)
                 {
                     var from = fromDate.Value.Date;
@@ -2021,104 +2580,192 @@ namespace VivekMedicalProducts.Controllers
 
                 if (toDate.HasValue)
                 {
-                    var to =
-                        toDate.Value.Date.AddDays(1);
+                    var to = toDate.Value.Date.AddDays(1);
 
                     query = query.Where(x =>
                         x.OrderDate < to);
                 }
 
+                //----------------------------------------------------
                 // Payment Status
+                //----------------------------------------------------
+
                 if (!string.IsNullOrWhiteSpace(paymentStatus))
                 {
                     query = query.Where(x =>
                         x.PaymentStatus == paymentStatus);
                 }
 
+                //----------------------------------------------------
                 // Order Status
+                //----------------------------------------------------
+
                 if (!string.IsNullOrWhiteSpace(orderStatus))
                 {
                     query = query.Where(x =>
                         x.OrderStatus == orderStatus);
                 }
 
-                // Stats
-                var totalOrders =
-    await query
-        .Select(x => x.OrderId)
-        .Distinct()
-        .CountAsync();
+                //----------------------------------------------------
+                // Return Status
+                //----------------------------------------------------
 
-                var totalPages = (int)Math.Ceiling((double)totalOrders / pageSize);
+                if (!string.IsNullOrWhiteSpace(returnStatus))
+                {
+                    query = query.Where(x =>
+                        x.ReturnStatus == returnStatus);
+                }
 
-                var completed =
-    await query
-        .Where(x =>
-            x.PaymentStatus ==
-            "Completed")
-        .Select(x => x.OrderId)
-        .Distinct()
-        .CountAsync();
+                //----------------------------------------------------
+                // Dashboard Statistics
+                //----------------------------------------------------
 
-                var pending =
-    await query
-        .Where(x =>
-            x.PaymentStatus ==
-            "Pending")
-        .Select(x => x.OrderId)
-        .Distinct()
-        .CountAsync();
+                var totalOrders = await query
+                    .Select(x => x.OrderId)
+                    .Distinct()
+                    .CountAsync();
 
-                var cancelled =
-    await query
-        .Where(x =>
-            x.OrderStatus ==
-            "Cancelled")
-        .Select(x => x.OrderId)
-        .Distinct()
-        .CountAsync();
+                var totalOrderItems = await query
+                    .CountAsync();
+
+                var pending = await query
+                    .Where(x => x.OrderStatus == "Pending")
+                    .CountAsync();
+
+                var packed = await query
+                    .Where(x => x.OrderStatus == "Packed")
+                    .CountAsync();
+
+                var shipped = await query
+                    .Where(x => x.OrderStatus == "Shipped")
+                    .CountAsync();
+
+                var outForDelivery = await query
+                    .Where(x => x.OrderStatus == "OutForDelivery")
+                    .CountAsync();
+
+                var delivered = await query
+                    .Where(x => x.OrderStatus == "Delivered")
+                    .CountAsync();
+
+                var cancelled = await query
+                    .Where(x => x.OrderStatus == "Cancelled")
+                    .CountAsync();
+
+                var returnRequested = await query
+                    .Where(x => x.ReturnStatus == "Requested")
+                    .CountAsync();
+
+                var returnApproved = await query
+                    .Where(x => x.ReturnStatus == "Approved")
+                    .CountAsync();
+
+                var returned = await query
+                    .Where(x => x.ReturnStatus == "Returned")
+                    .CountAsync();
+
+                var refunded = await query
+                    .Where(x => x.ReturnStatus == "Refunded")
+                    .CountAsync();
+
+                var completedPayments = await query
+                    .Where(x => x.PaymentStatus == "Completed")
+                    .Select(x => x.OrderId)
+                    .Distinct()
+                    .CountAsync();
+
+                var pendingPayments = await query
+                    .Where(x => x.PaymentStatus == "Pending")
+                    .Select(x => x.OrderId)
+                    .Distinct()
+                    .CountAsync();
+
+                var failedPayments = await query
+                    .Where(x => x.PaymentStatus == "Failed")
+                    .Select(x => x.OrderId)
+                    .Distinct()
+                    .CountAsync();
+
+                var totalPages =
+                    (int)Math.Ceiling((double)totalOrders / pageSize);
+
+                //----------------------------------------------------
+                // Revenue
+                //----------------------------------------------------
 
                 var revenue = await _context.OrderItems
-    .Where(x =>
-        (isAdmin || x.SellerId == sellerId) &&
-        x.Order.PaymentStatus == "Completed")
-    .SumAsync(x => x.LineTotal);
+                    .Where(x =>
+                        (isAdmin || x.SellerId == sellerId) &&
+                        x.Order.PaymentStatus == "Completed")
+                    .SumAsync(x => x.FinalPaidAmount);
 
-                // Recent Orders First
-                var orders =
-                    await query
-                        .OrderByDescending(x =>
-                            x.OrderDate)
-                        .Skip((page - 1) * pageSize)
-                        .Take(pageSize)
-                        .ToListAsync();
+                //----------------------------------------------------
+                // Sorting & Pagination
+                //----------------------------------------------------
+
+                var orders = await query
+
+                    .OrderByDescending(x => x.OrderDate)
+                    .ThenByDescending(x => x.OrderId)
+
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+
+                    .ToListAsync();
+
+                //----------------------------------------------------
+                // Response
+                //----------------------------------------------------
 
                 return Ok(new
                 {
                     success = true,
+
                     sellerName,
                     isSubscribed,
 
-                    page,
-                    pageSize,
-                    totalPages,
-                    totalOrders,
-                    completed,
-                    pending,
-                    cancelled,
-                    revenue,
+                    pagination = new
+                    {
+                        page,
+                        pageSize,
+                        totalPages,
+                        totalOrders,
+                        totalOrderItems
+                    },
+
+                    statistics = new
+                    {
+                        completedPayments,
+                        pendingPayments,
+                        failedPayments,
+
+                        pending,
+                        packed,
+                        shipped,
+                        outForDelivery,
+                        delivered,
+                        cancelled,
+
+                        returnRequested,
+                        returnApproved,
+                        returned,
+                        refunded,
+
+                        revenue
+                    },
 
                     orders
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     success = false,
-                    message = ex.Message,
-                    inner = ex.InnerException?.Message,
-                    stack = ex.StackTrace
+                    message = "An unexpected error occurred.",
+
+                    error = ex.Message,
+                    innerException = ex.InnerException?.Message
                 });
             }
         }
@@ -2129,16 +2776,13 @@ namespace VivekMedicalProducts.Controllers
 
         [Authorize]
         [HttpPut("orders/{id}/status")]
-        public async Task<IActionResult>
- UpdateOrderStatus(
-     int id,
-     [FromBody]
-    UpdateOrderStatusDto model)
+        public async Task<IActionResult> UpdateOrderStatus(
+      int id,
+      [FromBody] UpdateOrderStatusDto model)
         {
             try
             {
-                var isAdmin =
-                    User.IsInRole("Admin");
+                var isAdmin = User.IsInRole("Admin");
 
                 int sellerId = 0;
 
@@ -2165,66 +2809,107 @@ namespace VivekMedicalProducts.Controllers
                     }
 
                     sellerId = seller.SellerId;
-
-                    var hasAccess = await _context.OrderItems
-                        .AnyAsync(x =>
-                            x.OrderId == id &&
-                            x.SellerId == sellerId);
-
-                    if (!hasAccess)
-                    {
-                        return StatusCode(StatusCodes.Status403Forbidden, new
-                        {
-                            success = false,
-                            message = "You are not authorized to update this order."
-                        });
-                    }
                 }
 
-                    var order =
-                    await _context.Orders
-                        .FirstOrDefaultAsync(
-                            x =>
-                                x.OrderId ==
-                                id);
+                //--------------------------------------------------
+                // Get Order
+                //--------------------------------------------------
+
+                var order = await _context.Orders
+                    .Include(x => x.OrderItems)
+                    .FirstOrDefaultAsync(x => x.OrderId == id);
 
                 if (order == null)
                 {
                     return NotFound(new
                     {
                         success = false,
-                        message =
-                            "Order not found"
+                        message = "Order not found."
                     });
                 }
 
-                order.PaymentStatus =
-                    model.PaymentStatus;
+                //--------------------------------------------------
+                // Update Payment Status (Order Level)
+                //--------------------------------------------------
 
-                order.OrderStatus =
-                    model.OrderStatus;
+                if (!string.IsNullOrWhiteSpace(model.PaymentStatus))
+                {
+                    order.PaymentStatus = model.PaymentStatus;
+                }
 
-                order.OrderModifiedDate =
-                    DateTime.UtcNow;
+                order.OrderModifiedDate = DateTime.UtcNow;
 
-                await _context
-                    .SaveChangesAsync();
+                //--------------------------------------------------
+                // Update Item Status
+                //--------------------------------------------------
+
+                var items = isAdmin
+                    ? order.OrderItems
+                    : order.OrderItems.Where(x => x.SellerId == sellerId).ToList();
+
+                if (!items.Any())
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new
+                    {
+                        success = false,
+                        message = "You are not authorized to update this order."
+                    });
+                }
+
+                foreach (var item in items)
+                {
+                    if (!string.IsNullOrWhiteSpace(model.OrderStatus))
+                    {
+                        item.OrderItemStatus = model.OrderStatus;
+                    }
+
+                    switch (model.OrderStatus)
+                    {
+                        case "Packed":
+                            item.PackedDate = DateTime.UtcNow;
+                            break;
+
+                        case "Shipped":
+                            item.ShippedDate = DateTime.UtcNow;
+                            break;
+
+                        case "OutForDelivery":
+                            item.OutForDeliveryDate = DateTime.UtcNow;
+                            break;
+
+                        case "Delivered":
+                            item.DeliveredDate = DateTime.UtcNow;
+
+                            item.IsReturnEligible = true;
+
+                            item.ReturnEligibleTill = DateTime.UtcNow.AddDays(7); // or your return policy
+
+                            item.UpdatedAt = DateTime.UtcNow;
+
+                            item.ItemOrderModifiedDate = DateTime.UtcNow;
+                            break;
+
+                        case "Cancelled":
+                            item.CancelledAt = DateTime.UtcNow;
+                            break;
+                    }
+                }
+
+                await _context.SaveChangesAsync();
 
                 return Ok(new
                 {
                     success = true,
-                    message =
-                        "Order updated successfully"
+                    message = "Order status updated successfully."
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     success = false,
                     message = ex.Message,
-                    inner =
-                        ex.InnerException?.Message
+                    inner = ex.InnerException?.Message
                 });
             }
         }
@@ -2320,7 +3005,6 @@ namespace VivekMedicalProducts.Controllers
                         order.OrderId,
                         order.OrderNumber,
                         order.OrderDate,
-                        order.OrderStatus,
                         order.PaymentStatus,
                         //order.PaymentMethod,
                         order.GrandTotal,
@@ -2357,7 +3041,7 @@ namespace VivekMedicalProducts.Controllers
         x.Quantity,
         x.Price,
         x.LineTotal,
-        x.ItemStatus
+        x.OrderItemStatus
     })
     .ToList()
                     }

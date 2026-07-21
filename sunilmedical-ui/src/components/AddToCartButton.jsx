@@ -6,7 +6,8 @@ export default function AddToCartButton({
     variantId,
     minQty = 1,
     maxQty = null,
-    stepQty = 1
+    stepQty = 1,
+    setMessage
 }) {
     const {
         addToCart,
@@ -28,6 +29,7 @@ export default function AddToCartButton({
 
     const [loading, setLoading] =
         useState(false);
+
 
     useEffect(() => {
         setUiQty(cartQty);
@@ -70,6 +72,12 @@ export default function AddToCartButton({
                 variantKey,
                 min
             );
+
+        setMessage("🛒 Product added to your cart");
+
+        setTimeout(() => {
+            setMessage("");
+        }, 2500);
 
         if (!success) {
             setUiQty(cartQty);
@@ -124,6 +132,9 @@ export default function AddToCartButton({
     };
 
     return (
+
+        <>
+
         <div className="w-full">
             {uiQty <= 0 ? (
                 <button
@@ -162,6 +173,8 @@ export default function AddToCartButton({
 
                 </div>
             )}
-        </div>
+    </div>
+
+    </>
     );
 }

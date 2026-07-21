@@ -56,11 +56,10 @@ export default function OrderSuccessPage() {
     if (loading)
         return (
 
-            <div className="min-h-screen flex justify-center items-center">
-
-                Loading...
-
-            </div>
+            <SmallCubeLoader
+                title="Confirming Your Order"
+                subtitle="Redirecting to your Success Order Page..."
+            />
 
         );
 

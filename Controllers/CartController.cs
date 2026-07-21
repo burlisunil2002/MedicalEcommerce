@@ -225,7 +225,10 @@ private (string? userId, string guestId) GetIdentity()
                             c.ProductVariant.Price,
 
                         quantity =
-                            c.Quantity
+                            c.Quantity,
+
+                        finalPrice =
+                            c.FinalPrice
                     })
                     .ToListAsync();
 

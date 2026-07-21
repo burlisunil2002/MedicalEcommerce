@@ -290,13 +290,22 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<DateTime?>("CancelledAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("CancelledBy")
+                        .HasColumnType("text");
+
                     b.Property<string>("CancelledReason")
                         .HasColumnType("text");
 
                     b.Property<decimal>("CouponDiscountAmount")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("CourierPartner")
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeliveredDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal>("DiscountAmount")
@@ -317,10 +326,6 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<DateTime?>("ItemOrderModifiedDate")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("ItemStatus")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<decimal>("LineTotal")
                         .HasColumnType("decimal(18,2)");
 
@@ -329,6 +334,16 @@ namespace VivekMedicalProducts.Migrations
 
                     b.Property<int>("OrderId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("OrderItemStatus")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("OutForDeliveryDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("PackedDate")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime?>("PickupDate")
                         .HasColumnType("timestamp with time zone");
@@ -354,6 +369,10 @@ namespace VivekMedicalProducts.Migrations
 
                     b.Property<DateTime?>("RefundCompletedDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RefundStatus")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<DateTime?>("ReturnApprovedDate")
                         .HasColumnType("timestamp with time zone");
@@ -383,8 +402,14 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<int?>("SellerId")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("ShippedDate")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<decimal>("TaxableAmount")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("TrackingNumber")
+                        .HasColumnType("text");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -400,76 +425,43 @@ namespace VivekMedicalProducts.Migrations
                     b.ToTable("OrderItems");
                 });
 
-            modelBuilder.Entity("PaymentSession", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("numeric");
-
-                    b.Property<int>("CheckoutSessionId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("ExpiryDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("FailureReason")
-                        .HasColumnType("text");
-
-                    b.Property<string>("GuestId")
-                        .HasColumnType("text");
-
-                    b.Property<string>("IpAddress")
-                        .HasColumnType("text");
-
-                    b.Property<bool>("IsCompleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("PaymentCompletedDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("PaymentStatus")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("RazorpayOrderId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("RazorpayPaymentId")
-                        .HasColumnType("text");
-
-                    b.Property<string>("RazorpaySignature")
-                        .HasColumnType("text");
-
-                    b.Property<string>("UserAgent")
-                        .HasColumnType("text");
-
-                    b.Property<string>("UserId")
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("PaymentSessions");
-                });
-
             modelBuilder.Entity("VivekMedicalProducts.Models.AdminOrderModel", b =>
                 {
-                    b.Property<string>("Customer")
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("CouponDiscountAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("CourierPartner")
                         .HasColumnType("text");
 
-                    b.Property<decimal?>("GrandTotal")
+                    b.Property<string>("Customer")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DeliveredDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("FinalPaidAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("GSTAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("GSTPercentage")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("GrandTotal")
+                        .HasColumnType("numeric");
+
+                    b.Property<bool>("IsReturnEligible")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("LineTotal")
                         .HasColumnType("numeric");
 
                     b.Property<DateTime>("OrderDate")
@@ -481,23 +473,63 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<int>("OrderItemId")
                         .HasColumnType("integer");
 
-                    b.Property<string>("OrderStatus")
+                    b.Property<string>("OrderNumber")
+                        .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("OrderStatus")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("OutForDeliveryDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("PackedDate")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("PaymentStatus")
+                        .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("numeric");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("integer");
 
                     b.Property<string>("ProductName")
+                        .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int?>("Quantity")
+                    b.Property<int>("Quantity")
                         .HasColumnType("integer");
 
                     b.Property<string>("RazorpayPaymentId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ReturnEligibleTill")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReturnStatus")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<int?>("SellerId")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ShippedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("TaxableAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("TrackingNumber")
+                        .HasColumnType("text");
+
+                    b.Property<string>("VariantName")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.ToTable("AdminOrders");
                 });
@@ -724,21 +756,12 @@ namespace VivekMedicalProducts.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("OrderId"));
 
-                    b.Property<DateTime?>("CancelledAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CancelledBy")
-                        .HasColumnType("text");
-
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
 
                     b.Property<string>("Currency")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<DateTime?>("DeliveredDate")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("FailureCode")
                         .HasColumnType("text");
@@ -769,9 +792,13 @@ namespace VivekMedicalProducts.Migrations
 
                     b.Property<string>("OrderNumber")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
-                    b.Property<string>("OrderStatus")
+                    b.Property<DateTime?>("PaymentDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentMethod")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -799,13 +826,6 @@ namespace VivekMedicalProducts.Migrations
 
                     b.Property<string>("RefundStatus")
                         .HasColumnType("text");
-
-                    b.Property<string>("ReturnStatus")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int?>("SellerId")
-                        .HasColumnType("integer");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -836,11 +856,20 @@ namespace VivekMedicalProducts.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ReturnId"));
 
+                    b.Property<string>("AdminRemarks")
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("ApprovedDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime?>("CompletedDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
 
                     b.Property<string>("Image1")
                         .HasColumnType("text");
@@ -854,27 +883,59 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<int>("OrderId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("OrderItemId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("PickupDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("PickupScheduledDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Reason")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("ReceivedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("RefundAmount")
+                        .HasColumnType("numeric");
 
                     b.Property<bool>("RefundCompleted")
                         .HasColumnType("boolean");
 
+                    b.Property<DateTime?>("RefundCompletedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("RefundInitiatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RefundTransactionId")
+                        .HasColumnType("text");
+
                     b.Property<string>("RejectReason")
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("RejectedDate")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Remarks")
-                        .HasColumnType("text");
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<DateTime>("RequestedDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Status")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
 
                     b.Property<string>("UserId")
@@ -884,6 +945,8 @@ namespace VivekMedicalProducts.Migrations
                     b.HasKey("ReturnId");
 
                     b.HasIndex("OrderId");
+
+                    b.HasIndex("OrderItemId");
 
                     b.ToTable("OrderReturns");
                 });
@@ -974,6 +1037,136 @@ namespace VivekMedicalProducts.Migrations
                         .IsUnique();
 
                     b.ToTable("Payments");
+                });
+
+            modelBuilder.Entity("VivekMedicalProducts.Models.PaymentSession", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric");
+
+                    b.Property<int>("CheckoutSessionId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CouponCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("CouponDiscount")
+                        .HasColumnType("numeric");
+
+                    b.Property<int?>("CouponId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DeletedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiryDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FailureReason")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("GSTAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("GuestId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsVerified")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastRetryDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("PaymentCompletedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentGateway")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PaymentStatus")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("ProductDiscount")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("RazorpayOrderId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RazorpayPaymentId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RazorpaySignature")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("RefundAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<bool>("RefundCompleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("RefundDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("RefundInitiated")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("RefundTransactionId")
+                        .HasColumnType("text");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("ShippingCharge")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("SubTotal")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("TaxableAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserAgent")
+                        .HasColumnType("text");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PaymentSessions");
                 });
 
             modelBuilder.Entity("VivekMedicalProducts.Models.PincodeServiceabilityModel", b =>
@@ -1389,6 +1582,9 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<bool>("IsDefault")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("Landmark")
+                        .HasColumnType("text");
+
                     b.Property<string>("MobileNumber")
                         .IsRequired()
                         .HasColumnType("text");
@@ -1592,7 +1788,15 @@ namespace VivekMedicalProducts.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("OrderItemModel", "OrderItem")
+                        .WithMany()
+                        .HasForeignKey("OrderItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Order");
+
+                    b.Navigation("OrderItem");
                 });
 
             modelBuilder.Entity("VivekMedicalProducts.Models.PaymentModel", b =>

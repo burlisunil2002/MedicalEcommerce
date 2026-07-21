@@ -8,31 +8,55 @@ namespace VivekMedicalProducts.Models
         [Key]
         public int OrderId { get; set; }
 
+        // =====================================
+        // Customer
+        // =====================================
+
         public string? UserId { get; set; }
 
         public string? GuestId { get; set; }
 
-        public int? SellerId { get; set; }
-
         [ForeignKey(nameof(UserId))]
         public ApplicationUser? User { get; set; }
 
+        // =====================================
+        // Order Details
+        // =====================================
+
+        [Required]
+        [MaxLength(50)]
         public string OrderNumber { get; set; } = string.Empty;
 
-        // Address reference
+        public DateTime OrderDate { get; set; } = DateTime.UtcNow;
+
+        // =====================================
+        // Shipping Address
+        // =====================================
+
         public int? UserAddressId { get; set; }
 
         [ForeignKey(nameof(UserAddressId))]
         public UserAddress? UserAddress { get; set; }
+
+        // =====================================
+        // Order Summary
+        // =====================================
 
         [Column(TypeName = "decimal(18,2)")]
         public decimal GrandTotal { get; set; }
 
         public string Currency { get; set; } = "INR";
 
-        public string OrderStatus { get; set; } = "Pending";
+        // =====================================
+        // Payment
+        // =====================================
 
-        public string PaymentStatus { get; set; } = "Created";
+        // Payment
+        public string PaymentMethod { get; set; } = "Online";
+        // Online, COD, UPI, Card, NetBanking, Wallet
+
+        public string PaymentStatus { get; set; } = "Pending";
+        // Pending, Completed, Failed, Refunded, PartiallyRefunded
 
         public string? RazorpayOrderId { get; set; }
 
@@ -40,13 +64,21 @@ namespace VivekMedicalProducts.Models
 
         public string? RazorpaySignature { get; set; }
 
-        public bool IsPaymentVerified { get; set; } = false;
+        public bool IsPaymentVerified { get; set; }
+
+        public DateTime? PaymentDate { get; set; }
 
         public DateTime? PaymentVerifiedAt { get; set; }
+
+
+        // Payment Failure
 
         public string? FailureReason { get; set; }
 
         public string? FailureCode { get; set; }
+
+        // Full Order Refund
+        // (Use only when entire payment is refunded)
 
         public string? RefundId { get; set; }
 
@@ -55,12 +87,13 @@ namespace VivekMedicalProducts.Models
 
         public string? RefundStatus { get; set; }
 
+        // =====================================
+        // Security & Audit
+        // =====================================
+
         public string? IpAddress { get; set; }
 
         public string? UserAgent { get; set; }
-
-        public DateTime OrderDate { get; set; }
-            = DateTime.UtcNow;
 
         public string? CreatedBy { get; set; }
 
@@ -68,18 +101,13 @@ namespace VivekMedicalProducts.Models
 
         public string? UpdatedBy { get; set; }
 
-        public string ReturnStatus { get; set; } = "None";
-
-        public DateTime? DeliveredDate { get; set; }
-
-        public DateTime? CancelledAt { get; set; }
-
-        public string? CancelledBy { get; set; }
-
         public bool IsDeleted { get; set; } = false;
 
-        public ICollection<OrderItemModel> OrderItems
-        { get; set; }
+        // =====================================
+        // Navigation
+        // =====================================
+
+        public ICollection<OrderItemModel> OrderItems { get; set; }
             = new List<OrderItemModel>();
     }
 }

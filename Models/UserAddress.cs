@@ -16,6 +16,9 @@
 
         public string? AddressLine2 { get; set; }
 
+        public string? Landmark { get; set; }
+
+
         public string City { get; set; }
 
         public string State { get; set; }

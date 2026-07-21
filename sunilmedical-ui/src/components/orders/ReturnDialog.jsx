@@ -1,27 +1,24 @@
-﻿import { useState } from "react";
-
+﻿import { useEffect, useState } from "react";
 import {
     RotateCcw,
-    UploadCloud
+    Upload,
+    X,
+    Image as ImageIcon
 } from "lucide-react";
 
 const reasons = [
 
-    "Wrong Product Received",
-
     "Damaged Product",
 
-    "Defective Product",
+    "Wrong Product Delivered",
+
+    "Product Not Working",
 
     "Missing Parts",
 
-    "Quality Not Good",
+    "Quality Issue",
 
-    "Ordered By Mistake",
-
-    "Not As Described",
-
-    "Better Price Available",
+    "Changed My Mind",
 
     "Other"
 
@@ -31,8 +28,6 @@ export default function ReturnDialog({
 
     open,
 
-    order,
-
     loading,
 
     onClose,
@@ -41,189 +36,296 @@ export default function ReturnDialog({
 
 }) {
 
-    const [reason, setReason] =
-        useState("");
+    const [reason, setReason] = useState("");
 
-    const [remarks, setRemarks] =
-        useState("");
+    const [remarks, setRemarks] = useState("");
 
-    const [files, setFiles] =
-        useState([]);
+    const [files, setFiles] = useState([]);
 
-    if (!open || !order)
-        return null;
+    useEffect(() => {
+
+        if (!open) {
+
+            setReason("");
+
+            setRemarks("");
+
+            setFiles([]);
+
+        }
+
+    }, [open]);
+
+    if (!open) return null;
+
+    function addFiles(e) {
+
+        const selected = Array.from(e.target.files || []);
+
+        setFiles(prev => [...prev, ...selected]);
+
+    }
+
+    function removeFile(index) {
+
+        setFiles(prev => prev.filter((_, i) => i !== index));
+
+    }
+
+    function handleSubmit() {
+
+        if (!reason) {
+
+            alert("Please select a return reason.");
+
+            return;
+
+        }
+
+        onSubmit({
+
+            reason,
+
+            remarks,
+
+            files
+
+        });
+
+    }
 
     return (
 
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
 
-            <div className="w-full max-w-xl bg-white rounded-3xl shadow-2xl p-8">
+            <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl">
 
-                <div className="flex items-center gap-4">
+                {/* Header */}
 
-                    <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center">
+                <div className="flex items-center justify-between border-b p-6">
+
+                    <div className="flex items-center gap-3">
 
                         <RotateCcw
-                            size={32}
-                            className="text-purple-700"
+                            className="text-orange-500"
+                            size={28}
                         />
-
-                    </div>
-
-                    <div>
 
                         <h2 className="text-2xl font-bold">
 
-                            Return Order
+                            Request Return
 
                         </h2>
 
-                        <p className="text-gray-500">
-
-                            {order.orderNumber}
-
-                        </p>
-
                     </div>
 
-                </div>
+                    <button
 
-                {/* Reason */}
+                        onClick={onClose}
 
-                <div className="mt-8">
-
-                    <label className="font-semibold">
-
-                        Return Reason
-
-                    </label>
-
-                    <select
-
-                        value={reason}
-
-                        onChange={(e) =>
-
-                            setReason(e.target.value)
-
-                        }
-
-                        className="w-full mt-2 h-12 rounded-xl border px-4"
+                        className="rounded-full p-2 hover:bg-slate-100"
 
                     >
 
-                        <option value="">
+                        <X size={22} />
 
-                            Select Reason
-
-                        </option>
-
-                        {
-
-                            reasons.map(r => (
-
-                                <option key={r}>
-
-                                    {r}
-
-                                </option>
-
-                            ))
-
-                        }
-
-                    </select>
+                    </button>
 
                 </div>
 
-                {/* Remarks */}
+                {/* Body */}
 
-                <div className="mt-5">
+                <div className="space-y-6 p-6">
 
-                    <label className="font-semibold">
+                    {/* Reason */}
 
-                        Remarks
+                    <div>
 
-                    </label>
+                        <label className="mb-2 block font-medium">
 
-                    <textarea
+                            Return Reason
 
-                        rows={4}
+                        </label>
 
-                        value={remarks}
+                        <select
 
-                        onChange={(e) =>
+                            value={reason}
 
-                            setRemarks(e.target.value)
+                            onChange={(e) => setReason(e.target.value)}
 
-                        }
+                            className="w-full rounded-xl border p-3"
 
-                        className="w-full mt-2 rounded-xl border p-4"
+                        >
 
-                    />
+                            <option value="">
 
-                </div>
+                                Select Reason
 
-                {/* Upload */}
+                            </option>
 
-                <div className="mt-5">
+                            {
+                                reasons.map(reason => (
 
-                    <label className="font-semibold">
+                                    <option
+                                        key={reason}
+                                        value={reason}
+                                    >
+                                        {reason}
+                                    </option>
 
-                        Upload Images (Optional)
-
-                    </label>
-
-                    <label className="
-mt-3
-border-2
-border-dashed
-rounded-2xl
-p-8
-flex
-flex-col
-items-center
-cursor-pointer
-hover:bg-gray-50
-">
-
-                        <UploadCloud
-                            size={40}
-                        />
-
-                        <span className="mt-3">
-
-                            Click to Upload
-
-                        </span>
-
-                        <input
-
-                            type="file"
-
-                            multiple
-
-                            hidden
-
-                            onChange={(e) =>
-
-                                setFiles([...e.target.files])
-
+                                ))
                             }
 
+                        </select>
+
+                    </div>
+
+                    {/* Remarks */}
+
+                    <div>
+
+                        <label className="mb-2 block font-medium">
+
+                            Additional Remarks
+
+                        </label>
+
+                        <textarea
+
+                            rows={4}
+
+                            value={remarks}
+
+                            onChange={(e) => setRemarks(e.target.value)}
+
+                            className="w-full rounded-xl border p-3 outline-none focus:border-blue-500"
+
+                            placeholder="Describe the issue in detail..."
+
                         />
 
-                    </label>
+                    </div>
+
+                    {/* Upload Images */}
+
+                    <div>
+
+                        <label className="mb-3 block font-medium">
+
+                            Upload Supporting Images
+
+                        </label>
+
+                        <label className="flex cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 p-8 transition hover:border-blue-500 hover:bg-blue-50">
+
+                            <div className="text-center">
+
+                                <Upload
+                                    className="mx-auto text-blue-600"
+                                    size={34}
+                                />
+
+                                <p className="mt-3 font-medium">
+
+                                    Click to upload images
+
+                                </p>
+
+                                <p className="mt-1 text-sm text-slate-500">
+
+                                    JPG, PNG, JPEG
+
+                                </p>
+
+                            </div>
+
+                            <input
+
+                                type="file"
+
+                                multiple
+
+                                accept="image/*"
+
+                                hidden
+
+                                onChange={addFiles}
+
+                            />
+
+                        </label>
+
+                    </div>
+
+                    {/* Image Preview */}
 
                     {
 
                         files.length > 0 && (
 
-                            <div className="mt-3 text-sm text-gray-500">
+                            <div>
 
-                                {files.length}
+                                <h4 className="mb-4 font-semibold">
 
-                                file(s) selected
+                                    Selected Images
+
+                                </h4>
+
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+                                    {
+
+                                        files.map((file, index) => (
+
+                                            <div
+
+                                                key={index}
+
+                                                className="relative rounded-xl overflow-hidden border"
+
+                                            >
+
+                                                <img
+
+                                                    src={URL.createObjectURL(file)}
+
+                                                    alt="preview"
+
+                                                    className="h-32 w-full object-cover"
+
+                                                />
+
+                                                <button
+
+                                                    onClick={() => removeFile(index)}
+
+                                                    className="absolute top-2 right-2 rounded-full bg-red-600 p-1 text-white"
+
+                                                >
+
+                                                    <X size={14} />
+
+                                                </button>
+
+                                                <div className="flex items-center gap-2 p-2 text-xs">
+
+                                                    <ImageIcon size={14} />
+
+                                                    <span className="truncate">
+
+                                                        {file.name}
+
+                                                    </span>
+
+                                                </div>
+
+                                            </div>
+
+                                        ))
+
+                                    }
+
+                                </div>
 
                             </div>
 
@@ -233,20 +335,15 @@ hover:bg-gray-50
 
                 </div>
 
-                {/* Buttons */}
+                {/* Footer */}
 
-                <div className="mt-8 flex gap-4">
+                <div className="flex justify-end gap-3 border-t p-6">
 
                     <button
 
                         onClick={onClose}
 
-                        className="
-flex-1
-h-12
-rounded-xl
-border
-"
+                        className="rounded-xl border px-6 py-3 hover:bg-slate-100"
 
                     >
 
@@ -256,32 +353,11 @@ border
 
                     <button
 
-                        disabled={!reason || loading}
+                        disabled={loading}
 
-                        onClick={() =>
+                        onClick={handleSubmit}
 
-                            onSubmit({
-
-                                order,
-
-                                reason,
-
-                                remarks,
-
-                                files
-
-                            })
-
-                        }
-
-                        className="
-flex-1
-h-12
-rounded-xl
-bg-purple-600
-hover:bg-purple-700
-text-white
-"
+                        className="rounded-xl bg-orange-600 px-6 py-3 text-white hover:bg-orange-700 disabled:opacity-50"
 
                     >
 
@@ -289,13 +365,9 @@ text-white
 
                             loading
 
-                                ?
+                                ? "Submitting..."
 
-                                "Submitting..."
-
-                                :
-
-                                "Submit Return"
+                                : "Submit Return Request"
 
                         }
 
@@ -310,3 +382,4 @@ text-white
     );
 
 }
+

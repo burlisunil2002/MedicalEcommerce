@@ -4,17 +4,16 @@ namespace VivekMedicalProducts.DTOs
 {
     public class RequestReturnDto
     {
-        public int OrderId { get; set; }
+        public int OrderItemId { get; set; }
 
-        [Required]
-        public string Reason { get; set; }
+        public string Reason { get; set; } = string.Empty;
 
         public string? Remarks { get; set; }
 
-        public string? Image1 { get; set; }
+        public IFormFile? Image1 { get; set; }
 
-        public string? Image2 { get; set; }
+        public IFormFile? Image2 { get; set; }
 
-        public string? Image3 { get; set; }
+        public IFormFile? Image3 { get; set; }
     }
 }

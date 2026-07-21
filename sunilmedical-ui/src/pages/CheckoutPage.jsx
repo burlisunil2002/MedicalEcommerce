@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from "react-router-dom";
 import SummaryCard from "../components/SummaryCard";
 import AddressCard from "../components/checkout/AddressCard";
 import AddressForm from "../components/checkout/AddressForm";
+import SmallCubeLoader from "../components/loader/SmallCubeLoader";
+import OrderItemsSection from "../components/checkout/OrderItemsSection";
 
 
 import {
@@ -20,50 +22,62 @@ export default function CheckoutPage() {
 
     const [checkout, setCheckout] = useState(null); 
 
+    const [cartItems, setCartItems] = useState([]);
+
     const [selectedAddress, setSelectedAddress] =
         useState(null);
 
     const [editingAddress, setEditingAddress] =
         useState(null);
 
+    const [pageLoading, setPageLoading] = useState(true);
+
+
     const loadCheckout = async () => {
+
         try {
+
+            setPageLoading(true);
+
             const res = await getCheckout();
 
             setCheckout(res.data);
 
+            setCartItems(res.data.cartItems || []);
+
             if (res.data.addresses?.length > 0) {
 
-                if (res.data.addresses?.length > 0) {
+                let selected =
+                    res.data.addresses.find(
+                        x => x.id === res.data.selectedAddressId
+                    );
 
-                    let selected =
+                if (!selected)
+                    selected =
                         res.data.addresses.find(
-                            x => x.id === res.data.selectedAddressId
+                            x => x.isDefault
                         );
 
-                    if (!selected)
-                        selected =
-                            res.data.addresses.find(
-                                x => x.isDefault
-                            );
+                if (!selected)
+                    selected =
+                        res.data.addresses[0];
 
-                    if (!selected)
-                        selected =
-                            res.data.addresses[0];
-
-                    setSelectedAddress(selected.id);
-                }
+                setSelectedAddress(selected.id);
             }
 
-            // clear edit form after reload
             setEditingAddress(null);
 
-        } catch (err) {
-            console.error(
-                "Checkout load failed:",
-                err
-            );
         }
+        catch (err) {
+
+            console.error("Checkout load failed:", err);
+
+        }
+        finally {
+            setPageLoading(false);
+
+        }
+
     };
 
     useEffect(() => {
@@ -91,19 +105,26 @@ export default function CheckoutPage() {
     }, [location.state]);
 
     const handleSaveAddress = async (form) => {
+
         try {
+
             if (editingAddress) {
+
                 await updateAddress(
                     editingAddress.id,
                     form
                 );
+
             } else {
+
                 await addAddress(form);
+
             }
 
             await loadCheckout();
 
-        } catch (err) {
+        }
+        catch (err) {
 
             const message =
                 err?.response?.data?.message ||
@@ -112,20 +133,19 @@ export default function CheckoutPage() {
 
             alert(message);
 
-            console.error(err);
         }
+        finally {
+
+        }
+
     };
 
-    if (!checkout || !checkout.summary) {
+    if (pageLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto mb-4"></div>
-                    <p className="text-gray-600 text-lg">
-                        Loading checkout...
-                    </p>
-                </div>
-            </div>
+            <SmallCubeLoader
+                title="Preparing Checkout"
+                subtitle="Loading your addresses..."
+            />
         );
     }
 
@@ -136,9 +156,10 @@ export default function CheckoutPage() {
 
                 <div className="lg:col-span-2 space-y-6">
 
+                    {/* Delivery Address */}
                     <div className="bg-white p-6 rounded-3xl shadow-sm">
 
-                        <div className="flex justify-between mb-5">
+                        <div className="flex items-center justify-between mb-5">
 
                             <h2 className="text-2xl font-bold">
                                 Delivery Address
@@ -146,7 +167,7 @@ export default function CheckoutPage() {
 
                             <button
                                 onClick={() => navigate("/cart")}
-                                className="mb-4 flex items-center gap-2 text-gray-700 hover:text-green-600 font-medium"
+                                className="flex items-center gap-2 text-gray-700 hover:text-emerald-600 font-medium"
                             >
                                 ← Back to Cart
                             </button>
@@ -154,40 +175,23 @@ export default function CheckoutPage() {
                         </div>
 
                         <div className="space-y-4">
+
                             {checkout?.addresses?.length > 0 ? (
-                                checkout.addresses.map((a) => (
+                                checkout.addresses.map(a => (
                                     <AddressCard
                                         key={a.id}
                                         address={a}
                                         selected={selectedAddress === a.id}
                                         onSelect={async () => {
-
-                                            console.log("Address clicked:", a.id);
-
-                                            try {
-
-                                                const result = await selectAddress(a.id);
-
-                                                alert("Address Saved");
-
-                                                console.log(result.data);
-
-                                                setSelectedAddress(a.id);
-
-                                            }
-                                            catch (err) {
-
-                                                console.log("API Error:", err);
-
-                                            }
-
+                                            await selectAddress(a.id);
+                                            setSelectedAddress(a.id);
                                         }}
                                         onEdit={setEditingAddress}
                                     />
                                 ))
                             ) : (
                                 <p className="text-gray-500">
-                                    No address added yet
+                                    No address added yet.
                                 </p>
                             )}
 
@@ -195,6 +199,12 @@ export default function CheckoutPage() {
 
                     </div>
 
+                    {/* Order Items */}
+                    <OrderItemsSection
+                        items={cartItems}
+                    />
+
+                    {/* Address Form */}
                     <AddressForm
                         initialData={editingAddress || {}}
                         onSave={handleSaveAddress}
@@ -204,10 +214,10 @@ export default function CheckoutPage() {
 
                 <div className="self-start lg:sticky lg:top-24 h-fit">
 
-                <SummaryCard
-                    summary={checkout?.summary || {}}
-                    showCoupon={false}
-                    buttonText="Proceed To Review"
+                    <SummaryCard
+                        summary={checkout?.summary || {}}
+                        showCoupon={false}
+                        buttonText="Proceed To Review"
                         onButtonClick={async () => {
 
                             if (!selectedAddress) {
@@ -221,15 +231,15 @@ export default function CheckoutPage() {
 
                                 navigate("/review");
 
-                            } catch (err) {
-
-                                console.log(err);
+                            } catch {
 
                                 alert("Unable to save selected address.");
 
                             }
+
                         }}
                     />
+
                 </div>
 
             </div>

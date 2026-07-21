@@ -279,7 +279,16 @@ namespace VivekMedicalProducts.Services
                     ProductPrice =
                         c.ProductVariant != null
                         ? c.ProductVariant.Price
-                        : 0
+                        : 0,
+
+                    ProductFinalPrice =
+        c.Product.IsHotDeal &&
+        c.Product.DiscountPercentage > 0
+            ? c.ProductVariant.Price -
+              (c.ProductVariant.Price *
+               c.Product.DiscountPercentage / 100m)
+            : c.ProductVariant.Price
+
                 })
                 .ToListAsync();
 

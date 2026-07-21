@@ -1,32 +1,50 @@
 ﻿public class InvoiceItemViewModel
 {
-    public string ProductName { get; set; }
+    // Product
+    public int ProductId { get; set; }
 
-    public string VariantName { get; set; }
+    public int ProductVariantId { get; set; }
 
+    public int? SellerId { get; set; }
+
+    public string ProductName { get; set; } = "";
+
+    public string VariantName { get; set; } = "";
+
+    // Quantity
     public int Quantity { get; set; }
 
     // Original Unit Price
     public decimal Price { get; set; }
 
-    // Discount Per Unit
+    // Product Discount (Per Unit)
     public decimal DiscountAmount { get; set; }
 
-    // Amount After Product Discount × Qty
+    // Taxable Amount
     public decimal TaxableAmount { get; set; }
 
-    // GST %
+    // GST
     public decimal GSTPercentage { get; set; }
 
-    // GST Amount
     public decimal GSTAmount { get; set; }
 
-    // Coupon Share
+    // Coupon Allocation
     public decimal CouponDiscountAmount { get; set; }
 
-    // Final Amount Paid For This Item
+    // Final Paid Amount
     public decimal FinalPaidAmount { get; set; }
 
     // Line Total
     public decimal Total { get; set; }
+
+    // Item Status
+    public string ItemStatus { get; set; } = "";
+
+    // Return
+    public string ReturnStatus { get; set; } = "";
+
+    // Optional
+    public string? HSNCode { get; set; }
+
+    public string? SKU { get; set; }
 }

@@ -53,13 +53,27 @@ public class OrderItemModel
     [Column(TypeName = "decimal(18,2)")]
     public decimal NetAmount { get; set; }
 
-    public string ItemStatus { get; set; } = "Pending";
+    public string OrderItemStatus { get; set; } = "Pending";
 
     // audit
     public DateTime CreatedAt { get; set; }
         = DateTime.UtcNow;
 
+    public DateTime? PackedDate { get; set; }
+
+    public DateTime? ShippedDate { get; set; }
+
+    public DateTime? OutForDeliveryDate { get; set; }
+
+    public DateTime? DeliveredDate { get; set; }
+
+    public string? TrackingNumber { get; set; }
+
+    public string? CourierPartner { get; set; }
+
     public DateTime? UpdatedAt { get; set; }
+
+    public string? CancelledBy { get; set; }
 
     public DateTime? CancelledAt { get; set; }
 
@@ -98,6 +112,8 @@ public class OrderItemModel
     public string? ReturnImages { get; set; }   // JSON or comma-separated URLs
 
     public string? ReturnReviewedBy { get; set; }
+
+    public string RefundStatus { get; set; } = "None";
 
     // navigation
     [ForeignKey(nameof(OrderId))]

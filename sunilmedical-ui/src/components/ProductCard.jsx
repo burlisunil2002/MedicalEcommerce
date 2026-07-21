@@ -3,16 +3,10 @@ import { useWishlist } from "../context/WishlistContext";
 import AddToCartButton from "../components/AddToCartButton";
 import { useNavigate } from "react-router-dom";
 
-export default function ProductCard({ p }) {
+export default function ProductCard({ p, setMessage }) {
 
     const navigate = useNavigate();
     const { toggleWishlist, isWishlisted } = useWishlist();
-
-   /* const defaultVariant =
-        p.defaultVariant ??
-        (p.variants && p.variants.length > 0
-            ? p.variants[0]
-            : null);*/
 
     const defaultVariant =
         p.defaultVariant;
@@ -215,6 +209,8 @@ export default function ProductCard({ p }) {
                         minQty={defaultVariant.minQuantity}
                         stepQty={defaultVariant.stepQuantity}
                         maxQty={defaultVariant.maxQuantity}
+                        setMessage={setMessage}
+
                     />
                     ) : (
                         <button

@@ -662,6 +662,34 @@ ${dashboard.isSubscribed
 
                         whileTap={{ scale: .95 }}
 
+                        onClick={() => navigate("/seller/returns")}
+
+                        className="rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white p-6 transition"
+
+                    >
+
+                        <ShoppingCart size={34} className="mx-auto mb-3" />
+
+                        <h3 className="font-semibold">
+
+                            Return Orders
+
+                        </h3>
+
+                        <p className="text-xs text-indigo-100 mt-2">
+
+                            Manage Return Orders
+
+                        </p>
+
+                    </motion.button>
+
+                    <motion.button
+
+                        whileHover={{ scale: 1.03 }}
+
+                        whileTap={{ scale: .95 }}
+
                         onClick={() => navigate("/seller/subscription")}
 
                         className="rounded-2xl bg-green-600 hover:bg-green-700 text-white p-6 transition"

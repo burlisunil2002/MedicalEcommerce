@@ -1,23 +1,36 @@
-﻿import {
+﻿import { useState } from "react";
+
+import {
+    ChevronDown,
+    ChevronUp,
     Calendar,
-    CreditCard,
+    Receipt,
     PackageCheck,
-    Receipt
+    CircleDollarSign,
+    MapPin,
+    Phone,
+    User,
+    LifeBuoy
 } from "lucide-react";
 
-import OrderItemCard from "./OrderItemCard";
-import OrderActions from "./OrderActions";
-import DeliveryTracker from "./DeliveryTracker";
+import OrderItems from "./OrderItems";
+import PaymentSummary from "./PaymentSummary";
 
 export default function OrderCard({
 
     order,
 
+    overallStatus,
+
+    onInvoice,
+
+    onTrack,
+
     onCancel,
 
     onReturn,
 
-    onInvoice,
+    onReview,
 
     onBuyAgain,
 
@@ -25,185 +38,196 @@ export default function OrderCard({
 
 }) {
 
-    const statusColor = {
+    const [expanded, setExpanded] = useState(true);
 
-        Placed: "bg-purple-100 text-purple-700",
+    //---------------------------------------------------
+    // STATUS BADGE
+    //---------------------------------------------------
 
-        Packed: "bg-yellow-100 text-yellow-700",
+    const getStatusBadge = () => {
 
-        Shipped: "bg-blue-100 text-blue-700",
+        switch (overallStatus) {
 
-        OutForDelivery: "bg-orange-100 text-orange-700",
+            case "Delivered":
 
-        Delivered: "bg-green-100 text-green-700",
+                return "bg-emerald-100 text-emerald-700";
 
-        Cancelled: "bg-red-100 text-red-700"
+            case "Out For Delivery":
+
+                return "bg-orange-100 text-orange-700";
+
+            case "Shipped":
+
+                return "bg-blue-100 text-blue-700";
+
+            case "Packed":
+
+                return "bg-indigo-100 text-indigo-700";
+
+            case "Cancelled":
+
+                return "bg-red-100 text-red-700";
+
+            default:
+
+                return "bg-amber-100 text-amber-700";
+
+        }
 
     };
 
+    //---------------------------------------------------
+
     return (
 
-        <div
-            className="
-bg-white
-rounded-[32px]
-shadow-md
-border
-overflow-hidden
-mb-10
-"
-        >
+        <div className="bg-white rounded-3xl shadow-sm border overflow-hidden">
 
-            {/* ================= HEADER ================= */}
+            {/*=================================================
+                            HEADER
+            =================================================*/}
 
             <div
-                className="
-border-b
-bg-gradient-to-r
-from-slate-50
-to-white
-p-8
-"
+
+                className="cursor-pointer p-6"
+
+                onClick={() => setExpanded(!expanded)}
+
             >
 
-                <div className="grid lg:grid-cols-5 gap-6">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
 
-                    {/* Order */}
-
-                    <div>
-
-                        <div className="text-gray-500 text-sm">
-
-                            Order Number
-
-                        </div>
-
-                        <div className="font-bold text-lg mt-2">
-
-                            {order.orderNumber}
-
-                        </div>
-
-                    </div>
-
-                    {/* Date */}
+                    {/* LEFT */}
 
                     <div>
 
-                        <div className="text-gray-500 text-sm">
+                        <div className="flex items-center gap-3 flex-wrap">
 
-                            Ordered On
+                            <h2 className="text-xl font-bold text-slate-800">
 
-                        </div>
+                                {order.orderNumber}
 
-                        <div className="font-semibold mt-2 flex items-center gap-2">
-
-                            <Calendar size={18} />
-
-                            {new Date(order.orderDate)
-
-                                .toLocaleDateString("en-IN")}
-
-                        </div>
-
-                    </div>
-
-                    {/* Amount */}
-
-                    <div>
-
-                        <div className="text-gray-500 text-sm">
-
-                            Grand Total
-
-                        </div>
-
-                        <div className="font-bold text-xl text-blue-700 mt-2">
-
-                            ₹{order.grandTotal.toLocaleString()}
-
-                        </div>
-
-                    </div>
-
-                    {/* Payment */}
-
-                    <div>
-
-                        <div className="text-gray-500 text-sm">
-
-                            Payment
-
-                        </div>
-
-                        <div className="mt-2">
+                            </h2>
 
                             <span
+
                                 className={`
-px-4
-py-2
-rounded-full
-text-sm
-font-semibold
 
-${order.paymentStatus === "Completed"
+                                    px-3 py-1
 
-                                        ? "bg-green-100 text-green-700"
+                                    rounded-full
 
-                                        : "bg-orange-100 text-orange-700"
+                                    text-xs
 
-                                    }
-`}
+                                    font-semibold
+
+                                    ${getStatusBadge()}
+
+                                `}
+
                             >
 
-                                <CreditCard
-                                    size={16}
-                                    className="inline mr-2"
-                                />
-
-                                {order.paymentStatus}
+                                {overallStatus}
 
                             </span>
 
                         </div>
 
+                        <div className="mt-4 flex flex-wrap gap-6 text-sm text-slate-600">
+
+                            <div className="flex items-center gap-2">
+
+                                <Calendar size={18} />
+
+                                {new Date(order.orderDate)
+                                    .toLocaleDateString()}
+
+                            </div>
+
+                            <div className="flex items-center gap-2">
+
+                                <PackageCheck size={18} />
+
+                                {order.itemCount} Items
+
+                            </div>
+
+                            <div className="flex items-center gap-2">
+
+                                <CircleDollarSign size={18} />
+
+                                ₹{order.grandTotal.toLocaleString()}
+
+                            </div>
+
+                        </div>
+
                     </div>
 
-                    {/* Status */}
+                    {/* RIGHT */}
 
-                    <div>
+                    <div className="flex items-center gap-3 flex-wrap">
 
-                        <div className="text-gray-500 text-sm">
+                        <button
 
-                            Order Status
+                            onClick={(e) => {
 
-                        </div>
+                                e.stopPropagation();
 
-                        <div className="mt-2">
+                                onInvoice(order);
 
-                            <span
-                                className={`
-px-4
-py-2
-rounded-full
-text-sm
-font-semibold
+                            }}
 
-${statusColor[order.orderStatus]}
+                            className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-white font-medium hover:bg-blue-700 transition"
 
-`}
-                            >
+                        >
 
-                                <PackageCheck
-                                    size={16}
-                                    className="inline mr-2"
-                                />
+                            <Receipt size={18} />
 
-                                {order.orderStatus}
+                            Invoice
 
-                            </span>
+                        </button>
 
-                        </div>
+                        <button
+
+                            onClick={(e) => {
+
+                                e.stopPropagation();
+
+                                onHelp();
+
+                            }}
+
+                            className="flex items-center gap-2 rounded-xl border px-5 py-3 hover:bg-slate-50"
+
+                        >
+
+                            <LifeBuoy size={18} />
+
+                            Help
+
+                        </button>
+
+                        <button
+
+                            className="rounded-full p-3 hover:bg-slate-100"
+
+                        >
+
+                            {
+
+                                expanded
+
+                                    ?
+
+                                    <ChevronUp size={22} />
+
+                                    :
+
+                                    <ChevronDown size={22} />
+
+                            }
+
+                        </button>
 
                     </div>
 
@@ -211,87 +235,302 @@ ${statusColor[order.orderStatus]}
 
             </div>
 
-            {/* ================= PRODUCTS ================= */}
+            {/*=================================================
+                    EXPANDABLE SECTION
+            =================================================*/}
 
-            <div className="p-8">
+            {
 
-                <h2 className="font-bold text-xl mb-6">
+                expanded && (
 
-                    Ordered Products
+                    <>
 
-                </h2>
+                        {/*=================================================
+        DELIVERY ADDRESS
+=================================================*/}
 
-                <div className="space-y-5">
+                        <div className="border-t px-6 py-5 bg-slate-50">
 
-                    {
+                            <div className="flex items-center gap-3 mb-5">
 
-                        order.items.map(item => (
+                                <MapPin
+                                    className="text-blue-600"
+                                    size={22}
+                                />
 
-                            <OrderItemCard
+                                <h3 className="font-semibold text-lg">
 
-                                key={`${item.productId}-${item.variantId}`}
+                                    Delivery Address
 
-                                item={item}
+                                </h3>
 
-                                orderStatus={order.orderStatus}
+                            </div>
+
+                            <div className="grid lg:grid-cols-2 gap-5">
+
+                                {/* Customer */}
+
+                                <div className="rounded-2xl bg-white border border-slate-200 p-5">
+
+                                    <div className="flex items-center gap-2 mb-4">
+
+                                        <User
+                                            size={18}
+                                            className="text-emerald-600"
+                                        />
+
+                                        <span className="font-semibold">
+
+                                            Customer Details
+
+                                        </span>
+
+                                    </div>
+
+                                    <div className="space-y-2">
+
+                                        <p className="font-semibold text-slate-800">
+
+                                            {order.deliveryAddress?.fullName || "-"}
+
+                                        </p>
+
+                                        <p className="text-slate-600 flex items-center gap-2">
+
+                                            <Phone size={16} />
+
+                                            {order.deliveryAddress?.mobileNumber || "-"}
+
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                                {/* Address */}
+
+                                <div className="rounded-2xl bg-white border border-slate-200 p-5">
+
+                                    <div className="flex items-center justify-between mb-4">
+
+                                        <span className="font-semibold">
+
+                                            Shipping Address
+
+                                        </span>
+
+                                        {order.deliveryAddress?.addressType && (
+
+                                            <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">
+
+                                                {order.deliveryAddress.addressType}
+
+                                            </span>
+
+                                        )}
+
+                                    </div>
+
+                                    {order.deliveryAddress ? (
+
+                                        <>
+
+                                            <p className="text-slate-700">
+
+                                                {order.deliveryAddress.addressLine1}
+
+                                            </p>
+
+                                            {order.deliveryAddress.addressLine2 && (
+
+                                                <p className="text-slate-700 mt-1">
+
+                                                    {order.deliveryAddress.addressLine2}
+
+                                                </p>
+
+                                            )}
+
+                                            {order.deliveryAddress.landmark && (
+
+                                                <p className="text-slate-500 mt-2">
+
+                                                    <strong>Landmark:</strong>{" "}
+
+                                                    {order.deliveryAddress.landmark}
+
+                                                </p>
+
+                                            )}
+
+                                            <p className="mt-2 text-slate-700">
+
+                                                {order.deliveryAddress.city},
+
+                                                {" "}
+
+                                                {order.deliveryAddress.state}
+
+                                                {" - "}
+
+                                                {order.deliveryAddress.pincode}
+
+                                            </p>
+
+                                        </>
+
+                                    ) : (
+
+                                        <p className="text-slate-500">
+
+                                            Delivery address not available.
+
+                                        </p>
+
+                                    )}
+
+                                </div>
+
+                            </div>
+
+                        </div>
+                        
+
+                        {/*=================================================
+                                ORDER ITEMS
+                        =================================================*/}
+
+                        <div className="px-6 py-6">
+
+                            <div className="flex items-center justify-between mb-6">
+
+                                <div>
+
+                                    <h3 className="text-xl font-bold text-slate-800">
+
+                                        Ordered Items
+
+                                    </h3>
+
+                                    <p className="text-slate-500 text-sm mt-1">
+
+                                        {order.itemCount} item(s) in this order
+
+                                    </p>
+
+                                </div>
+
+                                <div className="hidden lg:flex items-center gap-2 text-sm text-slate-500">
+
+                                    <PackageCheck size={18} />
+
+                                    {overallStatus}
+
+                                </div>
+
+                            </div>
+
+                            <OrderItems
+
+                                items={order.items}
+
+                                overallStatus={overallStatus}
+
+                                onTrack={onTrack}
+
+                                onCancel={onCancel}
+
+                                onReturn={onReturn}
+
+                                onReview={onReview}
+
+                                onBuyAgain={onBuyAgain}
+
+                                order={order}
 
                             />
 
-                        ))
+                        </div>
 
-                    }
+                        {/*=================================================
+                                PAYMENT SUMMARY
+                        =================================================*/}
 
+                        <div className="border-t bg-slate-50">
 
-                </div>
+                            <PaymentSummary
 
-            </div>
+                                order={order}
 
-            {/* ================= TRACKER ================= */}
+                            />
 
-            <div
-                id={`tracker-${order.orderId}`}
-                className="px-8 pb-4"
-            >
+                        </div>
 
-                <DeliveryTracker
+                        {/*=================================================
+                                FOOTER
+                        =================================================*/}
 
-                    status={order.orderStatus}
+                        <div className="border-t bg-white px-6 py-5">
 
-                    paymentStatus={order.paymentStatus}
+                            <div className="flex flex-wrap justify-between items-center gap-4">
 
-                    orderDate={order.orderDate}
+                                {/* LEFT */}
 
-                    modifiedDate={order.modifiedDate}
+                                <div>
 
-                    onCancelOrder={() => onCancel(order)}
+                                    <h4 className="font-semibold text-slate-800">
 
-                    cancelling={false}
+                                        Payment Status
 
-                />
+                                    </h4>
 
-            </div>
+                                    <p className="mt-1 text-slate-600">
 
-            {/* ================= ACTIONS ================= */}
+                                        {order.paymentStatus}
 
-            <div className="px-8 pb-8">
+                                    </p>
 
-                <OrderActions
+                                </div>
 
-                    order={order}
+                                {/* RIGHT */}
 
-                    onCancel={onCancel}
+                                <div className="flex flex-wrap gap-3">
 
-                    onReturn={onReturn}
+                                    <button
 
-                    onInvoice={onInvoice}
+                                        onClick={() => onInvoice(order)}
 
-                    onBuyAgain={onBuyAgain}
+                                        className="rounded-xl bg-blue-600 px-5 py-3 text-white font-medium hover:bg-blue-700 transition"
 
-                    onHelp={onHelp}
+                                    >
 
-                />
+                                        Download Invoice
 
-            </div>
+                                    </button>
+
+                                    <button
+
+                                        onClick={onHelp}
+
+                                        className="rounded-xl border px-5 py-3 hover:bg-slate-100"
+
+                                    >
+
+                                        Need Help
+
+                                    </button>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </>
+
+                )
+
+            }
 
         </div>
 
