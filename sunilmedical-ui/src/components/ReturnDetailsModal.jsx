@@ -88,13 +88,11 @@ export default function ReturnDetailsModal({
 
     return (
 
-        <div className="fixed inset-0 bg-black/40 z-50 flex justify-center items-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/50 overflow-y-auto">
 
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[95vh] overflow-auto">
+            <div className="min-h-screen flex items-start justify-center p-4 md:p-8">
 
-                {/* Header */}
-
-                <div className="flex justify-between items-center border-b p-5">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl my-8">
 
                     <h2 className="text-xl font-bold">
 
