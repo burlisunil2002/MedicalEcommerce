@@ -87,6 +87,16 @@ export default function SellerLayout() {
 
         {
 
+            name: "Return Order Management",
+
+            icon: ShoppingCart,
+
+            path: "/seller/returns"
+
+        },
+
+        {
+
             name: "Subscription",
 
             icon: CreditCard,
