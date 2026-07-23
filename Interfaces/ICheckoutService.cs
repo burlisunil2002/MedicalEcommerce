@@ -7,6 +7,10 @@ namespace VivekMedicalProducts.Interfaces
     {
         Task<CheckoutResponseDto> GetCheckoutAsync();
 
+        Task<List<CartModel>> GetCurrentCartAsync();
+
+        Task<CheckoutSessionModel> GetCurrentSessionAsync();
+
         Task<UserAddress> AddAddressAsync(UserAddress model);
 
         Task<UserAddress> UpdateAddressAsync(

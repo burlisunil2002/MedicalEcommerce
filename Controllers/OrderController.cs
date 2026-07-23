@@ -12,6 +12,7 @@ using System.Security.Cryptography;
 using System.Text;
 using VivekMedicalProducts.Data;
 using VivekMedicalProducts.DTOs;
+using VivekMedicalProducts.Interfaces;
 using VivekMedicalProducts.Models;
 using VivekMedicalProducts.Services;
 using VivekMedicalProducts.Services.Storage;
@@ -32,9 +33,12 @@ namespace VivekMedicalProducts.Controllers
         private readonly EmailService _emailService;
         private readonly ICartCalculationService _calc;
         private readonly IFileStorageService _fileStorageService;
+        private readonly ICheckoutService _checkoutService;
 
 
-        public OrderController(IConfiguration config, ApplicationDbContext context, IUserContextService userContext, IFileStorageService fileStorageService, InvoiceService invoiceService, EmailService emailService, ICartCalculationService calc)
+
+        public OrderController(IConfiguration config, ApplicationDbContext context, IUserContextService userContext, IFileStorageService fileStorageService, ICheckoutService checkoutService,
+InvoiceService invoiceService, EmailService emailService, ICartCalculationService calc)
         {
             _config = config;
             _context = context;
@@ -43,6 +47,8 @@ namespace VivekMedicalProducts.Controllers
             _emailService = emailService;
             _calc = calc;
             _fileStorageService = fileStorageService;
+            _checkoutService = checkoutService;
+
         }
 
         private string GetOrCreateGuestId()
@@ -86,11 +92,8 @@ namespace VivekMedicalProducts.Controllers
                     });
                 }
 
-                // Address
-                var checkoutSession = await _context.CheckoutSessions
-    .FirstOrDefaultAsync(x =>
-        x.UserId == userId &&
-        x.IsActive);
+                var checkoutSession =
+    await _checkoutService.GetCurrentSessionAsync();
 
                 if (checkoutSession == null)
                 {
@@ -99,6 +102,11 @@ namespace VivekMedicalProducts.Controllers
                         success = false,
                         message = "Checkout session not found."
                     });
+                }
+
+                if (!checkoutSession.IsActive)
+                {
+                    checkoutSession.IsActive = true;
                 }
 
                 var address = await _context.UserAddresses
@@ -115,13 +123,9 @@ namespace VivekMedicalProducts.Controllers
                     });
                 }
 
-                // Cart
-                var carts =
-                    await _context.Carts
-                    .Include(x => x.Product)
-                    .Include(x => x.ProductVariant)
-                    .Where(x => x.UserId == userId)
-                    .ToListAsync();
+                var carts = await _checkoutService.GetCurrentCartAsync();
+
+                Console.WriteLine($"Cart Count: {carts.Count}");
 
                 if (!carts.Any())
                 {
@@ -422,10 +426,8 @@ namespace VivekMedicalProducts.Controllers
                 }
 
                 // Active Checkout Session
-                var checkoutSession = await _context.CheckoutSessions
-                    .FirstOrDefaultAsync(x =>
-                        x.UserId == userId &&
-                        x.IsActive);
+                var checkoutSession =
+ await _checkoutService.GetCurrentSessionAsync();
 
                 if (checkoutSession == null)
                 {
@@ -434,6 +436,12 @@ namespace VivekMedicalProducts.Controllers
                         success = false,
                         message = "Checkout session not found."
                     });
+                }
+
+                if (!checkoutSession.IsActive)
+                {
+                    checkoutSession.IsActive = true;
+                    checkoutSession.ModifiedDate = DateTime.UtcNow;
                 }
 
                 // Selected Address
@@ -452,11 +460,7 @@ namespace VivekMedicalProducts.Controllers
                 }
 
                 // Cart
-                var carts = await _context.Carts
-                    .Include(x => x.Product)
-                    .Include(x => x.ProductVariant)
-                    .Where(x => x.UserId == userId)
-                    .ToListAsync();
+                var carts = await _checkoutService.GetCurrentCartAsync();
 
                 if (!carts.Any())
                 {
@@ -602,8 +606,8 @@ namespace VivekMedicalProducts.Controllers
         public async Task<IActionResult> VerifyPayment(
     [FromBody] PaymentDto model)
         {
-            using var transaction =
-                await _context.Database.BeginTransactionAsync();
+            await using var transaction =
+     await _context.Database.BeginTransactionAsync();
 
             try
             {
@@ -678,10 +682,8 @@ namespace VivekMedicalProducts.Controllers
                 }
 
                 // Load Checkout Session
-                var checkoutSession = await _context.CheckoutSessions
-                    .FirstOrDefaultAsync(x =>
-                        x.Id == session.CheckoutSessionId &&
-                        x.IsActive);
+                var checkoutSession =
+     await _checkoutService.GetCurrentSessionAsync();
 
                 if (checkoutSession == null)
                 {
@@ -710,11 +712,8 @@ namespace VivekMedicalProducts.Controllers
                 }
 
                 // Cart
-                var carts = await _context.Carts
-                    .Include(x => x.Product)
-                    .Include(x => x.ProductVariant)
-                    .Where(x => x.UserId == userId)
-                    .ToListAsync();
+                var carts =
+     await _checkoutService.GetCurrentCartAsync();
 
                 if (!carts.Any())
                 {
@@ -908,8 +907,6 @@ namespace VivekMedicalProducts.Controllers
                 checkoutSession.CouponDiscount = 0;
                 checkoutSession.GrandTotal = 0;
                 checkoutSession.ShippingCharge = 0;
-
-                _context.Carts.RemoveRange(carts);
 
                 await _context.SaveChangesAsync();
 

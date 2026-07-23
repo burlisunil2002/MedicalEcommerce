@@ -1,14 +1,23 @@
-﻿import { useEffect, useState } from "react";
+﻿import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { getCheckout } from "../services/checkoutService";
 import SummaryCard from "../components/SummaryCard";
 import { useCart } from "../context/CartContext";
 import API from "../services/api";
 import SmallCubeLoader from "../components/loader/SmallCubeLoader";
+import OrderItemsSection from "../components/checkout/OrderItemsSection";
+import {
+    getCheckout,
+    selectAddress
+} from "../services/checkoutService";
+
 
 export default function ReviewPage() {
     const navigate = useNavigate();
     const { loadCart } = useCart();
+
+    const timeoutRef = useRef(null);
+
+    const pollingRef = useRef(null);
 
     const [checkout, setCheckout] = useState(null);
     const [selectedAddress, setSelectedAddress] = useState(null);
@@ -48,46 +57,59 @@ export default function ReviewPage() {
 
             const addresses = data.addresses || [];
 
-            if (addresses.length > 0) {
+            if (addresses.length === 0) {
 
-                let selected =
-                    addresses.find(
-                        x => x.id === data.selectedAddressId
-                    );
+                setSelectedAddress(null);
+                return;
 
-                if (!selected)
-                    selected =
-                        addresses.find(x => x.isDefault);
+            }
 
-                if (!selected)
-                    selected =
-                        addresses[0];
+            let selected =
+                addresses.find(x => x.id === data.selectedAddressId);
 
-                setSelectedAddress({
+            if (!selected)
+                selected =
+                    addresses.find(x => x.isDefault);
 
-                    id: selected.id,
+            if (!selected)
+                selected =
+                    addresses[0];
 
-                    fullName: selected.fullName,
+            setSelectedAddress({
 
-                    phoneNumber: selected.mobileNumber,
+                id: selected.id,
 
-                    address:
-                        `${selected.addressLine1} ${selected.addressLine2}`,
+                fullName: selected.fullName,
 
-                    city: selected.city,
+                phoneNumber: selected.mobileNumber,
 
-                    state: selected.state,
+                address:
+                    `${selected.addressLine1} ${selected.addressLine2 ?? ""}`,
 
-                    pincode: selected.pincode
+                city: selected.city,
 
-                });
+                state: selected.state,
+
+                pincode: selected.pincode
+
+            });
+
+            // Save default address only if session doesn't already have one
+            if (!data.selectedAddressId) {
+
+                await selectAddress(selected.id);
 
             }
 
         }
         catch (err) {
 
-            console.log(err);
+            console.error(err);
+
+            showToast(
+                "Unable to load checkout.",
+                "error"
+            );
 
         }
         finally {
@@ -102,7 +124,7 @@ export default function ReviewPage() {
 
         let attempts = 0;
 
-        const interval = setInterval(async () => {
+        pollingRef.current = setInterval(async () => {
 
             attempts++;
 
@@ -114,7 +136,8 @@ export default function ReviewPage() {
 
                 if (data.success) {
 
-                    clearInterval(interval);
+                    clearInterval(pollingRef.current);
+                    pollingRef.current = null;
 
                     await loadCart();
 
@@ -124,20 +147,21 @@ export default function ReviewPage() {
 
                     setRedirecting(true);
 
-                    setTimeout(() => {
+                    timeoutRef.current = setTimeout(() => {
 
                         navigate(`/success-order/${data.orderId}`, {
                             replace: true
                         });
 
-                    }, 1200);
+                    }, 500);
 
                     return;
                 }
 
                 if (attempts >= 30) {
 
-                    clearInterval(interval);
+                    clearInterval(pollingRef.current);
+                    pollingRef.current = null;
 
                     setProcessing(false);
 
@@ -145,11 +169,14 @@ export default function ReviewPage() {
                         "Payment verification is taking longer than expected.",
                         "error"
                     );
+
+                    return;
                 }
 
             } catch {
 
-                clearInterval(interval);
+                clearInterval(pollingRef.current);
+                pollingRef.current = null;
 
                 setProcessing(false);
 
@@ -174,7 +201,10 @@ export default function ReviewPage() {
             );
 
             return;
+
         }
+
+        await selectAddress(selectedAddress.id);
 
         setProcessing(true);
 
@@ -208,8 +238,6 @@ export default function ReviewPage() {
                     return;
                 }
 
-                    clearInterval(interval);
-
                     await loadCart();
 
                     window.dispatchEvent(new Event("cartUpdated"));
@@ -218,13 +246,15 @@ export default function ReviewPage() {
 
                     setRedirecting(true);
 
-                    setTimeout(() => {
+                timeoutRef.current = setTimeout(() => {
 
-                        navigate(`/success-order/${data.orderId}`, {
-                            replace: true
-                        });
+                    navigate(`/success-order/${data.orderId}`, {
+                        replace: true
+                    });
 
-                    }, 1200);
+                }, 500);
+
+
 
                     return;
             }
@@ -378,6 +408,18 @@ export default function ReviewPage() {
         loadReview();
     }, []);
 
+    useEffect(() => {
+
+        return () => {
+
+            clearTimeout(timeoutRef.current);
+
+            clearInterval(pollingRef.current);
+
+        };
+
+    }, []);
+
    
 
     if (pageLoading) {
@@ -457,6 +499,12 @@ export default function ReviewPage() {
                                 </div>
                             )}
                         </div>
+
+                        {/* Order Items */}
+
+                        <OrderItemsSection
+                            items={checkout?.cartItems || []}
+                        />
 
                         <div className="bg-white rounded-3xl p-6 shadow-sm">
                             <h2 className="text-2xl font-semibold mb-5">

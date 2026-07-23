@@ -3,36 +3,24 @@ import { X } from "lucide-react";
 import { updateReturn } from "../services/returnService";
 
 export default function ReturnDetailsModal({
-
     open,
-
     onClose,
-
     returnData,
-
     onSuccess
-
 }) {
 
     const [status, setStatus] = useState("");
-
     const [refundAmount, setRefundAmount] = useState("");
-
     const [remarks, setRemarks] = useState("");
-
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
 
-        if (returnData) {
+        if (!returnData) return;
 
-            setStatus(returnData.status);
-
-            setRefundAmount(returnData.refundAmount || "");
-
-            setRemarks("");
-
-        }
+        setStatus(returnData.status || "Requested");
+        setRefundAmount(returnData.refundAmount ?? "");
+        setRemarks("");
 
     }, [returnData]);
 
@@ -45,178 +33,227 @@ export default function ReturnDetailsModal({
             setSaving(true);
 
             await updateReturn(
-
                 returnData.returnId,
-
                 {
-
                     status,
-
                     remarks,
-
-                    refundAmount: refundAmount
-                        ? Number(refundAmount)
-                        : null
-
+                    refundAmount:
+                        refundAmount === ""
+                            ? null
+                            : Number(refundAmount)
                 }
-
             );
 
             alert("Return updated successfully.");
 
-            onSuccess();
+            onSuccess?.();
 
             onClose();
 
-        }
+        } catch (err) {
 
-        catch (err) {
-
-            console.log(err);
+            console.error(err);
 
             alert("Unable to update return.");
 
-        }
-
-        finally {
+        } finally {
 
             setSaving(false);
 
         }
-
     }
 
     return (
 
-        <div className="fixed inset-0 z-50 bg-black/50 overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-black/50">
 
-            <div className="min-h-screen flex items-start justify-center p-4 md:p-8">
+            <div className="absolute inset-0 flex items-center justify-center p-4">
 
-                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl my-8">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden">
 
-                    <h2 className="text-xl font-bold">
+                    {/* Header */}
 
-                        Return Request Details
-
-                    </h2>
-
-                    <button onClick={onClose}>
-
-                        <X />
-
-                    </button>
-
-                </div>
-
-                {/* Body */}
-
-                <div className="p-6">
-
-                    {/* Product */}
-
-                    <div className="grid lg:grid-cols-2 gap-8">
+                    <div className="border-b px-6 py-4 flex justify-between items-center flex-shrink-0">
 
                         <div>
 
-                            <h3 className="font-semibold mb-4">
+                            <h2 className="text-2xl font-bold text-gray-800">
 
-                                Product Details
+                                Return Request Details
 
-                            </h3>
+                            </h2>
 
-                            <img
+                            <p className="text-sm text-gray-500 mt-1">
 
-                                src={returnData.productImage}
+                                Return ID :
+                                <span className="font-medium text-gray-700 ml-2">
+                                    #{returnData.returnId}
+                                </span>
 
-                                alt=""
-
-                                className="w-40 h-40 rounded-lg border object-cover"
-
-                            />
-
-                            <div className="mt-4 space-y-2">
-
-                                <p>
-
-                                    <strong>Product :</strong>
-
-                                    {returnData.productName}
-
-                                </p>
-
-                                <p>
-
-                                    <strong>Variant :</strong>
-
-                                    {returnData.variantName}
-
-                                </p>
-
-                                <p>
-
-                                    <strong>Quantity :</strong>
-
-                                    {returnData.quantity}
-
-                                </p>
-
-                            </div>
+                            </p>
 
                         </div>
 
-                        {/* Customer */}
+                        <button
+                            onClick={onClose}
+                            className="h-10 w-10 rounded-full hover:bg-gray-100 transition flex items-center justify-center"
+                        >
+                            <X size={22} />
+                        </button>
 
-                        <div>
+                    </div>
 
-                            <h3 className="font-semibold mb-4">
+                    {/* Scrollable Body */}
 
-                                Customer Details
+                        <div className="flex-1 overflow-y-auto p-6">
 
-                            </h3>
+                        {/* Product & Customer */}
 
-                            <div className="space-y-2">
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
-                                <p>
+                            {/* Product Card */}
 
-                                    <strong>Name :</strong>
+                            <div className="bg-gray-50 border rounded-xl p-5">
 
-                                    {returnData.customerName}
+                                <h3 className="text-lg font-semibold text-gray-800 mb-5">
+                                    Product Details
+                                </h3>
 
-                                </p>
+                                <div className="flex flex-col md:flex-row gap-5">
 
-                                <p>
+                                    <img
+                                        src={returnData.productImage}
+                                        alt={returnData.productName}
+                                        className="w-40 h-40 rounded-xl border object-cover bg-white"
+                                    />
 
-                                    <strong>Mobile :</strong>
+                                    <div className="flex-1 space-y-3">
 
-                                    {returnData.mobileNumber}
+                                        <div>
 
-                                </p>
+                                            <p className="text-sm text-gray-500">
+                                                Product
+                                            </p>
 
-                                <p>
+                                            <p className="font-semibold text-gray-800">
+                                                {returnData.productName}
+                                            </p>
 
-                                    <strong>Address :</strong>
+                                        </div>
 
-                                </p>
+                                        <div>
 
-                                <div className="text-gray-600">
+                                            <p className="text-sm text-gray-500">
+                                                Variant
+                                            </p>
 
-                                    {returnData.address?.addressLine1}
+                                            <p className="font-medium">
+                                                {returnData.variantName || "-"}
+                                            </p>
 
-                                    <br />
+                                        </div>
 
-                                    {returnData.address?.addressLine2}
+                                        <div>
 
-                                    <br />
+                                            <p className="text-sm text-gray-500">
+                                                Quantity
+                                            </p>
 
-                                    {returnData.address?.city}
+                                            <p className="font-medium">
+                                                {returnData.quantity}
+                                            </p>
 
-                                    {" "}
+                                        </div>
 
-                                    {returnData.address?.state}
+                                        <div>
 
-                                    {" - "}
+                                            <p className="text-sm text-gray-500">
+                                                Return Status
+                                            </p>
 
-                                    {returnData.address?.pincode}
+                                            <span className="inline-flex px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-medium">
+                                                {status}
+                                            </span>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                            {/* Customer Card */}
+
+                            <div className="bg-gray-50 border rounded-xl p-5">
+
+                                <h3 className="text-lg font-semibold text-gray-800 mb-5">
+                                    Customer Details
+                                </h3>
+
+                                <div className="space-y-4">
+
+                                    <div>
+
+                                        <p className="text-sm text-gray-500">
+                                            Customer Name
+                                        </p>
+
+                                        <p className="font-semibold text-gray-800">
+                                            {returnData.customerName}
+                                        </p>
+
+                                    </div>
+
+                                    <div>
+
+                                        <p className="text-sm text-gray-500">
+                                            Mobile Number
+                                        </p>
+
+                                        <p className="font-medium">
+                                            {returnData.mobileNumber}
+                                        </p>
+
+                                    </div>
+
+                                    <div>
+
+                                        <p className="text-sm text-gray-500 mb-2">
+                                            Delivery Address
+                                        </p>
+
+                                        <div className="rounded-lg border bg-white p-4 leading-7 text-gray-700">
+
+                                            <div>
+                                                {returnData.address?.addressLine1}
+                                            </div>
+
+                                            {returnData.address?.addressLine2 &&
+                                                <div>
+                                                    {returnData.address.addressLine2}
+                                                </div>
+                                            }
+
+                                            {returnData.address?.landmark &&
+                                                <div>
+                                                    Landmark : {returnData.address.landmark}
+                                                </div>
+                                            }
+
+                                            <div>
+                                                {returnData.address?.city},
+                                                {" "}
+                                                {returnData.address?.state}
+                                            </div>
+
+                                            <div>
+                                                PIN : {returnData.address?.pincode}
+                                            </div>
+
+                                        </div>
+
+                                    </div>
 
                                 </div>
 
@@ -224,236 +261,273 @@ export default function ReturnDetailsModal({
 
                         </div>
 
-                    </div>
+                        {/* Return Information */}
 
-                    {/* Reason */}
+                        <div className="mt-8 grid grid-cols-1 xl:grid-cols-2 gap-6">
 
-                    <div className="mt-8">
+                            {/* Return Reason */}
 
-                        <h3 className="font-semibold mb-3">
+                            <div className="bg-gray-50 border rounded-xl p-5">
 
-                            Return Reason
+                                <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                                    Return Reason
+                                </h3>
 
-                        </h3>
+                                <div className="bg-white border rounded-lg p-4 min-h-[130px] text-gray-700 leading-7">
 
-                        <div className="bg-gray-100 rounded-lg p-4">
+                                    {returnData.reason || "No reason provided."}
 
-                            {returnData.reason}
+                                </div>
+
+                            </div>
+
+                            {/* Customer Remarks */}
+
+                            <div className="bg-gray-50 border rounded-xl p-5">
+
+                                <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                                    Customer Remarks
+                                </h3>
+
+                                <div className="bg-white border rounded-lg p-4 min-h-[130px] text-gray-700 leading-7">
+
+                                    {returnData.remarks || "No remarks available."}
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        {/* Uploaded Images */}
+
+                        <div className="mt-8 bg-gray-50 border rounded-xl p-5">
+
+                            <div className="flex items-center justify-between mb-5">
+
+                                <h3 className="text-lg font-semibold text-gray-800">
+
+                                    Uploaded Images
+
+                                </h3>
+
+                                <span className="text-sm text-gray-500">
+
+                                    {[returnData.image1, returnData.image2, returnData.image3]
+                                        .filter(Boolean).length} Image(s)
+
+                                </span>
+
+                            </div>
+
+                            {[returnData.image1, returnData.image2, returnData.image3]
+                                .filter(Boolean).length > 0 ? (
+
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+
+                                    {[
+
+                                        returnData.image1,
+
+                                        returnData.image2,
+
+                                        returnData.image3
+
+                                    ]
+                                        .filter(Boolean)
+                                        .map((img, index) => (
+
+                                            <a
+                                                key={index}
+                                                href={img}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="group"
+                                            >
+
+                                                <div className="overflow-hidden rounded-xl border bg-white">
+
+                                                    <img
+                                                        src={img}
+                                                        alt={`Return ${index + 1}`}
+                                                        className="w-full h-44 object-cover transition duration-300 group-hover:scale-105"
+                                                    />
+
+                                                </div>
+
+                                            </a>
+
+                                        ))}
+
+                                </div>
+
+                            ) : (
+
+                                <div className="rounded-lg border border-dashed p-10 text-center text-gray-500">
+
+                                    No images uploaded by the customer.
+
+                                </div>
+
+                            )}
+
+                        </div>
+
+                        {/* Action Section */}
+
+                        <div className="mt-8 bg-gray-50 border rounded-xl p-6">
+
+                            <h3 className="text-lg font-semibold text-gray-800 mb-6">
+                                Return Action
+                            </h3>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                                {/* Return Status */}
+
+                                <div>
+
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Return Status
+                                    </label>
+
+                                    <select
+                                        value={status}
+                                        onChange={(e) => setStatus(e.target.value)}
+                                        className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                    >
+                                        <option value="Requested">Requested</option>
+                                        <option value="Approved">Approved</option>
+                                        <option value="Rejected">Rejected</option>
+                                        <option value="PickupScheduled">Pickup Scheduled</option>
+                                        <option value="PickedUp">Picked Up</option>
+                                        <option value="RefundInitiated">Refund Initiated</option>
+                                        <option value="RefundCompleted">Refund Completed</option>
+                                    </select>
+
+                                </div>
+
+                                {/* Refund Amount */}
+
+                                <div>
+
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Refund Amount
+                                    </label>
+
+                                    <div className="relative">
+
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">
+                                            ₹
+                                        </span>
+
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={refundAmount}
+                                            onChange={(e) => setRefundAmount(e.target.value)}
+                                            placeholder="Enter refund amount"
+                                            className="w-full rounded-xl border border-gray-300 pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                        />
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                            {/* Admin Remarks */}
+
+                            <div className="mt-6">
+
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Admin / Seller Remarks
+                                </label>
+
+                                <textarea
+                                    rows={5}
+                                    value={remarks}
+                                    onChange={(e) => setRemarks(e.target.value)}
+                                    placeholder="Enter remarks..."
+                                    className="w-full rounded-xl border border-gray-300 p-4 resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                />
+
+                            </div>
 
                         </div>
 
                     </div>
 
-                    {/* Remarks */}
 
-                    <div className="mt-5">
+                        {/* Footer */}
 
-                        <h3 className="font-semibold mb-3">
+                            <div className="border-t bg-white px-6 py-4 flex justify-end gap-3 flex-shrink-0">
 
-                            Customer Remarks
+                            <div className="text-sm text-gray-500">
 
-                        </h3>
+                                Review the return details before updating the status.
 
-                        <div className="bg-gray-100 rounded-lg p-4">
+                            </div>
 
-                            {returnData.remarks}
+                        <div className="flex items-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={onClose}
+                                    disabled={saving}
+                                    className="flex-1 sm:flex-none px-6 py-3 rounded-xl border border-gray-300 bg-white hover:bg-gray-100 transition font-medium disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
 
-                        </div>
+                                <button
+                                    type="button"
+                                    onClick={saveReturn}
+                                    disabled={saving}
+                                    className="flex-1 sm:flex-none px-8 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
 
-                    </div>
+                                    {saving && (
 
-                    {/* Images */}
+                                        <svg
+                                            className="animate-spin h-5 w-5"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                        >
 
-                    <div className="mt-8">
+                                            <circle
+                                                className="opacity-25"
+                                                cx="12"
+                                                cy="12"
+                                                r="10"
+                                                stroke="currentColor"
+                                                strokeWidth="4"
+                                            />
 
-                        <h3 className="font-semibold mb-3">
+                                            <path
+                                                className="opacity-75"
+                                                fill="currentColor"
+                                                d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"
+                                            />
 
-                            Uploaded Images
+                                        </svg>
 
-                        </h3>
+                                    )}
 
-                        <div className="flex gap-4">
+                                    {saving ? "Saving..." : "Save Changes"}
 
-                            {[
+                                </button>
 
-                                returnData.image1,
-
-                                returnData.image2,
-
-                                returnData.image3
-
-                            ]
-
-                                .filter(Boolean)
-
-                                .map((img, index) => (
-
-                                    <img
-
-                                        key={index}
-
-                                        src={img}
-
-                                        alt=""
-
-                                        className="w-28 h-28 object-cover rounded-lg border cursor-pointer hover:scale-105 transition"
-
-                                    />
-
-                                ))}
-
-                        </div>
-
-                    </div>
-
-                    {/* Status */}
-
-                    <div className="grid lg:grid-cols-2 gap-6 mt-8">
-
-                        <div>
-
-                            <label className="block mb-2 font-medium">
-
-                                Return Status
-
-                            </label>
-
-                            <select
-
-                                value={status}
-
-                                onChange={(e) =>
-
-                                    setStatus(e.target.value)
-
-                                }
-
-                                className="border rounded-lg w-full p-3"
-
-                            >
-
-                                <option>Requested</option>
-
-                                <option>Approved</option>
-
-                                <option>Rejected</option>
-
-                                <option>PickupScheduled</option>
-
-                                <option>PickedUp</option>
-
-                                <option>RefundInitiated</option>
-
-                                <option>RefundCompleted</option>
-
-                            </select>
-
-                        </div>
-
-                        <div>
-
-                            <label className="block mb-2 font-medium">
-
-                                Refund Amount
-
-                            </label>
-
-                            <input
-
-                                value={refundAmount}
-
-                                onChange={(e) =>
-
-                                    setRefundAmount(e.target.value)
-
-                                }
-
-                                className="border rounded-lg w-full p-3"
-
-                            />
+                            </div>
 
                         </div>
 
                     </div>
-
-                    {/* Admin Remarks */}
-
-                    <div className="mt-6">
-
-                        <label className="block mb-2 font-medium">
-
-                            Remarks
-
-                        </label>
-
-                        <textarea
-
-                            rows={4}
-
-                            value={remarks}
-
-                            onChange={(e) =>
-
-                                setRemarks(e.target.value)
-
-                            }
-
-                            className="border rounded-lg w-full p-3"
-
-                        />
-
-                    </div>
-
-                </div>
-
-                {/* Footer */}
-
-                <div className="border-t p-5 flex justify-end gap-3">
-
-                    <button
-
-                        onClick={onClose}
-
-                        className="px-6 py-2 border rounded-lg"
-
-                    >
-
-                        Cancel
-
-                    </button>
-
-                    <button
-
-                        onClick={saveReturn}
-
-                        disabled={saving}
-
-                        className="px-6 py-2 bg-blue-600 text-white rounded-lg disabled:bg-gray-400"
-
-                    >
-
-                        {
-
-                            saving
-
-                                ?
-
-                                "Saving..."
-
-                                :
-
-                                "Save Changes"
-
-                        }
-
-                    </button>
 
                 </div>
 
             </div>
 
-        </div>
-
-    );
-
+            );
 }

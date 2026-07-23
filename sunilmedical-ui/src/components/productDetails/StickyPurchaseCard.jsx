@@ -10,12 +10,15 @@ export default function StickyPurchaseCard({
 
     selectedVariant,
 
-    onBuyNow
+    onBuyNow,
+
+    setMessage
 
 }) {
 
     if (!selectedVariant)
         return null;
+
 
     const originalPrice =
         Number(selectedVariant.price ?? 0);
@@ -193,6 +196,8 @@ p-6
                     maxQty={selectedVariant.maxQuantity}
 
                     stepQty={selectedVariant.stepQuantity}
+
+                    setMessage={setMessage}
 
                 />
 

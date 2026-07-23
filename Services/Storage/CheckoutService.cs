@@ -149,7 +149,7 @@ namespace VivekMedicalProducts.Services
             Console.WriteLine($"GUEST: {guestId}");
             Console.WriteLine($"ADDRESS: {addressId}");
 
-            var session = await GetOrCreateSessionAsync();
+            var session = await GetCurrentSessionAsync();
 
             Console.WriteLine($"SESSION ID: {session.Id}");
 
@@ -237,12 +237,34 @@ namespace VivekMedicalProducts.Services
             await _context.SaveChangesAsync();
         }
 
+        public async Task<List<CartModel>> GetCurrentCartAsync()
+        {
+            var (userId, guestId) = GetIdentity();
+
+            return await _context.Carts
+                .Include(x => x.Product)
+                .Include(x => x.ProductVariant)
+                .Where(x =>
+
+                    (!string.IsNullOrEmpty(userId) &&
+                     x.UserId == userId)
+
+                    ||
+
+                    (string.IsNullOrEmpty(userId) &&
+                     x.GuestId == guestId)
+
+                )
+                .ToListAsync();
+        }
+
         public async Task<CheckoutResponseDto> GetCheckoutAsync()
         {
             var (userId, guestId) = GetIdentity();
 
-            var session =
-                await GetOrCreateSessionAsync();
+            var session = await GetCurrentSessionAsync();
+
+            var carts = await GetCurrentCartAsync();
 
             var cartItems =
                 await _context.Carts
@@ -292,6 +314,12 @@ namespace VivekMedicalProducts.Services
                 })
                 .ToListAsync();
 
+
+            Console.WriteLine("========== GET CHECKOUT ==========");
+            Console.WriteLine($"UserId: {userId}");
+            Console.WriteLine($"GuestId: {guestId}");
+            Console.WriteLine($"Cart Count: {cartItems.Count}");
+
             var addresses =
                 await _context.UserAddresses
                 .Where(x =>
@@ -338,6 +366,36 @@ namespace VivekMedicalProducts.Services
                 SelectedAddressId =
                     session.SelectedAddressId
             };
+        }
+
+        public async Task<CheckoutSessionModel> GetCurrentSessionAsync()
+        {
+            var (userId, guestId) = GetIdentity();
+
+            var session = await _context.CheckoutSessions
+                .FirstOrDefaultAsync(x =>
+                    x.IsActive &&
+                    (
+                        (!string.IsNullOrEmpty(userId) && x.UserId == userId) ||
+                        (string.IsNullOrEmpty(userId) && x.GuestId == guestId)
+                    ));
+
+            if (session == null)
+            {
+                session = new CheckoutSessionModel
+                {
+                    UserId = userId,
+                    GuestId = string.IsNullOrEmpty(userId) ? guestId : null,
+                    CreatedDate = DateTime.UtcNow,
+                    ModifiedDate = DateTime.UtcNow,
+                    IsActive = true
+                };
+
+                _context.CheckoutSessions.Add(session);
+                await _context.SaveChangesAsync();
+            }
+
+            return session;
         }
     }
 }

@@ -141,7 +141,7 @@ private (string? userId, string guestId) GetIdentity()
                 return BadRequest(new
                 {
                     success = false,
-                    message = ex.Message
+                    message = ex.ToString()
                 });
             }
         }

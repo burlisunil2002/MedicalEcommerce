@@ -24,6 +24,7 @@ import StickyPurchaseCard from "../components/productDetails/StickyPurchaseCard"
 //import RecentlyViewed from "../components/productDetails/RecentlyViewed";
 import MobileBottomBar from "../components/productDetails/MobileBottomBar";
 import LoadingSkeleton from "../components/productDetails/LoadingSkeleton";
+import RecommendedProducts from "../components/RecommendedProducts";
 import { useLocation } from "react-router-dom";
 import { useMemo } from "react";
 
@@ -61,6 +62,8 @@ export default function ProductDetails() {
 
     const [zoomOpen, setZoomOpen] =
         useState(false);
+
+    const [message, setMessage] = useState("");
 
     //--------------------------------------------------------
     // Errors
@@ -774,6 +777,14 @@ export default function ProductDetails() {
 
         <>
 
+            {message && (
+                <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[9999]">
+                    <div className="bg-green-600 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-2 font-medium animate-fade-in">
+                        {message}
+                    </div>
+                </div>
+            )}
+
             <script
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{
@@ -912,6 +923,8 @@ export default function ProductDetails() {
 
                                 onBuyNow={handleBuyNow}
 
+                                setMessage={setMessage}
+
                             />
 
                         </div>
@@ -956,6 +969,12 @@ export default function ProductDetails() {
 
                      }
                     </div>
+
+                    {product && (
+                        <RecommendedProducts
+                            currentProduct={product}
+                        />
+                    )}
 
                 </div>
 

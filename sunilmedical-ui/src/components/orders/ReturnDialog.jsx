@@ -96,10 +96,11 @@ export default function ReturnDialog({
 
     return (
 
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
 
-            <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl">
+            <div className="min-h-screen flex items-center justify-center p-4">
 
+                <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
                 {/* Header */}
 
                 <div className="flex items-center justify-between border-b p-6">
@@ -135,8 +136,7 @@ export default function ReturnDialog({
 
                 {/* Body */}
 
-                <div className="space-y-6 p-6">
-
+                    <div className="flex-1 overflow-y-auto space-y-6 p-6">
                     {/* Reason */}
 
                     <div>
@@ -271,7 +271,7 @@ export default function ReturnDialog({
 
                                 </h4>
 
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
 
                                     {
 
@@ -291,8 +291,7 @@ export default function ReturnDialog({
 
                                                     alt="preview"
 
-                                                    className="h-32 w-full object-cover"
-
+                                                    className="h-24 md:h-28 w-full object-cover"
                                                 />
 
                                                 <button
@@ -337,8 +336,7 @@ export default function ReturnDialog({
 
                 {/* Footer */}
 
-                <div className="flex justify-end gap-3 border-t p-6">
-
+                    <div className="border-t bg-white p-6 flex justify-end gap-3 flex-shrink-0">
                     <button
 
                         onClick={onClose}
@@ -377,7 +375,9 @@ export default function ReturnDialog({
 
             </div>
 
+            </div>
         </div>
+
 
     );
 
