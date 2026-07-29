@@ -3108,6 +3108,16 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
                    seller.SubscriptionEndDate.Value >= DateTime.UtcNow;
         }
 
+        [HttpGet("test")]
+        public IActionResult Test()
+        {
+            return Ok(new
+            {
+                success = true,
+                message = "Backend Updated"
+            });
+        }
+
     }
 
 
