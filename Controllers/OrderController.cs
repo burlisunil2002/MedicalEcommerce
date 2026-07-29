@@ -10,13 +10,18 @@ using Razorpay.Api;
 using Rotativa.AspNetCore;
 using System.Security.Cryptography;
 using System.Text;
+using Twilio;
+using Twilio.Types;
 using VivekMedicalProducts.Data;
 using VivekMedicalProducts.DTOs;
 using VivekMedicalProducts.Interfaces;
 using VivekMedicalProducts.Models;
 using VivekMedicalProducts.Services;
+using VivekMedicalProducts.Services.Notification;
 using VivekMedicalProducts.Services.Storage;
 using VivekMedicalProducts.ViewModels;
+using Twilio.Rest.Api.V2010.Account;
+
 
 
 
@@ -34,11 +39,14 @@ namespace VivekMedicalProducts.Controllers
         private readonly ICartCalculationService _calc;
         private readonly IFileStorageService _fileStorageService;
         private readonly ICheckoutService _checkoutService;
+        private readonly ISmsService _sms;
+        private readonly ILogger<OrderController> _logger;
+
 
 
 
         public OrderController(IConfiguration config, ApplicationDbContext context, IUserContextService userContext, IFileStorageService fileStorageService, ICheckoutService checkoutService,
-InvoiceService invoiceService, EmailService emailService, ICartCalculationService calc)
+InvoiceService invoiceService, EmailService emailService, ICartCalculationService calc, ISmsService sms, ILogger<OrderController> logger)
         {
             _config = config;
             _context = context;
@@ -48,7 +56,8 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
             _calc = calc;
             _fileStorageService = fileStorageService;
             _checkoutService = checkoutService;
-
+            _sms = sms;
+            _logger = logger;
         }
 
         private string GetOrCreateGuestId()
@@ -155,6 +164,8 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
                     UserId = userId,
 
                     UserAddressId = address.Id,
+
+                    UserAddress = address,
 
                     OrderNumber = $"ORD-{DateTime.UtcNow.Ticks}",
 
@@ -357,6 +368,11 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
                 _context.CheckoutSessions.Remove(checkoutSession);
 
                 await _context.SaveChangesAsync();      // Save everything together
+
+                order.UserAddress = address;
+                order.OrderItems = orderItems;
+
+                await _sms.SendOrderPlacedAsync(order);
 
                 await transaction.CommitAsync();
                 // Send Invoice
@@ -738,6 +754,9 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
 
                     UserAddressId = address.Id,
 
+                    UserAddress = address,
+
+
                     OrderNumber = $"ORD-{DateTime.UtcNow.Ticks}",
 
                     GrandTotal = totals.Total,
@@ -909,6 +928,11 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
                 checkoutSession.ShippingCharge = 0;
 
                 await _context.SaveChangesAsync();
+
+                order.UserAddress = address;
+                order.OrderItems = orderItems;
+
+                await _sms.SendOrderPlacedAsync(order);
 
                 await transaction.CommitAsync();
 
@@ -2772,11 +2796,11 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
         // =========================
 
         [Authorize]
-        [HttpPut("orders/{id}/status")]
+        [HttpPut("order-items/{orderItemId}/status")]
         public async Task<IActionResult> UpdateOrderStatus(
-      int id,
-      [FromBody] UpdateOrderStatusDto model)
-        {
+    int orderItemId,
+    [FromBody] UpdateOrderStatusDto model)
+        { 
             try
             {
                 var isAdmin = User.IsInRole("Admin");
@@ -2812,16 +2836,22 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
                 // Get Order
                 //--------------------------------------------------
 
-                var order = await _context.Orders
-                    .Include(x => x.OrderItems)
-                    .FirstOrDefaultAsync(x => x.OrderId == id);
+                var item = await _context.OrderItems
+     .Include(x => x.Order)
+         .ThenInclude(o => o.UserAddress)
 
-                if (order == null)
+     .Include(x => x.Order)
+         .ThenInclude(o => o.OrderItems)
+
+     .FirstOrDefaultAsync(x =>
+         x.OrderItemId == orderItemId);
+
+                if (item == null)
                 {
                     return NotFound(new
                     {
                         success = false,
-                        message = "Order not found."
+                        message = "Order item not found."
                     });
                 }
 
@@ -2831,68 +2861,75 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
 
                 if (!string.IsNullOrWhiteSpace(model.PaymentStatus))
                 {
-                    order.PaymentStatus = model.PaymentStatus;
+                    item.Order.PaymentStatus = model.PaymentStatus;
+                    item.Order.OrderModifiedDate = DateTime.UtcNow;
                 }
-
-                order.OrderModifiedDate = DateTime.UtcNow;
 
                 //--------------------------------------------------
                 // Update Item Status
                 //--------------------------------------------------
 
-                var items = isAdmin
-                    ? order.OrderItems
-                    : order.OrderItems.Where(x => x.SellerId == sellerId).ToList();
-
-                if (!items.Any())
+                if (!isAdmin && item.SellerId != sellerId)
                 {
                     return StatusCode(StatusCodes.Status403Forbidden, new
                     {
                         success = false,
-                        message = "You are not authorized to update this order."
+                        message = "You are not authorized to update this item."
                     });
                 }
 
-                foreach (var item in items)
+
+
+                if (!string.IsNullOrWhiteSpace(model.ItemOrderStatus))
                 {
-                    if (!string.IsNullOrWhiteSpace(model.OrderStatus))
-                    {
-                        item.OrderItemStatus = model.OrderStatus;
-                    }
-
-                    switch (model.OrderStatus)
-                    {
-                        case "Packed":
-                            item.PackedDate = DateTime.UtcNow;
-                            break;
-
-                        case "Shipped":
-                            item.ShippedDate = DateTime.UtcNow;
-                            break;
-
-                        case "OutForDelivery":
-                            item.OutForDeliveryDate = DateTime.UtcNow;
-                            break;
-
-                        case "Delivered":
-                            item.DeliveredDate = DateTime.UtcNow;
-
-                            item.IsReturnEligible = true;
-
-                            item.ReturnEligibleTill = DateTime.UtcNow.AddDays(7); // or your return policy
-
-                            item.UpdatedAt = DateTime.UtcNow;
-
-                            item.ItemOrderModifiedDate = DateTime.UtcNow;
-                            break;
-
-                        case "Cancelled":
-                            item.CancelledAt = DateTime.UtcNow;
-                            break;
-                    }
+                    item.OrderItemStatus = model.ItemOrderStatus;
                 }
 
+                switch (model.ItemOrderStatus)
+                {
+                    case "Packed":
+                        item.PackedDate = DateTime.UtcNow;
+                        break;
+
+                    case "Shipped":
+                        item.ShippedDate = DateTime.UtcNow;
+                        break;
+
+                    case "OutForDelivery":
+                        item.OutForDeliveryDate = DateTime.UtcNow;
+                        break;
+
+                    case "Delivered":
+
+                        item.DeliveredDate = DateTime.UtcNow;
+                        item.IsReturnEligible = true;
+                        item.ReturnEligibleTill = DateTime.UtcNow.AddDays(7);
+
+                        break;
+
+                    case "Cancelled":
+
+                        item.CancelledAt = DateTime.UtcNow;
+                        break;
+                }
+
+                item.UpdatedAt = DateTime.UtcNow;
+                item.ItemOrderModifiedDate = DateTime.UtcNow;
+
                 await _context.SaveChangesAsync();
+
+                try
+                {
+                    await _sms.SendOrderStatusAsync(
+                        item.Order,
+                        item.OrderItemStatus);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "SMS sending failed for Order {OrderNumber}",
+                        item.Order.OrderNumber);
+                }
 
                 return Ok(new
                 {

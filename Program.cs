@@ -5,15 +5,23 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Rotativa.AspNetCore;
 using System.Text.Json.Serialization;
+using VivekMedicalProducts.Configuration;
 using VivekMedicalProducts.Data;
 using VivekMedicalProducts.Interfaces;
 using VivekMedicalProducts.Models;
 using VivekMedicalProducts.Services;
+using VivekMedicalProducts.Services.Notification;
 using VivekMedicalProducts.Services.Storage;
 
 
 
 var builder = WebApplication.CreateBuilder(args);
+
+Console.WriteLine("=== Program.cs ===");
+Console.WriteLine(builder.Configuration["Twilio:AccountSid"]);
+Console.WriteLine(builder.Configuration["Twilio:AuthToken"]);
+Console.WriteLine(builder.Configuration["Twilio:FromNumber"]);
+Console.WriteLine("==================");
 
 // Register MVC
 builder.Services
@@ -27,6 +35,8 @@ builder.Services.AddScoped<ProductService>();
 
 // Session (only if you really need it)
 builder.Services.AddSession();
+
+builder.Services.AddScoped<ISmsService, TwilioSmsService>();
 
 // Authentication
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()

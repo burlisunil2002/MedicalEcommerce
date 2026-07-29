@@ -47,6 +47,17 @@ export default function AddToCartButton({
             : Infinity;
 
     const handleAdd = async (e) => {
+
+        console.log("Button Clicked");
+
+        console.log({
+            productKey,
+            variantKey,
+            min,
+            setMessage,
+            addToCart
+        });
+
         e.preventDefault();
         e.stopPropagation();
 
@@ -58,27 +69,31 @@ export default function AddToCartButton({
         setUiQty(min);
 
         // Show success instantly
-        setMessage("🛒 Product added to your cart");
+        setMessage?.("Product added to your cart");
 
         setTimeout(() => {
-            setMessage("");
+            setMessage?.("");
         }, 2000);
 
         try {
+            console.log("Calling addToCart...");
+
             const success = await addToCart(
                 productKey,
                 variantKey,
                 min
             );
 
+            console.log("Returned from addToCart", success);
+
             if (!success) {
                 setUiQty(cartQty);
-                setMessage("❌ Unable to add product");
+                setMessage?.("Unable to add product");
             }
         }
         catch {
             setUiQty(cartQty);
-            setMessage("❌ Something went wrong");
+            setMessage?.("Something went wrong");
         }
         finally {
             setLoading(false);

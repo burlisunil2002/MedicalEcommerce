@@ -154,22 +154,16 @@ export default function SellerLayout() {
 
     useEffect(() => {
 
-        if (sidebarOpen) {
+        const isMobile = window.innerWidth < 1024;
 
+        if (isMobile && sidebarOpen) {
             document.body.style.overflow = "hidden";
-
-        }
-
-        else {
-
-            document.body.style.overflow = "auto";
-
+        } else {
+            document.body.style.overflow = "";
         }
 
         return () => {
-
-            document.body.style.overflow = "auto";
-
+            document.body.style.overflow = "";
         };
 
     }, [sidebarOpen]);
@@ -186,8 +180,7 @@ export default function SellerLayout() {
 
     return (
 
-        <div className="min-h-screen bg-slate-100">
-
+        <div className="min-h-screen flex bg-slate-100">
             {
                 sidebarOpen &&
 
@@ -310,7 +303,9 @@ lg:translate-x-0
 
                                         navigate(item.path);
 
-                                        setSidebarOpen(false);
+                                        if (window.innerWidth < 1024) {
+                                            setSidebarOpen(false);
+                                        }
 
                                     }}
 
@@ -405,13 +400,17 @@ ${active
                 Main Content
             ========================== */}
 
-            <div
-                className={`
-transition-all
+                <div
+                    className={`
+flex-1
+min-h-screen
+overflow-x-hidden
+transition-[margin]
 duration-300
+ml-0
 ${desktopCollapsed ? "lg:ml-20" : "lg:ml-72"}
 `}
-            >
+                >
                 {/* Header */}
 
                 <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b shadow-sm">
@@ -514,8 +513,7 @@ ${desktopCollapsed ? "lg:ml-20" : "lg:ml-72"}
 
                 {/* Page Content */}
 
-                <main className="flex-1 p-4 md:p-8">
-
+                <main className="flex-1 overflow-y-auto p-4 md:p-8">
                     <motion.div
 
                         initial={{

@@ -10,7 +10,7 @@
             set;
         }
 
-        public string? OrderStatus
+        public string? ItemOrderStatus
         {
             get;
             set;

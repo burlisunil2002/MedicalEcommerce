@@ -40,6 +40,7 @@ import MainLayout from "./layouts/MainLayout";
 // Context
 import { CartProvider } from "./context/CartContext";
 import { WishlistProvider } from "./context/WishlistContext";
+import { Toaster } from "react-hot-toast";
 
 function App() {
 
@@ -47,6 +48,31 @@ function App() {
 
         <CartProvider>
             <WishlistProvider>
+
+                <Toaster
+                    position="top-center"
+                    reverseOrder={false}
+                    toastOptions={{
+                        duration: 3000,
+                        style: {
+                            borderRadius: "10px",
+                            background: "#1f2937",
+                            color: "#fff"
+                        },
+                        success: {
+                            iconTheme: {
+                                primary: "#22c55e",
+                                secondary: "#fff"
+                            }
+                        },
+                        error: {
+                            iconTheme: {
+                                primary: "#ef4444",
+                                secondary: "#fff"
+                            }
+                        }
+                    }}
+                />
 
                 <Routes>
 

@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import API from "../services/api";
 
+import toast from "react-hot-toast";
+
 export default function AdminOrders() {
     const [orders, setOrders] =
         useState([]);
@@ -28,8 +30,11 @@ export default function AdminOrders() {
     const [editedOrders, setEditedOrders] =
         useState({});
 
-    const [loading, setLoading] =
-        useState(false);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [updatingId, setUpdatingId] = useState(null);
+    const [initialLoading, setInitialLoading] =
+        useState(true);
 
     const [filters, setFilters] =
         useState({
@@ -41,86 +46,109 @@ export default function AdminOrders() {
             page: 1
         });
 
-    useEffect(() => {
-        loadOrders();
-    }, []);
+    const loadOrders = async (
+        showLoader = false
+    ) => {
 
-    const loadOrders =
-        async () => {
-            try {
-                setLoading(true);
+        try {
 
-                const res =
-                    await API.get(
-                        "/api/order/admin-orders",
-                        {
-                            params: {
-                                search: filters.search,
-                                fromDate: filters.fromDate,
-                                toDate: filters.toDate,
-                                paymentStatus: filters.paymentStatus,
-                                orderStatus: filters.orderStatus,
-                                page: filters.page,
-                                pageSize: 50
-                            }
-                        }
-                    );
+            if (showLoader)
+                setInitialLoading(true);
 
-                setOrders(res.data.orders || []);
-
-                setStats({
-                    totalOrders:
-                        res.data.totalOrders || 0,
-
-                    completed:
-                        res.data.completed || 0,
-
-                    pending:
-                        res.data.pending || 0,
-
-                    revenue:
-                        res.data.revenue || 0
-                });
-            } catch (err) {
-  console.log(err);
-  console.log(err.response);
-
-  alert(
-    err.response?.data?.message ||
-    "Failed to load orders"
-  );
-} finally {
-                setLoading(false);
-            }
-        };
-
-    const updateStatus =
-        async (
-            orderId,
-            paymentStatus,
-            orderStatus
-        ) => {
-            try {
-                await API.put(
-                    `/api/order/orders/${orderId}/status`,
+            const { data } =
+                await API.get(
+                    "/api/order/admin-orders",
                     {
-                        orderId,
-                        paymentStatus,
-                        orderStatus
-                    }
-                );
+                        params: {
+                            ...filters,
+                            pageSize: 50
+                        }
+                    });
 
-                alert(
-                    "Updated successfully"
-                );
+            setOrders(data.orders ?? []);
 
-                loadOrders();
-            } catch {
-                alert(
-                    "Failed to update"
-                );
-            }
-        };
+            setStats({
+                totalOrders:
+                    data.pagination.totalOrders,
+
+                completed:
+                    data.statistics.completedPayments,
+
+                pending:
+                    data.statistics.pending,
+
+                revenue:
+                    data.statistics.revenue
+            });
+
+        }
+        catch (err) {
+
+            toast.error("Failed to load orders");
+
+        }
+        finally {
+
+            setInitialLoading(false);
+
+        }
+
+    };
+
+    const updateStatus = async (
+        orderItemId,
+        paymentStatus,
+        orderStatus
+    ) => {
+
+        try {
+
+            setUpdatingId(orderItemId);
+
+            await API.put(
+                `/api/order/order-items/${orderItemId}/status`,
+                {
+                    paymentStatus,
+                    itemOrderStatus: orderStatus
+                }
+            );
+
+            // Update only the modified row instantly
+            setOrders(prev =>
+                prev.map(order =>
+                    order.orderItemId === orderItemId
+                        ? {
+                            ...order,
+                            paymentStatus,
+                            orderStatus
+                        }
+                        : order
+                )
+            );
+
+            toast.success("Order Updated Successfully");
+
+            // Update statistics silently in background
+            loadOrders(false);
+
+        }
+        catch (err) {
+
+            console.error(err);
+
+            toast.error(
+                err.response?.data?.message ??
+                "Failed to update order."
+            );
+
+        }
+        finally {
+
+            setUpdatingId(null);
+
+        }
+
+    };
 
     const exportExcel = () => {
         window.open(
@@ -128,6 +156,34 @@ export default function AdminOrders() {
             "_blank"
         );
     };
+
+    useEffect(() => {
+        loadOrders(true);
+    }, []);
+
+    if (initialLoading) {
+
+        return (
+
+            <div className="h-screen flex justify-center items-center">
+
+                <div className="flex flex-col items-center">
+
+                    <div className="w-12 h-12 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
+
+                    <p className="mt-4 text-slate-500">
+
+                        Loading Orders...
+
+                    </p>
+
+                </div>
+
+            </div>
+
+        );
+
+    }
 
     return (
         <div className="min-h-screen bg-slate-100 p-8">
@@ -512,7 +568,7 @@ export default function AdminOrders() {
                   text-sm
                 ">
                                     <th className="p-5">
-                                        Order
+                                        OrderItemID
                                     </th>
                                     <th className="p-5">
                                         Date
@@ -556,7 +612,7 @@ export default function AdminOrders() {
                                         >
                                             <td className="p-5 font-bold text-blue-600">
                                                 #
-                                                {o.orderId}
+                                                {o.orderItemId}
                                             </td>
 
                                             <td className="p-5">
@@ -588,135 +644,112 @@ export default function AdminOrders() {
                                                 {o.grandTotal?.toLocaleString()}
                                             </td>
 
+
+
                                             <td className="p-5">
                                                 <select
                                                     className="
-            px-4 py-2
-            rounded-xl
-            border
-            border-gray-300
-            bg-white
-            text-gray-800
-            focus:ring-2
-            focus:ring-blue-500
-            outline-none
-        "
+        px-4 py-2
+        rounded-xl
+        border
+        border-gray-300
+        bg-white
+        text-gray-800
+        focus:ring-2
+        focus:ring-blue-500
+        outline-none"
                                                     value={
-                                                        editedOrders[o.orderId]?.paymentStatus ??
+                                                        editedOrders[o.orderItemId]?.paymentStatus ??
                                                         o.paymentStatus
                                                     }
                                                     onChange={(e) =>
-                                                        setEditedOrders({
-                                                            ...editedOrders,
-                                                            [o.orderId]: {
-                                                                ...editedOrders[o.orderId],
+                                                        setEditedOrders(prev => ({
+                                                            ...prev,
+                                                            [o.orderItemId]: {
+                                                                ...prev[o.orderItemId],
                                                                 paymentStatus: e.target.value
                                                             }
-                                                        })
+                                                        }))
                                                     }
                                                 >
-                                                    <option value="Pending">
-                                                        Pending
-                                                    </option>
-
-                                                    <option value="Completed">
-                                                        Completed
-                                                    </option>
-
-                                                    <option value="Failed">
-                                                        Failed
-                                                    </option>
-
-                                                    <option value="Refunded">
-                                                        Refunded
-                                                    </option>
+                                                    <option value="Pending">Pending</option>
+                                                    <option value="Completed">Completed</option>
+                                                    <option value="Failed">Failed</option>
+                                                    <option value="Refunded">Refunded</option>
                                                 </select>
                                             </td>
+
                                             <td className="p-5">
                                                 <select
                                                     className="
-            px-4 py-2
-            rounded-xl
-            border
-            border-gray-300
-            bg-white
-            text-gray-800
-            focus:ring-2
-            focus:ring-indigo-500
-            outline-none
-        "
+        px-4 py-2
+        rounded-xl
+        border
+        border-gray-300
+        bg-white
+        text-gray-800
+        focus:ring-2
+        focus:ring-indigo-500
+        outline-none"
                                                     value={
-                                                        editedOrders[o.orderId]?.orderStatus ??
+                                                        editedOrders[o.orderItemId]?.orderStatus ??
                                                         o.orderStatus
                                                     }
                                                     onChange={(e) =>
-                                                        setEditedOrders({
-                                                            ...editedOrders,
-                                                            [o.orderId]: {
-                                                                ...editedOrders[o.orderId],
-                                                                orderStatus: e.target.value
-                                                            }
-                                                        })
+                                                        setEditedOrders(prev => ({
+                                                            ...prev,
+                                                            [o.orderItemId]: {
+                                                                ...prev[o.orderItemId],
+                                                                orderStatus: e.target.value                                                            }
+                                                        }))
                                                     }
                                                 >
-                                                    <option value="Placed">
-                                                        Placed
-                                                    </option>
-
-                                                    <option value="Packed">
-                                                        Packed
-                                                    </option>
-
-                                                    <option value="Shipped">
-                                                        Shipped
-                                                    </option>
-
-                                                    <option value="OutForDelivery">
-                                                        OutForDelivery
-                                                    </option>
-
-                                                    <option value="Delivered">
-                                                        Delivered
-                                                    </option>
-
-                                                    <option value="Cancelled">
-                                                        Cancelled
-                                                    </option>
+                                                    <option value="Placed">Placed</option>
+                                                    <option value="Packed">Packed</option>
+                                                    <option value="Shipped">Shipped</option>
+                                                    <option value="OutForDelivery">Out For Delivery</option>
+                                                    <option value="Delivered">Delivered</option>
+                                                    <option value="Cancelled">Cancelled</option>
                                                 </select>
                                             </td>
 
                                             <td className="p-5">
-                                                <button
-                                                    onClick={() =>
-                                                        updateStatus(
-                                                            o.orderId,
-                                                            editedOrders[o.orderId]
-                                                                ?.paymentStatus ??
-                                                            o.paymentStatus,
-
-                                                            editedOrders[o.orderId]
-                                                                ?.orderStatus ??
-                                                            o.orderStatus
-                                                        )
-                                                    }
-                                                    className="
-            px-5 py-2
+                                                <td className="p-5">
+                                                    <button
+                                                        onClick={() =>
+                                                            updateStatus(
+                                                                o.orderItemId,
+                                                                editedOrders[o.orderItemId]?.paymentStatus ??
+                                                                o.paymentStatus,
+                                                                editedOrders[o.orderItemId]?.orderStatus ??
+                                                                o.orderStatus
+                                                            )
+                                                        }
+                                                        disabled={updatingId === o.orderItemId}
+                                                        className={`
+            px-5
+            py-2
             rounded-xl
-            bg-gradient-to-r
-            from-blue-600
-            to-indigo-600
-            text-white
-            font-medium
-            shadow-lg
-            hover:scale-105
-            transition
-        "
-                                                >
-                                                    Update
-                                                </button>
+            font-semibold
+            transition-all
+            ${updatingId === o.orderItemId
+                                                                ? "bg-gray-400 cursor-not-allowed text-white"
+                                                                : "bg-blue-600 hover:bg-blue-700 text-white"
+                                                            }
+        `}
+                                                    >
+                                                        {updatingId === o.orderItemId ? (
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                                                Updating...
+                                                            </div>
+                                                        ) : (
+                                                            "Update"
+                                                        )}
+                                                    </button>
+                                                </td>
                                             </td>
-
-                                        </tr>
+                                            </tr>
                                     )
                                 )}
 

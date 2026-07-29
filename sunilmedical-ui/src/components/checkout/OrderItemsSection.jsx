@@ -35,7 +35,7 @@
                     >
 
                         <img
-                            src={item.productImage}
+                            src={item.variantImage}
                             alt={item.productName}
                             className="w-24 h-24 rounded-xl object-cover border"
                         />

@@ -90,6 +90,11 @@ export default function ProductCard({ p, setMessage }) {
         0
     );
 
+    console.log("ProductCard Data:", data);
+    console.log("Product ID:", data.id);
+    console.log("Variant:", defaultVariant);
+
+
     return (
         <div className="group h-full flex flex-col bg-white rounded-2xl border border-gray-100 
         shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
@@ -194,6 +199,7 @@ export default function ProductCard({ p, setMessage }) {
                 {/* CTA */}
                 <div className="mt-auto pt-3">
 
+                   
                     {data.isRFQ ? (
                         <button
                             onClick={() => navigate(`/product/${data.id}`)}

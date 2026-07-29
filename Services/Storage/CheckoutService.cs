@@ -298,6 +298,13 @@ namespace VivekMedicalProducts.Services
                         ? c.ProductVariant.Model
                         : null,
 
+                    VariantImage =
+    c.ProductVariant.Images
+        .Select(i => i.ImageUrl)
+        .FirstOrDefault()
+    ?? c.Product.ImageUrl,
+
+
                     ProductPrice =
                         c.ProductVariant != null
                         ? c.ProductVariant.Price
