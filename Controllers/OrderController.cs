@@ -2172,7 +2172,9 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
                 return StatusCode(500, new
                 {
                     success = false,
-                    message = ex.InnerException?.Message ?? ex.Message
+                    message = ex.Message,
+                    inner = ex.InnerException?.Message,
+                    stack = ex.StackTrace
                 });
             }
         }

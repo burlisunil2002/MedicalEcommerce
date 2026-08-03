@@ -33,9 +33,10 @@ namespace VivekMedicalProducts.Services
             string? couponCode)
         {
             var carts =
-                await _context.Carts
-                    .Include(c => c.Product)
-                    .Include(c => c.ProductVariant)
+               await _context.Carts
+    .AsNoTracking()
+    .Include(c => c.Product)
+    .Include(c => c.ProductVariant)
                     .Where(c =>
                         (!string.IsNullOrEmpty(userId) &&
                          c.UserId == userId)

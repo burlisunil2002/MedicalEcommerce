@@ -17,12 +17,6 @@ using VivekMedicalProducts.Services.Storage;
 
 var builder = WebApplication.CreateBuilder(args);
 
-Console.WriteLine("=== Program.cs ===");
-Console.WriteLine(builder.Configuration["Twilio:AccountSid"]);
-Console.WriteLine(builder.Configuration["Twilio:AuthToken"]);
-Console.WriteLine(builder.Configuration["Twilio:FromNumber"]);
-Console.WriteLine("==================");
-
 // Register MVC
 builder.Services
     .AddControllersWithViews()
@@ -31,6 +25,7 @@ builder.Services
         options.JsonSerializerOptions.ReferenceHandler =
             ReferenceHandler.IgnoreCycles;
     }); 
+
 builder.Services.AddScoped<ProductService>();
 
 // Session (only if you really need it)
@@ -77,9 +72,14 @@ builder.Services.Configure<CookiePolicyOptions>(options =>
 
 builder.Services.AddAuthorization();
 
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseNpgsql(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        o =>
+        {
+            o.CommandTimeout(60);
+        }));
 
 // Email Service
 builder.Services.Configure<EmailSettings>(

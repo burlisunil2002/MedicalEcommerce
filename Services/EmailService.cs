@@ -25,10 +25,7 @@ public class EmailService
         var client = new SendGridClient(_apiKey);
 
         // ✅ Use DOMAIN email (NOT Gmail)
-        var from = new EmailAddress(
-     "burlisunil16@gmail.com",
-     "Sunil Medical Products"
- );
+        var from = new EmailAddress(_fromEmail, _fromName);
 
         var to = new EmailAddress(toEmail);
 
@@ -158,10 +155,7 @@ public class EmailService
     {
         var client = new SendGridClient(_apiKey);
 
-        var from = new EmailAddress(
-    "burlisunil16@gmail.com",
-    "Sunil Medical Products"
-);
+        var from = new EmailAddress(_fromEmail, _fromName);
 
         var to = new EmailAddress(toEmail); 
 
@@ -199,10 +193,7 @@ public class EmailService
     {
         var client = new SendGridClient(_apiKey);
 
-        var from = new EmailAddress(
-    "burlisunil16@gmail.com",
-    "Sunil Medical Products"
-);
+        var from = new EmailAddress(_fromEmail, _fromName);
 
         var to = new EmailAddress(toEmail);
 

@@ -9,8 +9,12 @@ import SmallCubeLoader from "../components/loader/SmallCubeLoader";
 export default function CartPage() {
 
         const navigate = useNavigate();
-        const { items, summary, applyCoupon, loading } = useCart();
-        const [coupon, setCoupon] = useState("");
+    const [coupon, setCoupon] = useState("");
+    const { items, summary, applyCoupon, loading, loadCart } = useCart();
+
+    useEffect(() => {
+        loadCart();
+    }, []);
 
 
 

@@ -131,9 +131,16 @@ private (string? userId, string guestId) GetIdentity()
 
                 await _context.SaveChangesAsync();
 
+                var cartCount = await _context.Carts
+     .Where(c =>
+         (!string.IsNullOrEmpty(userId) && c.UserId == userId) ||
+         (string.IsNullOrEmpty(userId) && c.GuestId == guestId))
+     .SumAsync(c => (int?)c.Quantity) ?? 0;
+
                 return Ok(new
                 {
-                    success = true
+                    success = true,
+                    cartCount
                 });
             }
             catch (Exception ex)
@@ -178,9 +185,28 @@ private (string? userId, string guestId) GetIdentity()
 
             await _context.SaveChangesAsync();
 
+            var checkoutSession = await _context.CheckoutSessions
+     .FirstOrDefaultAsync(x =>
+         x.IsActive &&
+         (
+             (userId != null && x.UserId == userId) ||
+             (userId == null && x.GuestId == guestId)
+         ));
+
+            var couponCode = checkoutSession?.CouponCode;
+
+            var summary = await _cartCalculation.CalculateAsync(
+                userId,
+                guestId,
+                couponCode);
+
+            var cartCount = await GetCartCount(userId, guestId);
+
             return Ok(new
             {
-                success = true
+                success = true,
+                cartCount,
+                summary
             });
         }
 
@@ -439,9 +465,28 @@ public async Task<IActionResult> ApplyCoupon(
 
             await _context.SaveChangesAsync();
 
+            var checkoutSession = await _context.CheckoutSessions
+    .FirstOrDefaultAsync(x =>
+        x.IsActive &&
+        (
+            (userId != null && x.UserId == userId) ||
+            (userId == null && x.GuestId == guestId)
+        ));
+
+            var couponCode = checkoutSession?.CouponCode;
+
+            var summary = await _cartCalculation.CalculateAsync(
+                userId,
+                guestId,
+                couponCode);
+
+            var cartCount = await GetCartCount(userId, guestId);
+
             return Ok(new
             {
-                success = true
+                success = true,
+                cartCount,
+                summary
             });
         }
 
@@ -623,11 +668,14 @@ public async Task<IActionResult> ApplyCoupon(
                 })
                 .ToList();
 
+                var cartCount = await GetCartCount(userId, guestId);
+
                 return Ok(new
                 {
                     success = true,
                     items,
-                    summary = totals
+                    summary = totals,
+                    cartCount
                 });
             }
             catch (Exception ex)
@@ -644,6 +692,14 @@ public async Task<IActionResult> ApplyCoupon(
             }
         }
 
+        private async Task<int> GetCartCount(string? userId, string guestId)
+        {
+            return await _context.Carts
+                .Where(c =>
+                    (!string.IsNullOrEmpty(userId) && c.UserId == userId) ||
+                    (string.IsNullOrEmpty(userId) && c.GuestId == guestId))
+                .SumAsync(c => (int?)c.Quantity) ?? 0;
+        }
 
         public class RemoveCartDto
         {
