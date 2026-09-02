@@ -22,6 +22,7 @@ export const CartProvider = ({ children }) => {
     const [items, setItems] = useState([]);
     const [summary, setSummary] = useState({});
     const [cartCount, setCartCount] = useState(0);
+    const [loading, setLoading] = useState(true);
 
     // ==========================
     // HELPERS
@@ -54,22 +55,28 @@ export const CartProvider = ({ children }) => {
 
         try {
 
+            setLoading(true);
+
             const res = await API.get("/api/cart/full");
 
             setItems(res.data.items || []);
 
             syncCartResponse(res.data);
 
-        }
-        catch (err) {
+        } catch (err) {
 
             console.error("Load Cart Error:", err);
 
             resetCart();
 
+        } finally {
+
+            setLoading(false);
+
         }
 
     }, [syncCartResponse, resetCart]);
+
 
 
     // ==========================
@@ -81,40 +88,50 @@ export const CartProvider = ({ children }) => {
         quantity = 1
     ) => {
 
+        const pid = Number(productId);
+        const vid = Number(variantId);
+        const qty = Number(quantity);
+
         try {
 
-            const res = await API.post("/api/cart/add", {
-                productId,
-                variantId,
-                quantity
-            });
+            const res = await API.post(
+                "/api/cart/add",
+                {
+                    productId: pid,
+                    variantId: vid,
+                    quantity: qty
+                }
+            );
 
-            syncCartResponse(res.data);
+            console.log("ADD CART RESPONSE:", res.data);
 
-            // If backend returns updated items, use them
-            if (res.data.items)
-                setItems(res.data.items);
+            // Update badge immediately from backend
+            if (
+                typeof res.data?.cartCount === "number"
+            ) {
+                setCartCount(
+                    res.data.cartCount
+                );
+            }
 
-            return {
-                success: true,
-                cartCount: res.data.cartCount
-            };
+            // 🔥 IMPORTANT
+            // Get the real cart data after successful add
+            await loadCart();
+
+            return true;
 
         }
         catch (err) {
 
-            console.error("Add To Cart Error:", err);
+            console.error(
+                "Add To Cart Error:",
+                err
+            );
 
-            return {
-                success: false,
-                message:
-                    err.response?.data?.message ??
-                    "Unable to add product."
-            };
-
+            return false;
         }
 
-    }, [syncCartResponse]);
+    }, [loadCart]);
 
     // ==========================
     // UPDATE CART
@@ -293,29 +310,26 @@ export const CartProvider = ({ children }) => {
         items,
         summary,
         cartCount,
+        loading,
 
         addToCart,
         updateCart,
         removeFromCart,
         applyCoupon,
-
         getQty,
         loadCart
 
     }), [
-
         items,
         summary,
         cartCount,
-
+        loading,
         addToCart,
         updateCart,
         removeFromCart,
         applyCoupon,
-
         getQty,
         loadCart
-
     ]);
 
 

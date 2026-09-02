@@ -9,6 +9,7 @@ export default function AddToCartButton({
     stepQty = 1,
     setMessage
 }) {
+
     const {
         addToCart,
         updateCart,
@@ -24,16 +25,23 @@ export default function AddToCartButton({
         variantKey
     );
 
-    const [uiQty, setUiQty] =
-        useState(cartQty);
+    const [uiQty, setUiQty] = useState(cartQty);
 
-    const [loading, setLoading] =
-        useState(false);
+    const [loading, setLoading] = useState(false);
 
-
+    /*
+     * IMPORTANT:
+     * Don't allow CartContext's old quantity (0)
+     * to overwrite our instant UI while Add is processing.
+     */
     useEffect(() => {
-        setUiQty(cartQty);
-    }, [cartQty]);
+
+        if (!loading) {
+            setUiQty(cartQty);
+        }
+
+    }, [cartQty, loading]);
+
 
     const min =
         Number(minQty) || 1;
@@ -46,17 +54,12 @@ export default function AddToCartButton({
             ? Number(maxQty)
             : Infinity;
 
+
+    // ==========================
+    // ADD
+    // ==========================
+
     const handleAdd = async (e) => {
-
-        console.log("Button Clicked");
-
-        console.log({
-            productKey,
-            variantKey,
-            min,
-            setMessage,
-            addToCart
-        });
 
         e.preventDefault();
         e.stopPropagation();
@@ -65,50 +68,55 @@ export default function AddToCartButton({
 
         setLoading(true);
 
-        // Update UI immediately
+        // 🔥 INSTANT UI
         setUiQty(min);
 
-        // Show success instantly
-        setMessage?.("Product added to your cart");
+        setMessage?.(
+            "Product added to your cart"
+        );
 
-        setTimeout(() => {
-            setMessage?.("");
-        }, 2000);
-
-        try {
-            console.log("Calling addToCart...");
-
-            const success = await addToCart(
+        const success =
+            await addToCart(
                 productKey,
                 variantKey,
                 min
             );
 
-            console.log("Returned from addToCart", success);
+        if (!success) {
 
-            if (!success) {
-                setUiQty(cartQty);
-                setMessage?.("Unable to add product");
-            }
-        }
-        catch {
+            // Rollback
             setUiQty(cartQty);
-            setMessage?.("Something went wrong");
+
+            setMessage?.(
+                "Unable to add product"
+            );
+
         }
-        finally {
-            setLoading(false);
-        }
+
+        setLoading(false);
+
+        setTimeout(() => {
+            setMessage?.("");
+        }, 1000);
     };
 
-    const increase = async e => {
+
+    // ==========================
+    // INCREASE
+    // ==========================
+
+    const increase = async (e) => {
+
         e.preventDefault();
         e.stopPropagation();
 
         const nextQty =
             uiQty + step;
 
-        if (nextQty > max) return;
+        if (nextQty > max)
+            return;
 
+        // 🔥 Instant UI
         setUiQty(nextQty);
 
         await updateCart(
@@ -118,7 +126,13 @@ export default function AddToCartButton({
         );
     };
 
-    const decrease = async e => {
+
+    // ==========================
+    // DECREASE
+    // ==========================
+
+    const decrease = async (e) => {
+
         e.preventDefault();
         e.stopPropagation();
 
@@ -126,6 +140,8 @@ export default function AddToCartButton({
             uiQty - step;
 
         if (nextQty < min) {
+
+            // 🔥 Instant UI
             setUiQty(0);
 
             await removeFromCart(
@@ -136,6 +152,7 @@ export default function AddToCartButton({
             return;
         }
 
+        // 🔥 Instant UI
         setUiQty(nextQty);
 
         await updateCart(
@@ -145,12 +162,12 @@ export default function AddToCartButton({
         );
     };
 
+
     return (
-
-        <>
-
         <div className="w-full">
+
             {uiQty <= 0 ? (
+
                 <button
                     type="button"
                     onClick={handleAdd}
@@ -161,7 +178,9 @@ export default function AddToCartButton({
                         ? "Adding..."
                         : "🛒 Add To Cart"}
                 </button>
+
             ) : (
+
                 <div className="flex items-center justify-between h-12 rounded-xl border bg-white overflow-hidden">
 
                     <button
@@ -186,9 +205,9 @@ export default function AddToCartButton({
                     </button>
 
                 </div>
-            )}
-    </div>
 
-    </>
+            )}
+
+        </div>
     );
 }

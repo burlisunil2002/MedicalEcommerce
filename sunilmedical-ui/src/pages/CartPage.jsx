@@ -10,12 +10,7 @@ export default function CartPage() {
 
         const navigate = useNavigate();
     const [coupon, setCoupon] = useState("");
-    const { items, summary, applyCoupon, loading, loadCart } = useCart();
-
-    useEffect(() => {
-        loadCart();
-    }, []);
-
+    const { items, summary, applyCoupon, loading } = useCart();
 
 
     if (loading) {

@@ -139,21 +139,13 @@ export default function ReviewPage() {
                     clearInterval(pollingRef.current);
                     pollingRef.current = null;
 
-                    await loadCart();
-
-                    window.dispatchEvent(new Event("cartUpdated"));
-
                     setProcessing(false);
 
-                    setRedirecting(true);
-
-                    timeoutRef.current = setTimeout(() => {
-
-                        navigate(`/success-order/${data.orderId}`, {
-                            replace: true
-                        });
-
-                    }, 500);
+                    // 🔥 Navigate immediately after confirmation
+                    navigate(
+                        `/success-order/${data.orderId}`,
+                        { replace: true }
+                    );
 
                     return;
                 }
@@ -295,6 +287,10 @@ export default function ReviewPage() {
 
                 handler: async function (response) {
 
+                    // 🔥 SHOW LOADER IMMEDIATELY
+                    setPaymentOpening(false);
+                    setRedirecting(true);
+
                     try {
 
                         const { data: verify } =
@@ -314,29 +310,30 @@ export default function ReviewPage() {
 
                         if (!verify.success) {
 
-                            setPaymentOpening(false);
+                            setRedirecting(false);
 
                             showToast(
-                                verify.message || "Payment verification failed.",
+                                verify.message ||
+                                "Payment verification failed.",
                                 "error"
                             );
 
                             return;
                         }
 
-                        setPaymentOpening(false);
-                        setRedirecting(true);
+                        // 🔥 DO NOT WAIT FOR CART BEFORE SHOWING LOADER
 
                         localStorage.removeItem("cart");
 
-                        await loadCart();
-
-                        window.dispatchEvent(new Event("cartUpdated"));
-
-                        startPolling(order.razorpayOrderId);
+                        // Start verification
+                        startPolling(
+                            order.razorpayOrderId
+                        );
 
                     }
                     catch (err) {
+
+                        setRedirecting(false);
 
                         showToast(
                             err.response?.data?.message ??
