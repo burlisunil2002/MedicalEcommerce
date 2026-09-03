@@ -514,9 +514,30 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
                     Convert.ToInt32(Math.Round(totals.Total * 100));
 
                 // Razorpay Client
+                var razorpayKey = _config["Razorpay:Key"];
+                var razorpaySecret = _config["Razorpay:Secret"];
+
+                _logger.LogInformation(
+                    "Razorpay Config Check - KeyExists: {KeyExists}, SecretExists: {SecretExists}, Mode: {Mode}",
+                    !string.IsNullOrWhiteSpace(razorpayKey),
+                    !string.IsNullOrWhiteSpace(razorpaySecret),
+                    razorpayKey?.StartsWith("rzp_test_") == true
+                        ? "TEST"
+                        : razorpayKey?.StartsWith("rzp_live_") == true
+                            ? "LIVE"
+                            : "UNKNOWN"
+                );
+
+                if (string.IsNullOrWhiteSpace(razorpayKey) ||
+                    string.IsNullOrWhiteSpace(razorpaySecret))
+                {
+                    throw new InvalidOperationException(
+                        "Razorpay Key or Secret is missing from configuration.");
+                }
+
                 var client = new RazorpayClient(
-                    _config["Razorpay:Key"],
-                    _config["Razorpay:Secret"]);
+                    razorpayKey,
+                    razorpaySecret);
 
                 // Unique Receipt Number
                 var receipt =
