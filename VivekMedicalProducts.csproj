@@ -79,7 +79,7 @@
   </ItemGroup>
 
 
-	<Target Name = "PublishReact" BeforeTargets = "Publish" >
+	 <Target Name = "PublishReact" BeforeTargets = "Publish" >
 
 	<Message Text = "========== Building React Application ==========" Importance = "high" />
 
