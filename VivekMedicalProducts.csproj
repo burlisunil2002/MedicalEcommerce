@@ -79,39 +79,39 @@
   </ItemGroup>
 
 
-	 <Target Name = "PublishReact" BeforeTargets = "Publish" >
+	<Target Name = "PublishReact" BeforeTargets = "Publish" >
 
-	<Message Text = "========== Building React Application ==========" Importance = "high" />
+		<Message Text = "========== Building React Application ==========" Importance = "high" />
 
-	<!--Install dependencies-->
-	<Exec
-      WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
-      Command = "npm ci"
-      Condition = "Exists('$(MSBuildProjectDirectory)\sunilmedical-ui\package-lock.json')" />
+		<!--Install dependencies-->
+		<Exec
+		  WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
+		  Command = "npm ci"
+		  Condition = "Exists('$(MSBuildProjectDirectory)\sunilmedical-ui\package-lock.json')" />
 
-	<Exec
-      WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
-      Command = "npm install"
-      Condition = "!Exists('$(MSBuildProjectDirectory)\sunilmedical-ui\package-lock.json')" />
+		<Exec
+		  WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
+		  Command = "npm install"
+		  Condition = "!Exists('$(MSBuildProjectDirectory)\sunilmedical-ui\package-lock.json')" />
 
-	<!--Build React-->
-	<Exec
-      WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
-      Command = "npm run build" />
+		<!--Build React-->
+		<Exec
+		  WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
+		  Command = "npm run build" />
 
-	<!--Create publish React folder -->
-	<MakeDir Directories="$(PublishDir)wwwroot\react" />
+		<!--Create publish React folder -->
+		<MakeDir Directories="$(PublishDir)wwwroot\react" />
 
-	<!-- Collect React build files -->
-	<ItemGroup>
-		<ReactBuildFiles Include="$(MSBuildProjectDirectory)\sunilmedical-ui\build\**\*" />
-	</ItemGroup>
+		<!-- Collect React build files -->
+		<ItemGroup>
+			<ReactBuildFiles Include="$(MSBuildProjectDirectory)\sunilmedical-ui\build\**\*" />
+		</ItemGroup>
 
-	<!-- Copy React build into publish folder -->
-	<Copy
-		SourceFiles="@(ReactBuildFiles)"
-		DestinationFiles="@(ReactBuildFiles->'$(PublishDir)wwwroot\react\%(RecursiveDir)%(Filename)%(Extension)')"
-		SkipUnchangedFiles="true" />
+		<!-- Copy React build into publish folder -->
+		<Copy
+			SourceFiles="@(ReactBuildFiles)"
+			DestinationFiles="@(ReactBuildFiles->'$(PublishDir)wwwroot\react\%(RecursiveDir)%(Filename)%(Extension)')"
+			SkipUnchangedFiles="true" />
 
 	</Target>
 

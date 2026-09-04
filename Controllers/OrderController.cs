@@ -517,24 +517,6 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
                 var razorpayKey = _config["Razorpay:Key"];
                 var razorpaySecret = _config["Razorpay:Secret"];
 
-                _logger.LogInformation(
-                    "Razorpay Config Check - KeyExists: {KeyExists}, SecretExists: {SecretExists}, Mode: {Mode}",
-                    !string.IsNullOrWhiteSpace(razorpayKey),
-                    !string.IsNullOrWhiteSpace(razorpaySecret),
-                    razorpayKey?.StartsWith("rzp_test_") == true
-                        ? "TEST"
-                        : razorpayKey?.StartsWith("rzp_live_") == true
-                            ? "LIVE"
-                            : "UNKNOWN"
-                );
-
-                if (string.IsNullOrWhiteSpace(razorpayKey) ||
-                    string.IsNullOrWhiteSpace(razorpaySecret))
-                {
-                    throw new InvalidOperationException(
-                        "Razorpay Key or Secret is missing from configuration.");
-                }
-
                 var client = new RazorpayClient(
                     razorpayKey,
                     razorpaySecret);
