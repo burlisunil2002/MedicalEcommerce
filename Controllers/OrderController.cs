@@ -91,6 +91,13 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
             {
                 var userId = _userContext.GetUserId();
 
+                Console.WriteLine("========== CREATE ORDER ==========");
+                Console.WriteLine($"Environment: {_config["ASPNETCORE_ENVIRONMENT"]}");
+                Console.WriteLine($"UserId exists: {!string.IsNullOrWhiteSpace(userId)}");
+                Console.WriteLine($"Authenticated: {User?.Identity?.IsAuthenticated}");
+                Console.WriteLine($"Authentication Type: {User?.Identity?.AuthenticationType}");
+                Console.WriteLine("==================================");
+
                 if (string.IsNullOrEmpty(userId))
                 {
                     return Unauthorized(new
