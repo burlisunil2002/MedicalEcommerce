@@ -5,29 +5,27 @@ public interface IUserContextService
     string GetUserId();
 }
 
-public class UserContextService : IUserContextService
-{
-    private readonly IHttpContextAccessor _httpContextAccessor;
-
-    public UserContextService(IHttpContextAccessor httpContextAccessor)
+    public class UserContextService : IUserContextService
     {
-        _httpContextAccessor = httpContextAccessor;
-    }
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public string GetUserId()
-    {
-        var context = _httpContextAccessor.HttpContext;
-
-        if (context == null)
-            return null;
-
-        // ✅ ONLY return userId if logged in
-        if (context.User?.Identity?.IsAuthenticated == true)
+        public UserContextService(
+            IHttpContextAccessor httpContextAccessor)
         {
-            return context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            _httpContextAccessor = httpContextAccessor;
         }
 
-        // 🔥 IMPORTANT: Guest must return NULL
-        return null;
+        public string? GetUserId()
+        {
+            var context = _httpContextAccessor.HttpContext;
+
+            if (context?.User?.Identity?.IsAuthenticated != true)
+            {
+                return null;
+            }
+
+            return context.User.FindFirstValue(
+                ClaimTypes.NameIdentifier
+            );
+        }
     }
-}

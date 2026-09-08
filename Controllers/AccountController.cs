@@ -625,19 +625,101 @@ public class AccountController : Controller
     [HttpGet("/api/user")]
     public async Task<IActionResult> GetUser()
     {
-        if (!User.Identity.IsAuthenticated)
-            return Unauthorized();
+        if (User?.Identity == null ||
+            !User.Identity.IsAuthenticated)
+        {
+            return Unauthorized(new
+            {
+                success = false,
+                message = "Not authenticated."
+            });
+        }
 
         var user = await _userManager.GetUserAsync(User);
 
+        if (user == null)
+        {
+            return Unauthorized(new
+            {
+                success = false,
+                message = "User account not found."
+            });
+        }
+
+        var roles = await _userManager.GetRolesAsync(user);
+
+        string? role = null;
+
+        if (roles.Contains("Admin", StringComparer.OrdinalIgnoreCase))
+        {
+            role = "Admin";
+        }
+        else if (roles.Contains("Seller", StringComparer.OrdinalIgnoreCase))
+        {
+            role = "Seller";
+        }
+        else if (roles.Contains("Customer", StringComparer.OrdinalIgnoreCase))
+        {
+            role = "Customer";
+        }
+
+        if (string.IsNullOrWhiteSpace(role))
+        {
+            return Unauthorized(new
+            {
+                success = false,
+                message = "User role not found."
+            });
+        }
+
+        // Seller information
+        object? seller = null;
+
+        if (roles.Contains("Seller"))
+        {
+            var sellerAccount = await _context.Sellers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.UserId == user.Id);
+
+            if (sellerAccount != null)
+            {
+                seller = new
+                {
+                    sellerId = sellerAccount.SellerId,
+                    businessName = sellerAccount.BusinessName,
+                    ownerName = sellerAccount.OwnerName,
+                    email = sellerAccount.Email,
+                    status = sellerAccount.Status,
+                    subscriptionEnd = sellerAccount.SubscriptionEndDate,
+                    isSubscribed =
+                        sellerAccount.SubscriptionEndDate.HasValue &&
+                        sellerAccount.SubscriptionEndDate.Value > DateTime.UtcNow
+                };
+            }
+        }
+
         return Ok(new
         {
+            success = true,
+
+            userId = user.Id,
+
             name = user.CustomerName ?? user.Email,
+
             email = user.Email,
+
+            role = role,
+
+            roles = roles,
+
             isProfileCompleted = user.IsProfileCompleted,
 
-            // 🔥 ADD THIS
-            kycStatus = user.IsProfileCompleted ? "Completed" : "Pending"
+            kycStatus =
+         user.IsProfileCompleted
+             ? "Completed"
+             : "Pending",
+
+            seller = seller
         });
     }
 }

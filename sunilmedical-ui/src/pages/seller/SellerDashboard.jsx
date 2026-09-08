@@ -1,947 +1,1674 @@
-﻿import { useEffect, useState } from "react";
+﻿import {
+    useCallback,
+    useEffect,
+    useMemo,
+    useState
+} from "react";
+
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 
 import {
-    Package,
-    ShoppingCart,
-    IndianRupee,
-    Users,
+    Activity,
     AlertTriangle,
-    TrendingUp,
     ArrowUpRight,
-    CreditCard,
-    Plus,
     Boxes,
+    CheckCircle2,
     Clock,
-    Activity
+    CreditCard,
+    IndianRupee,
+    Package,
+    Plus,
+    RefreshCw,
+    ShoppingCart,
+    TrendingUp,
+    Users,
+    XCircle
 } from "lucide-react";
 
 import API from "../../services/api";
 
-export default function SellerDashboard() {
 
+// =========================================================
+// EMPTY DASHBOARD
+// =========================================================
+
+const EMPTY_DASHBOARD = {
+    sellerName: "",
+
+    totalProducts: 0,
+    totalOrders: 0,
+    totalOrderItems: 0,
+    completedItems: 0,
+    pendingOrderItems: 0,
+
+    revenue: 0,
+    customers: 0,
+    lowStock: 0,
+
+    growth: null,
+    subscriptionEnd: null,
+    isSubscribed: false,
+
+    payment: {
+        cashOnDelivery: 0,
+        initiatedPayments: 0,
+        pendingPayments: 0,
+        completedPayments: 0,
+        failedPayments: 0,
+        refundedPayments: 0,
+        refundPendingPayments: 0,
+        cancelledPayments: 0
+    },
+
+    delivery: {
+        placed: 0,
+        accepted: 0,
+        packed: 0,
+        shipped: 0,
+        outForDelivery: 0,
+        delivered: 0,
+        cancelled: 0
+    },
+
+    returns: {
+        requested: 0,
+        approved: 0,
+        returned: 0,
+        refunded: 0
+    }
+};
+
+
+// =========================================================
+// HELPERS
+// =========================================================
+
+const toNumber = (value) => {
+    const number = Number(value);
+
+    return Number.isFinite(number) ? number : 0;
+};
+
+const firstNumber = (...values) => {
+    for (const value of values) {
+        if (
+            value !== null &&
+            value !== undefined &&
+            value !== ""
+        ) {
+            return toNumber(value);
+        }
+    }
+
+    return 0;
+};
+
+const formatNumber = (value) => {
+    return toNumber(value).toLocaleString("en-IN");
+};
+
+const formatCurrency = (value) => {
+    return new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency: "INR",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(toNumber(value));
+};
+
+const formatDate = (value) => {
+    if (!value) {
+        return "Not available";
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return "Not available";
+    }
+
+    return date.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+    });
+};
+
+const formatUpdatedTime = (value) => {
+    if (!value) {
+        return "";
+    }
+
+    return value.toLocaleTimeString("en-IN", {
+        hour: "2-digit",
+        minute: "2-digit"
+    });
+};
+
+
+// =========================================================
+// COMPONENT
+// =========================================================
+
+export default function SellerDashboard() {
     const navigate = useNavigate();
 
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [error, setError] = useState("");
+    const [lastUpdated, setLastUpdated] = useState(null);
+    const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD);
 
-    const [dashboard, setDashboard] = useState({
 
-        sellerName: "",
+    // =========================================================
+    // LOAD DASHBOARD
+    // =========================================================
 
-        totalProducts: 0,
+    const loadDashboard = useCallback(
+        async (showRefresh = false) => {
+            try {
+                if (showRefresh) {
+                    setRefreshing(true);
+                } else {
+                    setLoading(true);
+                }
 
-        totalOrders: 0,
+                setError("");
 
-        revenue: 0,
+                const response = await API.get(
+                    "/api/seller/dashboard"
+                );
 
-        customers: 0,
+                const data = response?.data || {};
 
-        pendingOrders: 0,
+                /*
+                 * Supports both response formats:
+                 *
+                 * 1. Direct:
+                 *    data.totalOrders
+                 *    data.payment.completed
+                 *
+                 * 2. Statistics:
+                 *    data.statistics.totalOrders
+                 *    data.statistics.payment.completed
+                 *
+                 * This makes the page tolerant to the current
+                 * seller dashboard API response.
+                 */
 
-        lowStock: 0,
+                const statistics =
+                    data?.statistics || data;
 
-        growth: 18,
+                const payment =
+                    data?.payment ||
+                    statistics?.payment ||
+                    {};
 
-        subscriptionEnd: null,
+                const delivery =
+                    data?.delivery ||
+                    statistics?.delivery ||
+                    {};
 
-        isSubscribed: false
+                const returns =
+                    data?.returns ||
+                    statistics?.returns ||
+                    {};
 
-    });
+                setDashboard({
+                    sellerName:
+                        data?.sellerName ||
+                        data?.seller?.businessName ||
+                        data?.seller?.name ||
+                        "",
+
+                    totalProducts: firstNumber(
+                        data?.totalProducts,
+                        statistics?.totalProducts
+                    ),
+
+                    totalOrders: firstNumber(
+                        data?.totalOrders,
+                        statistics?.totalOrders
+                    ),
+
+                    totalOrderItems: firstNumber(
+                        data?.totalOrderItems,
+                        statistics?.totalOrderItems,
+                        data?.pagination?.totalOrderItems,
+                        data?.pagination?.totalItems
+                    ),
+
+                    completedItems: firstNumber(
+                        data?.completedItems,
+                        statistics?.completedItems,
+                        statistics?.completed
+                    ),
+
+                    pendingOrderItems: firstNumber(
+                        data?.pendingOrderItems,
+                        data?.pendingOrders,
+                        statistics?.pendingOrderItems,
+                        statistics?.pending
+                    ),
+
+                    revenue: firstNumber(
+                        data?.revenue,
+                        statistics?.revenue
+                    ),
+
+                    customers: firstNumber(
+                        data?.customers,
+                        statistics?.customers,
+                        data?.uniqueCustomers
+                    ),
+
+                    lowStock: firstNumber(
+                        data?.lowStock,
+                        statistics?.lowStock
+                    ),
+
+                    growth:
+                        data?.growth !== undefined &&
+                            data?.growth !== null &&
+                            data?.growth !== ""
+                            ? toNumber(data.growth)
+                            : statistics?.growth !== undefined &&
+                                statistics?.growth !== null &&
+                                statistics?.growth !== ""
+                                ? toNumber(statistics.growth)
+                                : null,
+
+                    subscriptionEnd:
+                        data?.subscriptionEnd ||
+                        data?.subscription?.endDate ||
+                        null,
+
+                    isSubscribed: Boolean(
+                        data?.isSubscribed ??
+                        data?.subscription?.isActive ??
+                        false
+                    ),
+
+                    payment: {
+                        cashOnDelivery: firstNumber(
+                            payment?.cashOnDelivery,
+                            payment?.cod,
+                            data?.cashOnDelivery
+                        ),
+
+                        initiatedPayments: firstNumber(
+                            payment?.initiatedPayments,
+                            payment?.initiated,
+                            data?.initiatedPayments
+                        ),
+
+                        pendingPayments: firstNumber(
+                            payment?.pendingPayments,
+                            payment?.pending,
+                            data?.pendingPayments
+                        ),
+
+                        completedPayments: firstNumber(
+                            payment?.completedPayments,
+                            payment?.completed,
+                            data?.completedPayments
+                        ),
+
+                        failedPayments: firstNumber(
+                            payment?.failedPayments,
+                            payment?.failed,
+                            data?.failedPayments
+                        ),
+
+                        refundedPayments: firstNumber(
+                            payment?.refundedPayments,
+                            payment?.refunded,
+                            data?.refundedPayments
+                        ),
+
+                        refundPendingPayments: firstNumber(
+                            payment?.refundPendingPayments,
+                            payment?.refundPending,
+                            payment?.refundpending,
+                            data?.refundPendingPayments
+                        ),
+
+                        cancelledPayments: firstNumber(
+                            payment?.cancelledPayments,
+                            payment?.cancelled,
+                            data?.cancelledPayments
+                        )
+                    },
+
+                    delivery: {
+                        placed: firstNumber(
+                            delivery?.placed,
+                            delivery?.placedItems,
+                            data?.placedItems
+                        ),
+
+                        accepted: firstNumber(
+                            delivery?.accepted,
+                            delivery?.acceptedItems,
+                            data?.acceptedItems
+                        ),
+
+                        packed: firstNumber(
+                            delivery?.packed,
+                            delivery?.packedItems,
+                            data?.packedItems
+                        ),
+
+                        shipped: firstNumber(
+                            delivery?.shipped,
+                            delivery?.shippedItems,
+                            data?.shippedItems
+                        ),
+
+                        outForDelivery: firstNumber(
+                            delivery?.outForDelivery,
+                            delivery?.outForDeliveryItems,
+                            data?.outForDeliveryItems
+                        ),
+
+                        delivered: firstNumber(
+                            delivery?.delivered,
+                            delivery?.deliveredItems,
+                            data?.deliveredItems
+                        ),
+
+                        cancelled: firstNumber(
+                            delivery?.cancelled,
+                            delivery?.cancelledItems,
+                            data?.cancelledItems
+                        )
+                    },
+
+                    returns: {
+                        requested: firstNumber(
+                            returns?.requested,
+                            returns?.returnRequested,
+                            data?.returnRequested
+                        ),
+
+                        approved: firstNumber(
+                            returns?.approved,
+                            returns?.returnApproved,
+                            data?.returnApproved
+                        ),
+
+                        returned: firstNumber(
+                            returns?.returned,
+                            data?.returned
+                        ),
+
+                        refunded: firstNumber(
+                            returns?.refunded,
+                            data?.refunded
+                        )
+                    }
+                });
+
+                setLastUpdated(new Date());
+            } catch (err) {
+                console.error(
+                    "Seller dashboard load error:",
+                    err
+                );
+
+                setError(
+                    err?.response?.data?.message ||
+                    "Unable to load seller dashboard data. Please try again."
+                );
+            } finally {
+                setLoading(false);
+                setRefreshing(false);
+            }
+        },
+        []
+    );
+
+
+    // =========================================================
+    // INITIAL LOAD + AUTO REFRESH
+    // =========================================================
 
     useEffect(() => {
-
         loadDashboard();
 
-    }, []);
+        const interval = setInterval(() => {
+            loadDashboard(true);
+        }, 60000);
 
-    const loadDashboard = async () => {
+        return () => clearInterval(interval);
+    }, [loadDashboard]);
 
-        try {
 
-            const { data } = await API.get(
-                "/api/seller/dashboard"
-            );
+    // =========================================================
+    // MAIN CARDS
+    // =========================================================
 
-            setDashboard({
+    const cards = useMemo(
+        () => [
+            {
+                title: "Products",
+                value: formatNumber(
+                    dashboard.totalProducts
+                ),
+                icon: Package,
+                iconBg: "bg-blue-50",
+                iconColor: "text-blue-600",
+                description: "Products listed"
+            },
+            {
+                title: "Unique Orders",
+                value: formatNumber(
+                    dashboard.totalOrders
+                ),
+                icon: ShoppingCart,
+                iconBg: "bg-indigo-50",
+                iconColor: "text-indigo-600",
+                description: "Unique orders received"
+            },
+            {
+                title: "Total Order Items",
+                value: formatNumber(
+                    dashboard.totalOrderItems
+                ),
+                icon: Boxes,
+                iconBg: "bg-violet-50",
+                iconColor: "text-violet-600",
+                description: "All seller order items"
+            },
+            {
+                title: "Pending Order Items",
+                value: formatNumber(
+                    dashboard.pendingOrderItems
+                ),
+                icon: Clock,
+                iconBg: "bg-amber-50",
+                iconColor: "text-amber-600",
+                description: "Items not completed yet"
+            },
+            {
+                title: "Delivered Items",
+                value: formatNumber(
+                    dashboard.delivery.delivered
+                ),
+                icon: CheckCircle2,
+                iconBg: "bg-emerald-50",
+                iconColor: "text-emerald-600",
+                description: "Successfully delivered"
+            },
+            {
+                title: "Customers",
+                value: formatNumber(
+                    dashboard.customers
+                ),
+                icon: Users,
+                iconBg: "bg-cyan-50",
+                iconColor: "text-cyan-600",
+                description: "Unique customers"
+            },
+            {
+                title: "Revenue",
+                value: formatCurrency(
+                    dashboard.revenue
+                ),
+                icon: IndianRupee,
+                iconBg: "bg-green-50",
+                iconColor: "text-green-600",
+                description: "Paid and delivered"
+            },
+            {
+                title: "Low Stock",
+                value: formatNumber(
+                    dashboard.lowStock
+                ),
+                icon: AlertTriangle,
+                iconBg: "bg-rose-50",
+                iconColor: "text-rose-600",
+                description: "Inventory alerts"
+            }
+        ],
+        [dashboard]
+    );
 
-                sellerName:
-                    data.sellerName,
 
-                totalProducts:
-                    data.totalProducts,
+    // =========================================================
+    // SUBSCRIPTION
+    // =========================================================
 
-                totalOrders:
-                    data.totalOrders,
-
-                revenue:
-                    data.revenue,
-
-                customers:
-                    data.customers ?? 0,
-
-                pendingOrders:
-                    data.pendingOrders ?? 0,
-
-                lowStock:
-                    data.lowStock ?? 0,
-
-                growth:
-                    data.growth ?? 18,
-
-                subscriptionEnd:
-                    data.subscriptionEnd,
-
-                isSubscribed:
-                    data.isSubscribed
-
-            });
-
+    const subscriptionDays = useMemo(() => {
+        if (!dashboard.subscriptionEnd) {
+            return null;
         }
 
-        catch (err) {
-
-            console.log(err);
-
-        }
-
-        finally {
-
-            setLoading(false);
-
-        }
-
-    };
-
-    const cards = [
-
-        {
-
-            title: "Products",
-
-            value: dashboard.totalProducts,
-
-            icon: Package,
-
-            bg: "bg-blue-100",
-
-            color: "text-blue-600"
-
-        },
-
-        {
-
-            title: "Orders",
-
-            value: dashboard.totalOrders,
-
-            icon: ShoppingCart,
-
-            bg: "bg-indigo-100",
-
-            color: "text-indigo-600"
-
-        },
-
-        {
-
-            title: "Revenue",
-
-            value: `₹${dashboard.revenue}`,
-
-            icon: IndianRupee,
-
-            bg: "bg-green-100",
-
-            color: "text-green-600"
-
-        },
-
-        {
-
-            title: "Customers",
-
-            value: dashboard.customers,
-
-            icon: Users,
-
-            bg: "bg-purple-100",
-
-            color: "text-purple-600"
-
-        },
-
-        {
-
-            title: "Pending Orders",
-
-            value: dashboard.pendingOrders,
-
-            icon: Clock,
-
-            bg: "bg-orange-100",
-
-            color: "text-orange-600"
-
-        },
-
-        {
-
-            title: "Low Stock",
-
-            value: dashboard.lowStock,
-
-            icon: AlertTriangle,
-
-            bg: "bg-red-100",
-
-            color: "text-red-600"
-
-        }
-
-    ];
-
-    if (loading) {
-
-        return (
-
-            <div className="space-y-6 animate-pulse">
-
-                <div className="h-56 rounded-3xl bg-slate-200"></div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-
-                    {[1, 2, 3, 4, 5, 6].map(x => (
-
-                        <div
-                            key={x}
-                            className="h-40 rounded-3xl bg-slate-200"
-                        />
-
-                    ))}
-
-                </div>
-
-            </div>
-
+        const end = new Date(
+            dashboard.subscriptionEnd
         );
 
-    }
+        if (Number.isNaN(end.getTime())) {
+            return null;
+        }
 
-    return (
+        const today = new Date();
 
-        <div className="space-y-8">
-            {/* ================= HERO ================= */}
+        today.setHours(0, 0, 0, 0);
+        end.setHours(0, 0, 0, 0);
 
-            <motion.div
+        return Math.ceil(
+            (end - today) / 86400000
+        );
+    }, [dashboard.subscriptionEnd]);
 
-                initial={{ opacity: 0, y: 20 }}
+    const subscriptionMessage =
+        dashboard.isSubscribed
+            ? subscriptionDays === null
+                ? "Your seller subscription is active."
+                : subscriptionDays > 0
+                    ? `${subscriptionDays} day${subscriptionDays === 1 ? "" : "s"} remaining`
+                    : "Subscription expires today"
+            : "Renew your subscription to continue selling";
 
-                animate={{ opacity: 1, y: 0 }}
 
-                transition={{ duration: .4 }}
+    // =========================================================
+    // LOADING
+    // =========================================================
 
-                className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-700 via-indigo-700 to-cyan-600 text-white p-6 md:p-10 shadow-2xl"
+    if (loading) {
+        return (
+            <div className="space-y-6 animate-pulse">
+                <div className="h-64 rounded-3xl bg-slate-200" />
 
-            >
-
-                <div className="absolute -top-16 -right-16 w-72 h-72 bg-white/10 rounded-full blur-3xl"></div>
-
-                <div className="absolute bottom-0 left-0 w-56 h-56 bg-cyan-300/10 rounded-full blur-3xl"></div>
-
-                <div className="relative flex flex-col lg:flex-row justify-between gap-8">
-
-                    <div>
-
-                        <h1 className="text-3xl md:text-5xl font-black">
-
-                            Welcome Back 👋
-
-                        </h1>
-
-                        <p className="text-blue-100 mt-3 text-lg">
-
-                            {dashboard.sellerName}
-
-                        </p>
-
-                        <p className="mt-6 max-w-xl text-blue-50">
-
-                            Manage your products, orders, subscriptions and
-                            grow your business from one premium seller portal.
-
-                        </p>
-
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-
-                        <div className="bg-white/15 backdrop-blur-md rounded-2xl p-5">
-
-                            <Activity
-                                className="mb-3"
-                                size={28}
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map(
+                        (item) => (
+                            <div
+                                key={item}
+                                className="h-40 rounded-2xl bg-slate-200"
                             />
-
-                            <p className="text-sm">
-
-                                Business Growth
-
-                            </p>
-
-                            <h2 className="text-4xl font-black mt-2">
-
-                                +{dashboard.growth}%
-
-                            </h2>
-
-                        </div>
-
-                        <div className="bg-white/15 backdrop-blur-md rounded-2xl p-5">
-
-                            <Boxes
-                                className="mb-3"
-                                size={28}
-                            />
-
-                            <p className="text-sm">
-
-                                Products
-
-                            </p>
-
-                            <h2 className="text-4xl font-black mt-2">
-
-                                {dashboard.totalProducts}
-
-                            </h2>
-
-                        </div>
-
-                    </div>
-
+                        )
+                    )}
                 </div>
 
-            </motion.div>
+                <div className="h-80 rounded-2xl bg-slate-200" />
+            </div>
+        );
+    }
 
-            {/* ================= KPI ================= */}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+    // =========================================================
+    // UI
+    // =========================================================
 
-                {
+    return (
+        <div className="min-h-full space-y-6 pb-10">
 
-                    cards.map((card, index) => {
+            {/* HEADER */}
 
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                    <p className="text-sm font-semibold text-blue-600">
+                        Seller Overview
+                    </p>
+
+                    <h1 className="text-2xl md:text-3xl font-black text-slate-900 mt-1">
+                        Dashboard
+                    </h1>
+
+                    <p className="text-sm text-slate-500 mt-1">
+                        Monitor your products, orders,
+                        payments, deliveries and returns.
+                    </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    {lastUpdated && (
+                        <span className="hidden sm:block text-xs text-slate-500">
+                            Updated{" "}
+                            {formatUpdatedTime(lastUpdated)}
+                        </span>
+                    )}
+
+                    <button
+                        type="button"
+                        onClick={() => loadDashboard(true)}
+                        disabled={refreshing}
+                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+                    >
+                        <RefreshCw
+                            size={17}
+                            className={
+                                refreshing
+                                    ? "animate-spin"
+                                    : ""
+                            }
+                        />
+
+                        {refreshing
+                            ? "Refreshing..."
+                            : "Refresh"}
+                    </button>
+                </div>
+            </div>
+
+
+            {/* ERROR */}
+
+            {error && (
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    <div className="flex items-center gap-2">
+                        <XCircle size={18} />
+                        <span>{error}</span>
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={() => loadDashboard(true)}
+                        className="font-semibold underline underline-offset-2"
+                    >
+                        Try again
+                    </button>
+                </div>
+            )}
+
+
+            {/* HERO */}
+
+            <motion.section
+                initial={{
+                    opacity: 0,
+                    y: 16
+                }}
+                animate={{
+                    opacity: 1,
+                    y: 0
+                }}
+                transition={{
+                    duration: 0.35
+                }}
+                className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-blue-900 to-cyan-700 text-white shadow-xl"
+            >
+                <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
+
+                <div className="absolute -bottom-28 left-1/3 h-72 w-72 rounded-full bg-cyan-300/10 blur-3xl" />
+
+                <div className="relative grid lg:grid-cols-[1fr_auto] gap-8 p-7 md:p-10">
+                    <div className="max-w-2xl">
+                        <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold backdrop-blur">
+                            <Activity size={15} />
+                            Seller Control Center
+                        </div>
+
+                        <h2 className="mt-5 text-3xl md:text-5xl font-black tracking-tight">
+                            Welcome back
+                            {dashboard.sellerName
+                                ? `, ${dashboard.sellerName}`
+                                : ""}.
+                        </h2>
+
+                        <p className="mt-4 text-sm md:text-base leading-7 text-blue-100 max-w-xl">
+                            Manage products, process orders,
+                            monitor payments and deliveries,
+                            and track returns from one place.
+                        </p>
+
+                        <div className="mt-7 flex flex-wrap gap-3">
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    navigate(
+                                        "/seller/products"
+                                    )
+                                }
+                                className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-blue-800 hover:bg-blue-50"
+                            >
+                                <Plus size={18} />
+                                Add Product
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    navigate(
+                                        "/seller/orders"
+                                    )
+                                }
+                                className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-white/20 hover:bg-white/20"
+                            >
+                                <ShoppingCart size={17} />
+                                View Orders
+                                <ArrowUpRight size={17} />
+                            </button>
+                        </div>
+                    </div>
+
+
+                    {/* HERO MINI STATS */}
+
+                    <div className="grid grid-cols-2 gap-3 self-start lg:min-w-[310px]">
+                        <MiniStat
+                            icon={Boxes}
+                            label="Unique Orders"
+                            value={dashboard.totalOrders}
+                        />
+
+                        <MiniStat
+                            icon={Package}
+                            label="Order Items"
+                            value={dashboard.totalOrderItems}
+                        />
+
+                        <MiniStat
+                            icon={CheckCircle2}
+                            label="Delivered"
+                            value={dashboard.delivery.delivered}
+                        />
+
+                        <MiniStat
+                            icon={Clock}
+                            label="Pending Items"
+                            value={dashboard.pendingOrderItems}
+                        />
+                    </div>
+                </div>
+            </motion.section>
+
+
+            {/* MAIN CARDS */}
+
+            <section>
+                <div className="mb-4">
+                    <h2 className="text-lg font-bold text-slate-900">
+                        Store Performance
+                    </h2>
+
+                    <p className="text-xs text-slate-500 mt-1">
+                        Live values calculated from your seller data.
+                    </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+                    {cards.map((card, index) => {
                         const Icon = card.icon;
 
                         return (
-
                             <motion.div
-
                                 key={card.title}
-
                                 initial={{
-
                                     opacity: 0,
-
-                                    y: 20
-
+                                    y: 12
                                 }}
-
                                 animate={{
-
                                     opacity: 1,
-
                                     y: 0
-
                                 }}
-
                                 transition={{
-
-                                    delay: index * .05
-
+                                    duration: 0.3,
+                                    delay: index * 0.04
                                 }}
-
                                 whileHover={{
-
-                                    y: -5
-
+                                    y: -3
                                 }}
-
-                                className="bg-white rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-300 p-6"
-
+                                className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm hover:shadow-lg transition-shadow"
                             >
-
-                                <div className="flex justify-between">
-
+                                <div className="flex items-start justify-between gap-4">
                                     <div>
-
-                                        <p className="text-gray-500">
-
+                                        <p className="text-sm font-medium text-slate-500">
                                             {card.title}
-
                                         </p>
 
-                                        <h2 className="text-3xl md:text-4xl font-black mt-4">
-
+                                        <h3 className="mt-3 text-2xl md:text-3xl font-black text-slate-900 break-words">
                                             {card.value}
-
-                                        </h2>
-
+                                        </h3>
                                     </div>
 
                                     <div
-
-                                        className={`${card.bg} w-16 h-16 rounded-2xl flex items-center justify-center`}
-
+                                        className={`shrink-0 h-12 w-12 rounded-xl ${card.iconBg} flex items-center justify-center`}
                                     >
-
                                         <Icon
-
-                                            className={card.color}
-
-                                            size={30}
-
+                                            size={24}
+                                            className={card.iconColor}
                                         />
-
                                     </div>
-
                                 </div>
 
-                                <div className="mt-6 flex items-center gap-2 text-green-600">
-
-                                    <ArrowUpRight size={18} />
-
-                                    <span>
-
-                                        12% Growth
-
-                                    </span>
-
+                                <div className="mt-5 flex items-center gap-2 text-xs text-slate-500">
+                                    <ArrowUpRight size={15} />
+                                    {card.description}
                                 </div>
-
                             </motion.div>
-
                         );
+                    })}
+                </div>
+            </section>
 
-                    })
 
-                }
+            {/* ORDER PERFORMANCE */}
 
-            </div>
+            <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
+                    <div>
+                        <h2 className="text-lg font-bold text-slate-900">
+                            Delivery Performance
+                        </h2>
 
-            {/* ================= Subscription ================= */}
+                        <p className="text-xs text-slate-500 mt-1">
+                            Current seller order-item delivery status.
+                        </p>
+                    </div>
 
-            <motion.div
+                    <button
+                        type="button"
+                        onClick={() =>
+                            navigate("/seller/orders")
+                        }
+                        className="inline-flex items-center gap-2 self-start rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800"
+                    >
+                        Manage Orders
+                        <ArrowUpRight size={16} />
+                    </button>
+                </div>
 
-                initial={{
+                <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+                    <StatusBox
+                        label="Placed"
+                        value={dashboard.delivery.placed}
+                    />
 
-                    opacity: 0,
+                    <StatusBox
+                        label="Accepted"
+                        value={dashboard.delivery.accepted}
+                    />
 
-                    y: 20
+                    <StatusBox
+                        label="Packed"
+                        value={dashboard.delivery.packed}
+                    />
 
-                }}
+                    <StatusBox
+                        label="Shipped"
+                        value={dashboard.delivery.shipped}
+                    />
 
-                animate={{
+                    <StatusBox
+                        label="Out for Delivery"
+                        value={dashboard.delivery.outForDelivery}
+                    />
 
-                    opacity: 1,
+                    <StatusBox
+                        label="Delivered"
+                        value={dashboard.delivery.delivered}
+                        valueClass="text-emerald-600"
+                    />
 
-                    y: 0
+                    <StatusBox
+                        label="Cancelled"
+                        value={dashboard.delivery.cancelled}
+                        valueClass="text-red-600"
+                    />
+                </div>
+            </section>
 
-                }}
 
-                className="rounded-3xl bg-white shadow-xl p-8"
+            {/* PAYMENT PERFORMANCE */}
 
-            >
-
-                <div className="flex flex-col lg:flex-row justify-between gap-8">
+            <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="h-11 w-11 rounded-xl bg-blue-50 flex items-center justify-center">
+                        <CreditCard
+                            size={22}
+                            className="text-blue-600"
+                        />
+                    </div>
 
                     <div>
+                        <h2 className="text-lg font-bold text-slate-900">
+                            Payment Performance
+                        </h2>
 
-                        <div className="flex items-center gap-3">
-
-                            <CreditCard
-
-                                className="text-blue-600"
-
-                                size={32}
-
-                            />
-
-                            <h2 className="text-2xl font-bold">
-
-                                Subscription Status
-
-                            </h2>
-
-                        </div>
-
-                        <p className="text-gray-500 mt-4">
-
-                            Manage your seller subscription and continue
-                            selling products without interruption.
-
+                        <p className="text-xs text-slate-500 mt-1">
+                            Payment status captured from seller orders.
                         </p>
+                    </div>
+                </div>
 
+                <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
+                    <StatusBox
+                        label="Cash on Delivery"
+                        value={
+                            dashboard.payment.cashOnDelivery
+                        }
+                    />
+
+                    <StatusBox
+                        label="Initiated"
+                        value={
+                            dashboard.payment.initiatedPayments
+                        }
+                    />
+
+                    <StatusBox
+                        label="Pending"
+                        value={
+                            dashboard.payment.pendingPayments
+                        }
+                    />
+
+                    <StatusBox
+                        label="Completed"
+                        value={
+                            dashboard.payment.completedPayments
+                        }
+                        valueClass="text-emerald-600"
+                    />
+
+                    <StatusBox
+                        label="Failed"
+                        value={
+                            dashboard.payment.failedPayments
+                        }
+                        valueClass="text-red-600"
+                    />
+
+                    <StatusBox
+                        label="Refund Pending"
+                        value={
+                            dashboard.payment.refundPendingPayments
+                        }
+                        valueClass="text-amber-600"
+                    />
+
+                    <StatusBox
+                        label="Refunded"
+                        value={
+                            dashboard.payment.refundedPayments
+                        }
+                    />
+
+                    <StatusBox
+                        label="Cancelled"
+                        value={
+                            dashboard.payment.cancelledPayments
+                        }
+                        valueClass="text-red-600"
+                    />
+                </div>
+            </section>
+
+
+            {/* RETURNS */}
+
+            <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="h-11 w-11 rounded-xl bg-orange-50 flex items-center justify-center">
+                        <Package
+                            size={22}
+                            className="text-orange-600"
+                        />
                     </div>
 
-                    <div className="flex flex-col items-start lg:items-end">
+                    <div>
+                        <h2 className="text-lg font-bold text-slate-900">
+                            Returns & Refunds
+                        </h2>
 
-                        <span
+                        <p className="text-xs text-slate-500 mt-1">
+                            Current return status for seller order items.
+                        </p>
+                    </div>
+                </div>
 
-                            className={`
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <StatusBox
+                        label="Requested"
+                        value={
+                            dashboard.returns.requested
+                        }
+                        valueClass="text-amber-600"
+                    />
 
-px-5
+                    <StatusBox
+                        label="Approved"
+                        value={
+                            dashboard.returns.approved
+                        }
+                    />
 
-py-2
+                    <StatusBox
+                        label="Returned"
+                        value={
+                            dashboard.returns.returned
+                        }
+                    />
 
-rounded-full
+                    <StatusBox
+                        label="Refunded"
+                        value={
+                            dashboard.returns.refunded
+                        }
+                        valueClass="text-emerald-600"
+                    />
+                </div>
+            </section>
 
-font-semibold
 
-${dashboard.isSubscribed
+            {/* PAYMENT + RETURNS SUMMARY */}
 
-                                    ? "bg-green-100 text-green-700"
+            <div className="grid lg:grid-cols-2 gap-5">
+                <SummaryCard title="Payment Summary">
+                    <SummaryRow
+                        label="Cash On Delivery"
+                        value={formatNumber(
+                            dashboard.payment.cashOnDelivery
+                        )}
+                    />
 
-                                    : "bg-red-100 text-red-600"
+                    <SummaryRow
+                        label="Initiated Payments"
+                        value={formatNumber(
+                            dashboard.payment.initiatedPayments
+                        )}
+                    />
 
+                    <SummaryRow
+                        label="Pending Payments"
+                        value={formatNumber(
+                            dashboard.payment.pendingPayments
+                        )}
+                    />
+
+                    <SummaryRow
+                        label="Completed Payments"
+                        value={formatNumber(
+                            dashboard.payment.completedPayments
+                        )}
+                        valueClass="text-emerald-600"
+                    />
+
+                    <SummaryRow
+                        label="Failed Payments"
+                        value={formatNumber(
+                            dashboard.payment.failedPayments
+                        )}
+                        valueClass="text-red-600"
+                    />
+
+                    <SummaryRow
+                        label="Refund Pending"
+                        value={formatNumber(
+                            dashboard.payment.refundPendingPayments
+                        )}
+                        valueClass="text-amber-600"
+                    />
+
+                    <SummaryRow
+                        label="Refunded Payments"
+                        value={formatNumber(
+                            dashboard.payment.refundedPayments
+                        )}
+                    />
+
+                    <SummaryRow
+                        label="Cancelled Payments"
+                        value={formatNumber(
+                            dashboard.payment.cancelledPayments
+                        )}
+                        valueClass="text-red-600"
+                    />
+
+                    <div className="border-t border-slate-100 pt-3">
+                        <SummaryRow
+                            label="Recognized Revenue"
+                            value={formatCurrency(
+                                dashboard.revenue
+                            )}
+                            valueClass="text-emerald-600"
+                        />
+                    </div>
+                </SummaryCard>
+
+
+                <SummaryCard title="Returns Summary">
+                    <SummaryRow
+                        label="Requested"
+                        value={formatNumber(
+                            dashboard.returns.requested
+                        )}
+                    />
+
+                    <SummaryRow
+                        label="Approved"
+                        value={formatNumber(
+                            dashboard.returns.approved
+                        )}
+                    />
+
+                    <SummaryRow
+                        label="Returned"
+                        value={formatNumber(
+                            dashboard.returns.returned
+                        )}
+                    />
+
+                    <SummaryRow
+                        label="Refunded"
+                        value={formatNumber(
+                            dashboard.returns.refunded
+                        )}
+                        valueClass="text-emerald-600"
+                    />
+                </SummaryCard>
+            </div>
+
+
+            {/* BUSINESS SUMMARY */}
+
+            <div className="grid lg:grid-cols-2 gap-5">
+                <SummaryCard title="Business Summary">
+                    <SummaryRow
+                        label="Products"
+                        value={formatNumber(
+                            dashboard.totalProducts
+                        )}
+                    />
+
+                    <SummaryRow
+                        label="Unique Orders"
+                        value={formatNumber(
+                            dashboard.totalOrders
+                        )}
+                    />
+
+                    <SummaryRow
+                        label="Total Order Items"
+                        value={formatNumber(
+                            dashboard.totalOrderItems
+                        )}
+                    />
+
+                    <SummaryRow
+                        label="Completed Items"
+                        value={formatNumber(
+                            dashboard.completedItems
+                        )}
+                        valueClass="text-emerald-600"
+                    />
+
+                    <SummaryRow
+                        label="Pending Order Items"
+                        value={formatNumber(
+                            dashboard.pendingOrderItems
+                        )}
+                        valueClass="text-amber-600"
+                    />
+
+                    <SummaryRow
+                        label="Delivered Items"
+                        value={formatNumber(
+                            dashboard.delivery.delivered
+                        )}
+                    />
+
+                    <SummaryRow
+                        label="Customers"
+                        value={formatNumber(
+                            dashboard.customers
+                        )}
+                    />
+
+                    <SummaryRow
+                        label="Revenue"
+                        value={formatCurrency(
+                            dashboard.revenue
+                        )}
+                        valueClass="text-emerald-600"
+                    />
+                </SummaryCard>
+
+
+                <SummaryCard title="Inventory Status">
+                    <div className="flex items-center justify-between rounded-xl bg-slate-50 p-4">
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center">
+                                <Package
+                                    size={20}
+                                    className="text-blue-600"
+                                />
+                            </div>
+
+                            <div>
+                                <p className="text-xs text-slate-500">
+                                    Listed products
+                                </p>
+
+                                <p className="text-xl font-black text-slate-900">
+                                    {formatNumber(
+                                        dashboard.totalProducts
+                                    )}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        className={`mt-3 flex items-center justify-between rounded-xl p-4 ${dashboard.lowStock > 0
+                                ? "bg-amber-50"
+                                : "bg-emerald-50"
+                            }`}
+                    >
+                        <div className="flex items-center gap-3">
+                            <AlertTriangle
+                                size={20}
+                                className={
+                                    dashboard.lowStock > 0
+                                        ? "text-amber-600"
+                                        : "text-emerald-600"
                                 }
+                            />
 
-`}
+                            <div>
+                                <p className="text-xs text-slate-500">
+                                    Low stock alerts
+                                </p>
 
+                                <p className="text-xl font-black text-slate-900">
+                                    {formatNumber(
+                                        dashboard.lowStock
+                                    )}
+                                </p>
+                            </div>
+                        </div>
+
+                        {dashboard.lowStock > 0 && (
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    navigate(
+                                        "/seller/products"
+                                    )
+                                }
+                                className="text-xs font-bold text-amber-700 hover:underline"
+                            >
+                                Review
+                            </button>
+                        )}
+                    </div>
+                </SummaryCard>
+            </div>
+
+
+            {/* SUBSCRIPTION */}
+
+            <motion.section
+                initial={{
+                    opacity: 0,
+                    y: 12
+                }}
+                animate={{
+                    opacity: 1,
+                    y: 0
+                }}
+                className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm"
+            >
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                    <div className="flex items-start gap-4">
+                        <div className="h-12 w-12 shrink-0 rounded-xl bg-blue-50 flex items-center justify-center">
+                            <CreditCard
+                                size={24}
+                                className="text-blue-600"
+                            />
+                        </div>
+
+                        <div>
+                            <h2 className="text-lg font-bold text-slate-900">
+                                Subscription
+                            </h2>
+
+                            <p className="text-sm text-slate-500 mt-1">
+                                {subscriptionMessage}
+                            </p>
+
+                            {dashboard.subscriptionEnd && (
+                                <p className="text-xs text-slate-500 mt-2">
+                                    Valid till{" "}
+                                    <span className="font-semibold text-slate-700">
+                                        {formatDate(
+                                            dashboard.subscriptionEnd
+                                        )}
+                                    </span>
+                                </p>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <span
+                            className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-bold ${dashboard.isSubscribed
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : "bg-red-50 text-red-700"
+                                }`}
                         >
+                            {dashboard.isSubscribed ? (
+                                <CheckCircle2 size={15} />
+                            ) : (
+                                <XCircle size={15} />
+                            )}
 
-                            {
-
-                                dashboard.isSubscribed
-
-                                    ? "Active"
-
-                                    : "Expired"
-
-                            }
-
+                            {dashboard.isSubscribed
+                                ? "Active"
+                                : "Expired"}
                         </span>
 
-                        {
-
-                            dashboard.subscriptionEnd &&
-
-                            <p className="text-gray-500 mt-4">
-
-                                Valid Till
-
-                                <br />
-
-                                <span className="font-semibold">
-
-                                    {
-
-                                        new Date(
-
-                                            dashboard.subscriptionEnd
-
-                                        ).toLocaleDateString()
-
-                                    }
-
-                                </span>
-
-                            </p>
-
-                        }
-
                         <button
-
+                            type="button"
                             onClick={() =>
-                                navigate("/seller/subscription")
+                                navigate(
+                                    "/seller/subscription"
+                                )
                             }
-
-                            className="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-semibold transition"
-
+                            className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800"
                         >
-
-                            Manage Subscription
-
+                            Manage
                         </button>
-
                     </div>
-
                 </div>
+            </motion.section>
 
-            </motion.div>
-            {/* ================= QUICK ACTIONS ================= */}
 
-            <motion.div
+            {/* QUICK ACTIONS */}
 
-                initial={{ opacity: 0, y: 20 }}
-
-                animate={{ opacity: 1, y: 0 }}
-
-                className="bg-white rounded-3xl shadow-xl p-8"
-
-            >
-
-                <div className="flex items-center justify-between mb-8">
-
-                    <h2 className="text-2xl font-bold">
-
+            <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+                <div className="mb-5">
+                    <h2 className="text-lg font-bold text-slate-900">
                         Quick Actions
-
                     </h2>
 
-                    <span className="text-sm text-gray-500">
-
-                        Frequently Used
-
-                    </span>
-
+                    <p className="text-xs text-slate-500 mt-1">
+                        Common seller tasks.
+                    </p>
                 </div>
 
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-
-                    <motion.button
-
-                        whileHover={{ scale: 1.03 }}
-
-                        whileTap={{ scale: .95 }}
-
-                        onClick={() => navigate("/seller/products")}
-
-                        className="rounded-2xl bg-blue-600 hover:bg-blue-700 text-white p-6 transition"
-
-                    >
-
-                        <Plus size={34} className="mx-auto mb-3" />
-
-                        <h3 className="font-semibold">
-
-                            Add Product
-
-                        </h3>
-
-                        <p className="text-xs text-blue-100 mt-2">
-
-                            Create New Product
-
-                        </p>
-
-                    </motion.button>
-
-                    <motion.button
-
-                        whileHover={{ scale: 1.03 }}
-
-                        whileTap={{ scale: .95 }}
-
-                        onClick={() => navigate("/seller/orders")}
-
-                        className="rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white p-6 transition"
-
-                    >
-
-                        <ShoppingCart size={34} className="mx-auto mb-3" />
-
-                        <h3 className="font-semibold">
-
-                            Orders
-
-                        </h3>
-
-                        <p className="text-xs text-indigo-100 mt-2">
-
-                            Manage Orders
-
-                        </p>
-
-                    </motion.button>
-
-                    <motion.button
-
-                        whileHover={{ scale: 1.03 }}
-
-                        whileTap={{ scale: .95 }}
-
-                        onClick={() => navigate("/seller/returns")}
-
-                        className="rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white p-6 transition"
-
-                    >
-
-                        <ShoppingCart size={34} className="mx-auto mb-3" />
-
-                        <h3 className="font-semibold">
-
-                            Return Orders
-
-                        </h3>
-
-                        <p className="text-xs text-indigo-100 mt-2">
-
-                            Manage Return Orders
-
-                        </p>
-
-                    </motion.button>
-
-                    <motion.button
-
-                        whileHover={{ scale: 1.03 }}
-
-                        whileTap={{ scale: .95 }}
-
-                        onClick={() => navigate("/seller/subscription")}
-
-                        className="rounded-2xl bg-green-600 hover:bg-green-700 text-white p-6 transition"
-
-                    >
-
-                        <CreditCard size={34} className="mx-auto mb-3" />
-
-                        <h3 className="font-semibold">
-
-                            Subscription
-
-                        </h3>
-
-                        <p className="text-xs text-green-100 mt-2">
-
-                            Upgrade Plan
-
-                        </p>
-
-                    </motion.button>
-
-                    <motion.button
-
-                        whileHover={{ scale: 1.03 }}
-
-                        whileTap={{ scale: .95 }}
-
-                        className="rounded-2xl bg-orange-500 hover:bg-orange-600 text-white p-6 transition"
-
-                    >
-
-                        <TrendingUp size={34} className="mx-auto mb-3" />
-
-                        <h3 className="font-semibold">
-
-                            Reports
-
-                        </h3>
-
-                        <p className="text-xs text-orange-100 mt-2">
-
-                            Coming Soon
-
-                        </p>
-
-                    </motion.button>
-
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <ActionButton
+                        icon={Plus}
+                        title="Add Product"
+                        description="Create product"
+                        onClick={() =>
+                            navigate(
+                                "/seller/products"
+                            )
+                        }
+                    />
+
+                    <ActionButton
+                        icon={ShoppingCart}
+                        title="Orders"
+                        description="Manage orders"
+                        onClick={() =>
+                            navigate(
+                                "/seller/orders"
+                            )
+                        }
+                    />
+
+                    <ActionButton
+                        icon={Package}
+                        title="Returns"
+                        description="Manage returns"
+                        onClick={() =>
+                            navigate(
+                                "/seller/returns"
+                            )
+                        }
+                    />
+
+                    <ActionButton
+                        icon={CreditCard}
+                        title="Subscription"
+                        description="Manage plan"
+                        onClick={() =>
+                            navigate(
+                                "/seller/subscription"
+                            )
+                        }
+                    />
+                </div>
+            </section>
+
+
+            {/* CHECKLIST */}
+
+            <section className="rounded-2xl bg-gradient-to-br from-blue-700 via-indigo-700 to-cyan-600 p-6 text-white shadow-lg">
+                <div className="flex items-center gap-3">
+                    <Activity size={22} />
+
+                    <h2 className="text-lg font-bold">
+                        Seller Checklist
+                    </h2>
                 </div>
 
-            </motion.div>
-
-            {/* ================= BUSINESS SUMMARY ================= */}
-
-            <div className="grid lg:grid-cols-3 gap-6">
-
-                <motion.div
-
-                    initial={{ opacity: 0 }}
-
-                    animate={{ opacity: 1 }}
-
-                    className="bg-white rounded-3xl shadow-lg p-6"
-
-                >
-
-                    <h3 className="text-xl font-bold mb-6">
-
-                        Business Summary
-
-                    </h3>
-
-                    <div className="space-y-5">
-
-                        <div className="flex justify-between">
-
-                            <span className="text-gray-500">
-
-                                Products
-
-                            </span>
-
-                            <span className="font-semibold">
-
-                                {dashboard.totalProducts}
-
-                            </span>
-
-                        </div>
-
-                        <div className="flex justify-between">
-
-                            <span className="text-gray-500">
-
-                                Orders
-
-                            </span>
-
-                            <span className="font-semibold">
-
-                                {dashboard.totalOrders}
-
-                            </span>
-
-                        </div>
-
-                        <div className="flex justify-between">
-
-                            <span className="text-gray-500">
-
-                                Customers
-
-                            </span>
-
-                            <span className="font-semibold">
-
-                                {dashboard.customers}
-
-                            </span>
-
-                        </div>
-
-                        <div className="flex justify-between">
-
-                            <span className="text-gray-500">
-
-                                Revenue
-
-                            </span>
-
-                            <span className="font-bold text-green-600">
-
-                                ₹{dashboard.revenue}
-
-                            </span>
-
-                        </div>
-
-                    </div>
-
-                </motion.div>
-
-                <motion.div
-
-                    initial={{ opacity: 0 }}
-
-                    animate={{ opacity: 1 }}
-
-                    className="bg-white rounded-3xl shadow-lg p-6"
-
-                >
-
-                    <h3 className="text-xl font-bold mb-6">
-
-                        Inventory Status
-
-                    </h3>
-
-                    <div className="flex items-center justify-center h-52">
-
-                        <div className="text-center">
-
-                            <Package
-
-                                className="mx-auto text-blue-600"
-
-                                size={64}
-
-                            />
-
-                            <h2 className="text-4xl font-black mt-4">
-
-                                {dashboard.totalProducts}
-
-                            </h2>
-
-                            <p className="text-gray-500 mt-2">
-
-                                Products Listed
-
-                            </p>
-
-                        </div>
-
-                    </div>
-
-                </motion.div>
-
-                <motion.div
-
-                    initial={{ opacity: 0 }}
-
-                    animate={{ opacity: 1 }}
-
-                    className="bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500 rounded-3xl shadow-xl p-6 text-white"
-
-                >
-
-                    <h3 className="text-xl font-bold">
-
-                        Business Tips
-
-                    </h3>
-
-                    <div className="mt-6 space-y-4">
-
-                        <div>
-
-                            ✅ Add more products regularly
-
-                        </div>
-
-                        <div>
-
-                            ✅ Keep stock updated
-
-                        </div>
-
-                        <div>
-
-                            ✅ Respond to orders quickly
-
-                        </div>
-
-                        <div>
-
-                            ✅ Maintain subscription active
-
-                        </div>
-
-                        <div>
-
-                            ✅ Grow your revenue every month
-
-                        </div>
-
-                    </div>
-
-                </motion.div>
-
-            </div>
-
-            {/* ================= FOOTER ================= */}
-
-            <div className="text-center py-8 text-gray-500 text-sm">
-
+                <div className="mt-6 grid md:grid-cols-2 gap-4 text-sm">
+                    <ChecklistItem
+                        text="Keep product information accurate"
+                        done={true}
+                    />
+
+                    <ChecklistItem
+                        text="Keep inventory quantities updated"
+                        done={
+                            dashboard.lowStock === 0
+                        }
+                    />
+
+                    <ChecklistItem
+                        text="Process pending order items quickly"
+                        done={
+                            dashboard.pendingOrderItems === 0
+                        }
+                    />
+
+                    <ChecklistItem
+                        text={
+                            dashboard.isSubscribed
+                                ? "Subscription is active"
+                                : "Renew your seller subscription"
+                        }
+                        done={
+                            dashboard.isSubscribed
+                        }
+                    />
+
+                    <ChecklistItem
+                        text={
+                            dashboard.returns.requested > 0
+                                ? `${formatNumber(
+                                    dashboard.returns.requested
+                                )} return request(s) need attention`
+                                : "No pending return requests"
+                        }
+                        done={
+                            dashboard.returns.requested === 0
+                        }
+                    />
+                </div>
+            </section>
+
+
+            <footer className="border-t border-slate-200 pt-6 text-center text-xs text-slate-400">
                 © {new Date().getFullYear()} SunilMedMarket Seller Portal
-
-            </div>
-
+            </footer>
         </div>
-
     );
+}
 
+
+// =========================================================
+// MINI STAT
+// =========================================================
+
+function MiniStat({
+    icon: Icon,
+    label,
+    value
+}) {
+    return (
+        <div className="rounded-2xl bg-white/10 p-5 backdrop-blur-md ring-1 ring-white/10">
+            <Icon size={25} />
+
+            <p className="mt-4 text-xs text-blue-100">
+                {label}
+            </p>
+
+            <p className="mt-1 text-3xl font-black">
+                {formatNumber(value)}
+            </p>
+        </div>
+    );
+}
+
+
+// =========================================================
+// STATUS BOX
+// =========================================================
+
+function StatusBox({
+    label,
+    value,
+    valueClass = "text-slate-900"
+}) {
+    return (
+        <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+            <p className="text-xs text-slate-500">
+                {label}
+            </p>
+
+            <p
+                className={`mt-2 text-2xl font-black ${valueClass}`}
+            >
+                {formatNumber(value)}
+            </p>
+        </div>
+    );
+}
+
+
+// =========================================================
+// ACTION BUTTON
+// =========================================================
+
+function ActionButton({
+    icon: Icon,
+    title,
+    description,
+    onClick
+}) {
+    return (
+        <motion.button
+            type="button"
+            whileHover={{
+                y: -2
+            }}
+            whileTap={{
+                scale: 0.98
+            }}
+            onClick={onClick}
+            className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-left hover:bg-white hover:shadow-md transition-all"
+        >
+            <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                    <Icon
+                        size={19}
+                        className="text-blue-600"
+                    />
+                </div>
+
+                <div className="min-w-0">
+                    <p className="font-bold text-sm text-slate-900 truncate">
+                        {title}
+                    </p>
+
+                    <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                        {description}
+                    </p>
+                </div>
+            </div>
+        </motion.button>
+    );
+}
+
+
+// =========================================================
+// SUMMARY CARD
+// =========================================================
+
+function SummaryCard({
+    title,
+    children
+}) {
+    return (
+        <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-slate-900 mb-5">
+                {title}
+            </h2>
+
+            <div className="space-y-3">
+                {children}
+            </div>
+        </section>
+    );
+}
+
+
+// =========================================================
+// SUMMARY ROW
+// =========================================================
+
+function SummaryRow({
+    label,
+    value,
+    valueClass = "text-slate-900"
+}) {
+    return (
+        <div className="flex items-center justify-between gap-4 rounded-lg py-1">
+            <span className="text-sm text-slate-500">
+                {label}
+            </span>
+
+            <span
+                className={`text-sm font-bold ${valueClass}`}
+            >
+                {value}
+            </span>
+        </div>
+    );
+}
+
+
+// =========================================================
+// CHECKLIST
+// =========================================================
+
+function ChecklistItem({
+    text,
+    done = false
+}) {
+    return (
+        <div className="flex items-start gap-3">
+            <CheckCircle2
+                size={18}
+                className={
+                    done
+                        ? "text-emerald-300"
+                        : "text-white/70"
+                }
+            />
+
+            <span className="text-blue-50 leading-6">
+                {text}
+            </span>
+        </div>
+    );
 }

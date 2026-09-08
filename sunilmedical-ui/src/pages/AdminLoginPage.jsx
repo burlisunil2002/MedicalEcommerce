@@ -28,7 +28,7 @@ export default function AdminLoginPage() {
                     "Admin"
                 );
 
-                navigate("/admin/admin-dashboard");
+                navigate("/admin/dashboard");
             }
 
         } catch (err) {

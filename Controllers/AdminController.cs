@@ -18,7 +18,7 @@ namespace VivekMedicalProducts.Controllers
             _context = context;
         }
 
-        [HttpGet("admin-dashboard")]
+        [HttpGet("dashboard")]
         public async Task<IActionResult> Dashboard()
         {
             var totalProducts =
@@ -30,19 +30,75 @@ namespace VivekMedicalProducts.Controllers
             var totalUsers =
                 await _context.Users.CountAsync();
 
+            var completedOrderItemsQuery =
+    _context.OrderItems
+        .Where(item =>
+            item.Order.PaymentStatus == "Completed" &&
+            item.OrderItemStatus == "Delivered");
+
+            var completedItems =
+                await completedOrderItemsQuery.CountAsync();
+
+            var totalOrderItems =
+                await _context.OrderItems.CountAsync();
+
+            var pendingItems =
+                totalOrderItems - completedItems;
+
             var revenue =
-                await _context.Orders
-                    .Where(x =>
-                        x.PaymentStatus == "Completed")
-                    .SumAsync(x =>
-                        (decimal?)x.GrandTotal) ?? 0;
+                await completedOrderItemsQuery
+                    .SumAsync(item =>
+                        (decimal?)item.FinalPaidAmount) ?? 0;
+
+            var completedPayments =
+                await _context.OrderItems
+                    .CountAsync(item =>
+                        item.Order.PaymentStatus == "Completed");
+
+            var failedPayments =
+                await _context.OrderItems
+                    .CountAsync(item =>
+                        item.Order.PaymentStatus == "Failed");
+
+            var refundedPayments =
+                await _context.OrderItems
+                    .CountAsync(item =>
+                        item.Order.PaymentStatus == "Refunded");
+
+            var deliveredItems =
+                await _context.OrderItems
+                    .CountAsync(item =>
+                        item.OrderItemStatus == "Delivered");
+
+            var shippedItems =
+                await _context.OrderItems
+                    .CountAsync(item =>
+                        item.OrderItemStatus == "Shipped");
+
+            var outForDeliveryItems =
+                await _context.OrderItems
+                    .CountAsync(item =>
+                        item.OrderItemStatus == "OutForDelivery");
 
             return Ok(new
             {
                 totalProducts,
                 totalOrders,
                 totalUsers,
-                revenue
+
+                revenue,
+
+                totalOrderItems,
+                completedItems,
+                pendingItems,
+
+                completedPayments,
+                failedPayments,
+                refundedPayments,
+
+                deliveredItems,
+                shippedItems,
+                outForDeliveryItems
             });
         }
     }

@@ -2425,54 +2425,93 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
                 : user.UserName;
         }
 
-        [Authorize]
+       /* [Authorize]
         [HttpGet("admin-orders")]
         public async Task<IActionResult> AdminOrders(
-     string search = "",
-     DateTime? fromDate = null,
-     DateTime? toDate = null,
-     string paymentStatus = "",
-     string orderStatus = "",
-     string returnStatus = "",
-     int page = 1,
-     int pageSize = 50)
+      string search = "",
+      DateTime? fromDate = null,
+      DateTime? toDate = null,
+      string paymentStatus = "",
+      string orderStatus = "",
+      string returnStatus = "",
+      int page = 1,
+      int pageSize = 50)
         {
             try
             {
+                // =========================================================
+                // VALIDATE PAGINATION
+                // =========================================================
+
+                page = Math.Max(page, 1);
+
+                pageSize = Math.Clamp(
+                    pageSize,
+                    10,
+                    100
+                );
+
+
+                // =========================================================
+                // IDENTIFY USER ROLE
+                // =========================================================
+
                 var isAdmin = User.IsInRole("Admin");
 
                 int sellerId = 0;
+
                 string sellerName = "Admin";
+
                 bool isSubscribed = true;
+
+
+                // =========================================================
+                // SELLER SECURITY
+                // =========================================================
 
                 if (!isAdmin)
                 {
-                    var seller = await GetCurrentSellerAsync();
+                    var seller =
+                        await GetCurrentSellerAsync();
+
 
                     if (seller == null)
                     {
                         return Unauthorized(new
                         {
                             success = false,
-                            message = "Seller not found."
+                            message = "Seller account not found."
                         });
                     }
+
 
                     if (!HasActiveSubscription(seller))
                     {
-                        return StatusCode(StatusCodes.Status403Forbidden, new
-                        {
-                            success = false,
-                            message = "Your subscription has expired. Please renew it."
-                        });
+                        return StatusCode(
+                            StatusCodes.Status403Forbidden,
+                            new
+                            {
+                                success = false,
+                                message =
+                                    "Your seller subscription has expired. Please renew it."
+                            }
+                        );
                     }
 
+
                     sellerId = seller.SellerId;
-                    sellerName = seller.BusinessName ?? "Seller";
+
+                    sellerName =
+                        seller.BusinessName ?? "Seller";
+
                     isSubscribed = true;
                 }
 
-                // Base Query
+
+                // =========================================================
+                // BASE QUERY
+                // =========================================================
+
                 var query =
                     from item in _context.OrderItems
 
@@ -2487,88 +2526,197 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
 
                     select new AdminOrderModel
                     {
-                        // Order
-                        OrderId = order.OrderId,
-                        OrderItemId = item.OrderItemId,
-                        OrderNumber = order.OrderNumber,
-                        OrderDate = order.OrderDate,
+                        // =================================================
+                        // ORDER
+                        // =================================================
 
-                        // Customer
-                        Customer = !string.IsNullOrWhiteSpace(user.CustomerName)
-                            ? user.CustomerName
-                            : user.UserName,
+                        OrderId =
+                            order.OrderId,
 
-                        // Seller
-                        SellerId = item.SellerId,
+                        OrderItemId =
+                            item.OrderItemId,
 
-                        // Product
-                        ProductId = item.ProductId,
-                        ProductName = item.ProductName,
+                        OrderNumber =
+                            order.OrderNumber,
 
-                        VariantName = item.ProductVariant != null
-                            ? item.ProductVariant.Model
-                            : "",
+                        OrderDate =
+                            order.OrderDate,
 
-                        Quantity = item.Quantity,
-                        Price = item.Price,
 
-                        // Pricing
-                        DiscountAmount = item.DiscountAmount,
-                        CouponDiscountAmount = item.CouponDiscountAmount,
-                        TaxableAmount = item.TaxableAmount,
-                        GSTPercentage = item.GSTPercentage,
-                        GSTAmount = item.GSTAmount,
-                        FinalPaidAmount = item.FinalPaidAmount,
-                        LineTotal = item.LineTotal,
+                        // =================================================
+                        // CUSTOMER
+                        // =================================================
 
-                        // Payment
-                        PaymentStatus = order.PaymentStatus ?? "Pending",
-                        RazorpayPaymentId = order.RazorpayPaymentId ?? "-",
+                        Customer =
+                            !string.IsNullOrWhiteSpace(
+                                user.CustomerName
+                            )
+                                ? user.CustomerName
+                                : user.UserName,
 
-                        // Item Status
-                        OrderStatus = item.OrderItemStatus,
 
-                        PackedDate = item.PackedDate,
-                        ShippedDate = item.ShippedDate,
-                        OutForDeliveryDate = item.OutForDeliveryDate,
-                        DeliveredDate = item.DeliveredDate,
+                        // =================================================
+                        // SELLER
+                        // =================================================
 
-                        // Return
-                        ReturnStatus = item.ReturnStatus,
-                        IsReturnEligible = item.IsReturnEligible,
-                        ReturnEligibleTill = item.ReturnEligibleTill,
+                        SellerId =
+                            item.SellerId,
 
-                        // Cancellation
-                        CancelledAt = item.CancelledAt,
 
-                        // Tracking
-                        TrackingNumber = item.TrackingNumber,
-                        CourierPartner = item.CourierPartner,
+                        // =================================================
+                        // PRODUCT
+                        // =================================================
 
-                        // Order Total
-                        GrandTotal = order.GrandTotal
+                        ProductId =
+                            item.ProductId,
+
+                        ProductName =
+                            item.ProductName,
+
+                        VariantName =
+                            item.ProductVariant != null
+                                ? item.ProductVariant.Model
+                                : "",
+
+
+                        // =================================================
+                        // QUANTITY / PRICE
+                        // =================================================
+
+                        Quantity =
+                            item.Quantity,
+
+                        Price =
+                            item.Price,
+
+
+                        // =================================================
+                        // PRICING
+                        // =================================================
+
+                        DiscountAmount =
+                            item.DiscountAmount,
+
+                        CouponDiscountAmount =
+                            item.CouponDiscountAmount,
+
+                        TaxableAmount =
+                            item.TaxableAmount,
+
+                        GSTPercentage =
+                            item.GSTPercentage,
+
+                        GSTAmount =
+                            item.GSTAmount,
+
+                        FinalPaidAmount =
+                            item.FinalPaidAmount,
+
+                        LineTotal =
+                            item.LineTotal,
+
+
+                        // =================================================
+                        // PAYMENT
+                        // =================================================
+
+                        PaymentStatus =
+                            order.PaymentStatus ?? "Pending",
+
+                        RazorpayPaymentId =
+                            order.RazorpayPaymentId ?? "-",
+
+
+                        // =================================================
+                        // ORDER ITEM STATUS
+                        // =================================================
+
+                        OrderStatus =
+                            item.OrderItemStatus ?? "Pending",
+
+
+                        // =================================================
+                        // DELIVERY DATES
+                        // =================================================
+
+                        PackedDate =
+                            item.PackedDate,
+
+                        ShippedDate =
+                            item.ShippedDate,
+
+                        OutForDeliveryDate =
+                            item.OutForDeliveryDate,
+
+                        DeliveredDate =
+                            item.DeliveredDate,
+
+
+                        // =================================================
+                        // RETURN
+                        // =================================================
+
+                        ReturnStatus =
+                            item.ReturnStatus,
+
+                        IsReturnEligible =
+                            item.IsReturnEligible,
+
+                        ReturnEligibleTill =
+                            item.ReturnEligibleTill,
+
+
+                        // =================================================
+                        // CANCELLATION
+                        // =================================================
+
+                        CancelledAt =
+                            item.CancelledAt,
+
+
+                        // =================================================
+                        // TRACKING
+                        // =================================================
+
+                        TrackingNumber =
+                            item.TrackingNumber,
+
+                        CourierPartner =
+                            item.CourierPartner,
+
+
+                        // =================================================
+                        // ORDER TOTAL
+                        // =================================================
+
+                        GrandTotal =
+                            order.GrandTotal
                     };
 
-                //----------------------------------------------------
-                // Seller Filter
-                //----------------------------------------------------
+
+                // =========================================================
+                // SELLER FILTER
+                // =========================================================
 
                 if (!isAdmin)
                 {
-                    query = query.Where(x =>
-                        x.SellerId == sellerId);
+                    query = query.Where(
+                        x => x.SellerId == sellerId
+                    );
                 }
 
-                //----------------------------------------------------
-                // Search
-                //----------------------------------------------------
+
+                // =========================================================
+                // SEARCH
+                // =========================================================
 
                 if (!string.IsNullOrWhiteSpace(search))
                 {
-                    search = search.Trim().ToLower();
+                    search =
+                        search.Trim().ToLower();
+
 
                     query = query.Where(x =>
-
                         (x.ProductName ?? "")
                             .ToLower()
                             .Contains(search)
@@ -2599,215 +2747,440 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
                     );
                 }
 
-                //----------------------------------------------------
-                // Date Filter
-                //----------------------------------------------------
+
+                // =========================================================
+                // DATE FILTER
+                // =========================================================
 
                 if (fromDate.HasValue)
                 {
-                    var from = fromDate.Value.Date;
+                    var from =
+                        fromDate.Value.Date;
 
-                    query = query.Where(x =>
-                        x.OrderDate >= from);
+
+                    query = query.Where(
+                        x => x.OrderDate >= from
+                    );
                 }
+
 
                 if (toDate.HasValue)
                 {
-                    var to = toDate.Value.Date.AddDays(1);
+                    var to =
+                        toDate.Value.Date.AddDays(1);
 
-                    query = query.Where(x =>
-                        x.OrderDate < to);
+
+                    query = query.Where(
+                        x => x.OrderDate < to
+                    );
                 }
 
-                //----------------------------------------------------
-                // Payment Status
-                //----------------------------------------------------
+
+                // =========================================================
+                // PAYMENT FILTER
+                // =========================================================
 
                 if (!string.IsNullOrWhiteSpace(paymentStatus))
                 {
-                    query = query.Where(x =>
-                        x.PaymentStatus == paymentStatus);
+                    query = query.Where(
+                        x =>
+                            x.PaymentStatus ==
+                            paymentStatus
+                    );
                 }
 
-                //----------------------------------------------------
-                // Order Status
-                //----------------------------------------------------
+
+                // =========================================================
+                // DELIVERY / ITEM STATUS FILTER
+                // =========================================================
 
                 if (!string.IsNullOrWhiteSpace(orderStatus))
                 {
-                    query = query.Where(x =>
-                        x.OrderStatus == orderStatus);
+                    query = query.Where(
+                        x =>
+                            x.OrderStatus ==
+                            orderStatus
+                    );
                 }
 
-                //----------------------------------------------------
-                // Return Status
-                //----------------------------------------------------
+
+                // =========================================================
+                // RETURN FILTER
+                // =========================================================
 
                 if (!string.IsNullOrWhiteSpace(returnStatus))
                 {
-                    query = query.Where(x =>
-                        x.ReturnStatus == returnStatus);
+                    query = query.Where(
+                        x =>
+                            x.ReturnStatus ==
+                            returnStatus
+                    );
                 }
 
-                //----------------------------------------------------
-                // Dashboard Statistics
-                //----------------------------------------------------
 
-                var totalOrders = await query
-                    .Select(x => x.OrderId)
-                    .Distinct()
-                    .CountAsync();
+                // =========================================================
+                // TOTAL COUNTS
+                // =========================================================
 
-                var totalOrderItems = await query
-                    .CountAsync();
+                var totalOrderItems =
+                    await query.CountAsync();
 
-                var pending = await query
-                    .Where(x => x.OrderStatus == "Pending")
-                    .CountAsync();
 
-                var packed = await query
-                    .Where(x => x.OrderStatus == "Packed")
-                    .CountAsync();
+                var totalOrders =
+                    await query
+                        .Select(x => x.OrderId)
+                        .Distinct()
+                        .CountAsync();
 
-                var shipped = await query
-                    .Where(x => x.OrderStatus == "Shipped")
-                    .CountAsync();
 
-                var outForDelivery = await query
-                    .Where(x => x.OrderStatus == "OutForDelivery")
-                    .CountAsync();
+                // =========================================================
+                // COMPLETED ORDER ITEMS
+                //
+                // Payment Completed
+                // AND
+                // Item Delivered
+                // =========================================================
 
-                var delivered = await query
-                    .Where(x => x.OrderStatus == "Delivered")
-                    .CountAsync();
+                var completedItems =
+                    await query
+                        .Where(x =>
+                            x.PaymentStatus ==
+                                "Completed"
 
-                var cancelled = await query
-                    .Where(x => x.OrderStatus == "Cancelled")
-                    .CountAsync();
+                            &&
 
-                var returnRequested = await query
-                    .Where(x => x.ReturnStatus == "Requested")
-                    .CountAsync();
+                            x.OrderStatus ==
+                                "Delivered"
+                        )
+                        .CountAsync();
 
-                var returnApproved = await query
-                    .Where(x => x.ReturnStatus == "Approved")
-                    .CountAsync();
 
-                var returned = await query
-                    .Where(x => x.ReturnStatus == "Returned")
-                    .CountAsync();
+                // =========================================================
+                // PENDING ORDER ITEMS
+                //
+                // Everything NOT fully completed
+                // =========================================================
 
-                var refunded = await query
-                    .Where(x => x.ReturnStatus == "Refunded")
-                    .CountAsync();
+                var pendingItems =
+                    totalOrders -
+                    completedItems;
 
-                var completedPayments = await query
-                    .Where(x => x.PaymentStatus == "Completed")
-                    .Select(x => x.OrderId)
-                    .Distinct()
-                    .CountAsync();
 
-                var pendingPayments = await query
-                    .Where(x => x.PaymentStatus == "Pending")
-                    .Select(x => x.OrderId)
-                    .Distinct()
-                    .CountAsync();
+                // =========================================================
+                // PAYMENT STATISTICS
+                // =========================================================
 
-                var failedPayments = await query
-                    .Where(x => x.PaymentStatus == "Failed")
-                    .Select(x => x.OrderId)
-                    .Distinct()
-                    .CountAsync();
+                var completedPayments =
+                    await query
+                        .Where(x =>
+                            x.PaymentStatus ==
+                            "Completed"
+                        )
+                        .Select(x => x.OrderId)
+                        .Distinct()
+                        .CountAsync();
+
+
+                var pendingPayments =
+                    await query
+                        .Where(x =>
+                            x.PaymentStatus ==
+                            "Pending"
+                        )
+                        .Select(x => x.OrderId)
+                        .Distinct()
+                        .CountAsync();
+
+
+                var failedPayments =
+                    await query
+                        .Where(x =>
+                            x.PaymentStatus ==
+                            "Failed"
+                        )
+                        .Select(x => x.OrderId)
+                        .Distinct()
+                        .CountAsync();
+
+
+                // =========================================================
+                // DELIVERY STATISTICS
+                // =========================================================
+
+                var placed =
+                    await query
+                        .Where(x =>
+                            x.OrderStatus ==
+                            "Placed"
+                        )
+                        .CountAsync();
+
+
+                var packed =
+                    await query
+                        .Where(x =>
+                            x.OrderStatus ==
+                            "Packed"
+                        )
+                        .CountAsync();
+
+
+                var shipped =
+                    await query
+                        .Where(x =>
+                            x.OrderStatus ==
+                            "Shipped"
+                        )
+                        .CountAsync();
+
+
+                var outForDelivery =
+                    await query
+                        .Where(x =>
+                            x.OrderStatus ==
+                            "OutForDelivery"
+                        )
+                        .CountAsync();
+
+
+                var delivered =
+                    await query
+                        .Where(x =>
+                            x.OrderStatus ==
+                            "Delivered"
+                        )
+                        .CountAsync();
+
+
+                var cancelled =
+                    await query
+                        .Where(x =>
+                            x.OrderStatus ==
+                            "Cancelled"
+                        )
+                        .CountAsync();
+
+
+                // =========================================================
+                // RETURN STATISTICS
+                // =========================================================
+
+                var returnRequested =
+                    await query
+                        .Where(x =>
+                            x.ReturnStatus ==
+                            "Requested"
+                        )
+                        .CountAsync();
+
+
+                var returnApproved =
+                    await query
+                        .Where(x =>
+                            x.ReturnStatus ==
+                            "Approved"
+                        )
+                        .CountAsync();
+
+
+                var returned =
+                    await query
+                        .Where(x =>
+                            x.ReturnStatus ==
+                            "Returned"
+                        )
+                        .CountAsync();
+
+
+                var refunded =
+                    await query
+                        .Where(x =>
+                            x.ReturnStatus ==
+                            "Refunded"
+                        )
+                        .CountAsync();
+
+
+                // =========================================================
+                // REVENUE
+                //
+                // IMPORTANT:
+                //
+                // Revenue is ONLY:
+                //
+                // PaymentStatus = Completed
+                // AND
+                // OrderStatus = Delivered
+                //
+                // Seller gets only their own revenue.
+                // =========================================================
+
+                var revenue =
+                    await query
+                        .Where(x =>
+                            x.PaymentStatus ==
+                                "Completed"
+
+                            &&
+
+                            x.OrderStatus ==
+                                "Delivered"
+                        )
+                        .SumAsync(
+                            x =>
+                                (decimal?)x.FinalPaidAmount
+                        ) ?? 0m;
+
+
+                // =========================================================
+                // PAGINATION
+                // =========================================================
 
                 var totalPages =
-                    (int)Math.Ceiling((double)totalOrders / pageSize);
+                    totalOrderItems == 0
+                        ? 0
+                        : (int)Math.Ceiling(
+                            (double)totalOrderItems /
+                            pageSize
+                        );
 
-                //----------------------------------------------------
-                // Revenue
-                //----------------------------------------------------
 
-                var revenue = await _context.OrderItems
-                    .Where(x =>
-                        (isAdmin || x.SellerId == sellerId) &&
-                        x.Order.PaymentStatus == "Completed")
-                    .SumAsync(x => x.FinalPaidAmount);
+                // =========================================================
+                // ORDERS
+                // =========================================================
 
-                //----------------------------------------------------
-                // Sorting & Pagination
-                //----------------------------------------------------
+                var orders =
+                    await query
 
-                var orders = await query
+                        .OrderByDescending(
+                            x => x.OrderDate
+                        )
 
-                    .OrderByDescending(x => x.OrderDate)
-                    .ThenByDescending(x => x.OrderId)
+                        .ThenByDescending(
+                            x => x.OrderId
+                        )
 
-                    .Skip((page - 1) * pageSize)
-                    .Take(pageSize)
+                        .ThenByDescending(
+                            x => x.OrderItemId
+                        )
 
-                    .ToListAsync();
+                        .Skip(
+                            (page - 1) *
+                            pageSize
+                        )
 
-                //----------------------------------------------------
-                // Response
-                //----------------------------------------------------
+                        .Take(pageSize)
+
+                        .ToListAsync();
+
+
+                // =========================================================
+                // RESPONSE
+                // =========================================================
 
                 return Ok(new
                 {
                     success = true,
 
                     sellerName,
+
+                    isAdmin,
+
                     isSubscribed,
+
 
                     pagination = new
                     {
                         page,
+
                         pageSize,
+
                         totalPages,
+
                         totalOrders,
+
                         totalOrderItems
                     },
 
+
                     statistics = new
                     {
+                        // Main dashboard
+                        totalOrders,
+
+                        totalOrderItems,
+
+                        completed =
+                            completedItems,
+
+                        pending =
+                            pendingItems,
+
+                        revenue,
+
+
+                        // Payment
                         completedPayments,
+
                         pendingPayments,
+
                         failedPayments,
 
-                        pending,
+
+                        // Delivery
+                        placed,
+
                         packed,
+
                         shipped,
+
                         outForDelivery,
+
                         delivered,
+
                         cancelled,
 
-                        returnRequested,
-                        returnApproved,
-                        returned,
-                        refunded,
 
-                        revenue
+                        // Returns
+                        returnRequested,
+
+                        returnApproved,
+
+                        returned,
+
+                        refunded
                     },
+
 
                     orders
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    success = false,
-                    message = "An unexpected error occurred.",
+                // Log actual exception server-side
+                Console.WriteLine(
+                    $"AdminOrders Error: {ex}"
+                );
 
-                    error = ex.Message,
-                    innerException = ex.InnerException?.Message
-                });
+
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    new
+                    {
+                        success = false,
+
+                        message =
+                            "An unexpected error occurred while loading orders."
+                    }
+                );
             }
-        }
+        }*/
 
         // =========================
         // UPDATE ORDER
         // =========================
 
-        [Authorize]
+      /*  [Authorize]
         [HttpPut("order-items/{orderItemId}/status")]
         public async Task<IActionResult> UpdateOrderStatus(
     int orderItemId,
@@ -2958,12 +3331,13 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
                     inner = ex.InnerException?.Message
                 });
             }
-        }
+        }*/
 
 
         // =========================
         // ORDER DETAILS (MODAL)
         // =========================
+
         [Authorize]
         [HttpGet("details/{id}")]
         public async Task<IActionResult> GetOrderDetails(

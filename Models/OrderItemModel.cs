@@ -55,6 +55,9 @@ public class OrderItemModel
 
     public string OrderItemStatus { get; set; } = "Pending";
 
+    //public string PaymentStatus { get; set; } = "Pending";
+
+
     // audit
     public DateTime CreatedAt { get; set; }
         = DateTime.UtcNow;
