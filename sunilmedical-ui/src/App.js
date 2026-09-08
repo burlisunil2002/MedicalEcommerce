@@ -30,6 +30,8 @@ import ProductManagement from "./pages/ProductManagement";
 import AddProduct from "./pages/AddProduct";
 import EditProduct from "./pages/EditProduct";
 import ReturnOrdersPage from "./pages/ReturnOrdersPage";
+import SellerManagement from "./pages/SellerManagement";
+
 
 
 // =====================================================
@@ -348,6 +350,13 @@ function App() {
                         <Route
                             path="products/edit/:id"
                             element={<EditProduct />}
+                        />
+
+                        {/* Seller Management */}
+
+                        <Route
+                            path="seller-management"
+                            element={<SellerManagement />}
                         />
 
 

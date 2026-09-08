@@ -37,7 +37,7 @@ import toast from "react-hot-toast";
 // CONSTANTS
 // =========================================================
 
-const CACHE_KEY = "seller_admin_orders_v3";
+const CACHE_KEY_BASE = "seller_admin_orders_v4";
 const PAGE_SIZE = 100;
 const SEARCH_DELAY = 450;
 
@@ -212,6 +212,7 @@ export default function AdminOrders() {
     const [editedOrders, setEditedOrders] = useState({});
 
     const [lastUpdated, setLastUpdated] = useState(null);
+    const [loadError, setLoadError] = useState("");
 
 
     // ---------------------------------------------------------
@@ -231,9 +232,9 @@ export default function AdminOrders() {
 
     const restoreCache = useCallback(() => {
         try {
-            const raw = sessionStorage.getItem(
-                CACHE_KEY
-            );
+            const cacheKey = `${CACHE_KEY_BASE}_${String(role || "unknown").toLowerCase()}`;
+
+            const raw = sessionStorage.getItem(cacheKey);
 
             if (!raw) return;
 
@@ -306,77 +307,124 @@ export default function AdminOrders() {
             try {
                 setRoleLoading(true);
 
-                const response =
-                    await API.get("/api/user");
-
-                const data =
-                    response?.data || {};
-
-                const user =
-                    data?.user || data;
-
-                const roles =
-                    user?.roles ||
-                    user?.Roles ||
-                    data?.roles ||
-                    data?.Roles ||
-                    [];
-
-                let returnedRole =
-                    user?.role ||
-                    user?.Role ||
-                    data?.role ||
-                    data?.Role;
-
                 /*
-                 * Seller accounts can have both Customer
-                 * and Seller roles. Always prefer Admin,
-                 * then Seller, then Customer.
+                 * Use the server as the source of truth whenever possible.
+                 * localStorage is only an immediate UI fallback so the
+                 * Order Management page does not get stuck if /api/user
+                 * briefly returns 401 while the Identity cookie is valid
+                 * for the protected order endpoint.
                  */
-
-                if (Array.isArray(roles)) {
-                    const normalizedRoles =
-                        roles.map(
-                            item =>
-                                String(item)
-                                    .trim()
-                                    .toLowerCase()
-                        );
-
-                    if (
-                        normalizedRoles.includes(
-                            "admin"
-                        )
-                    ) {
-                        returnedRole = "Admin";
-                    } else if (
-                        normalizedRoles.includes(
-                            "seller"
-                        )
-                    ) {
-                        returnedRole = "Seller";
-                    }
-                }
-
-                const normalizedRole =
-                    String(returnedRole || "")
+                const storedRole =
+                    String(
+                        localStorage.getItem("role") || ""
+                    )
                         .trim()
                         .toLowerCase();
 
                 if (
-                    normalizedRole === "admin"
+                    storedRole === "admin" ||
+                    storedRole === "seller"
                 ) {
-                    setRole("Admin");
-                } else if (
-                    normalizedRole === "seller"
-                ) {
-                    setRole("Seller");
-                } else {
-                    setRole(null);
-
-                    toast.error(
-                        "You are not authorized to manage orders."
+                    setRole(
+                        storedRole === "admin"
+                            ? "Admin"
+                            : "Seller"
                     );
+                }
+
+                try {
+                    const response =
+                        await API.get("/api/user");
+
+                    const data =
+                        response?.data || {};
+
+                    const user =
+                        data?.user || data;
+
+                    const roles =
+                        user?.roles ||
+                        user?.Roles ||
+                        data?.roles ||
+                        data?.Roles ||
+                        [];
+
+                    let returnedRole =
+                        user?.role ||
+                        user?.Role ||
+                        data?.role ||
+                        data?.Role;
+
+                    if (Array.isArray(roles)) {
+                        const normalizedRoles =
+                            roles.map(item =>
+                                String(item)
+                                    .trim()
+                                    .toLowerCase()
+                            );
+
+                        if (
+                            normalizedRoles.includes("admin")
+                        ) {
+                            returnedRole = "Admin";
+                        } else if (
+                            normalizedRoles.includes("seller")
+                        ) {
+                            returnedRole = "Seller";
+                        }
+                    }
+
+                    const normalizedRole =
+                        String(returnedRole || "")
+                            .trim()
+                            .toLowerCase();
+
+                    if (normalizedRole === "admin") {
+                        setRole("Admin");
+                        localStorage.setItem("role", "Admin");
+                    } else if (
+                        normalizedRole === "seller"
+                    ) {
+                        setRole("Seller");
+                        localStorage.setItem("role", "Seller");
+                    } else if (
+                        storedRole !== "admin" &&
+                        storedRole !== "seller"
+                    ) {
+                        setRole(null);
+                        toast.error(
+                            "You are not authorized to manage orders."
+                        );
+                    }
+                } catch (userError) {
+                    /*
+                     * Do not block Order Management only because /api/user
+                     * failed. If the protected order endpoint is accessible,
+                     * its own authorization remains authoritative.
+                     */
+                    console.warn(
+                        "Could not verify /api/user. Using stored role fallback.",
+                        userError
+                    );
+
+                    if (
+                        storedRole !== "admin" &&
+                        storedRole !== "seller"
+                    ) {
+                        setRole(null);
+
+                        if (
+                            userError?.response?.status === 401
+                        ) {
+                            toast.error(
+                                "Your session has expired. Please login again."
+                            );
+                        } else {
+                            toast.error(
+                                "Unable to identify your account."
+                            );
+                        }
+                    }
                 }
             } catch (error) {
                 console.error(
@@ -386,18 +434,9 @@ export default function AdminOrders() {
 
                 setRole(null);
 
-                if (
-                    error?.response?.status ===
-                    401
-                ) {
-                    toast.error(
-                        "Your session has expired. Please login again."
-                    );
-                } else {
-                    toast.error(
-                        "Unable to identify your account."
-                    );
-                }
+                toast.error(
+                    "Unable to identify your account."
+                );
             } finally {
                 setRoleLoading(false);
             }
@@ -484,7 +523,11 @@ export default function AdminOrders() {
                 const receivedOrders =
                     Array.isArray(data.orders)
                         ? data.orders
-                        : [];
+                        : Array.isArray(data.items)
+                            ? data.items
+                            : Array.isArray(data.orderItems)
+                                ? data.orderItems
+                                : [];
 
                 const statistics =
                     data.statistics || {};
@@ -723,6 +766,7 @@ export default function AdminOrders() {
                             ? data.monthlyStats
                             : [];
 
+                setLoadError("");
                 setOrders(receivedOrders);
                 setStats(nextStats);
                 setPagination(nextPagination);
@@ -742,7 +786,7 @@ export default function AdminOrders() {
 
                 try {
                     sessionStorage.setItem(
-                        CACHE_KEY,
+                        `${CACHE_KEY_BASE}_${String(role || "unknown").toLowerCase()}`,
                         JSON.stringify({
                             role,
                             orders:
@@ -777,11 +821,19 @@ export default function AdminOrders() {
                  * visible while the API is unavailable.
                  */
 
+                const message =
+                    error?.response?.data?.message ||
+                    error?.response?.data?.error ||
+                    (error?.response?.status === 401
+                        ? "Your session has expired. Please login again."
+                        : error?.response?.status === 403
+                            ? "You are not authorized to manage orders."
+                            : "Failed to load orders.");
+
+                setLoadError(message);
+
                 if (!orders.length) {
-                    toast.error(
-                        error?.response?.data?.message ||
-                        "Failed to load orders."
-                    );
+                    toast.error(message);
                 }
             } finally {
                 setLoading(false);
@@ -1243,6 +1295,42 @@ export default function AdminOrders() {
                 )}
 
 
+                {/* API ERROR */}
+
+                {loadError && (
+                    <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div className="flex items-start gap-3">
+                                <XCircle
+                                    size={20}
+                                    className="text-red-500 mt-0.5 shrink-0"
+                                />
+                                <div>
+                                    <p className="text-sm font-bold text-red-700">
+                                        Order data could not be loaded
+                                    </p>
+                                    <p className="text-xs text-red-600 mt-1 break-words">
+                                        {loadError}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    loadOrders({
+                                        showRefresh: true
+                                    })
+                                }
+                                disabled={loading}
+                                className="shrink-0 px-3 py-2 rounded-xl bg-white border border-red-200 text-red-700 text-xs font-bold hover:bg-red-100 disabled:opacity-50"
+                            >
+                                Retry
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {/* HEADER */}
 
                 <header className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 mb-6">
@@ -1255,8 +1343,8 @@ export default function AdminOrders() {
 
                             <span
                                 className={`px-3 py-1 rounded-full text-[11px] font-black ${isAdmin
-                                        ? "bg-blue-100 text-blue-700"
-                                        : "bg-purple-100 text-purple-700"
+                                    ? "bg-blue-100 text-blue-700"
+                                    : "bg-purple-100 text-purple-700"
                                     }`}
                             >
                                 {isAdmin
@@ -1799,8 +1887,8 @@ export default function AdminOrders() {
 
                     <div
                         className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 ${mobileFiltersOpen
-                                ? "block"
-                                : "hidden lg:grid"
+                            ? "block"
+                            : "hidden lg:grid"
                             }`}
                     >
 
@@ -2388,8 +2476,8 @@ function KpiCard({
 
                     <p
                         className={`mt-2 font-black text-slate-900 break-words ${moneyValue
-                                ? "text-lg sm:text-2xl"
-                                : "text-2xl sm:text-3xl"
+                            ? "text-lg sm:text-2xl"
+                            : "text-2xl sm:text-3xl"
                             }`}
                     >
                         {moneyValue
@@ -2508,16 +2596,16 @@ function TabButton({
             type="button"
             onClick={onClick}
             className={`py-2.5 sm:py-3 rounded-xl text-sm font-black transition ${active
-                    ? activeClass
-                    : "text-slate-600 hover:bg-slate-100"
+                ? activeClass
+                : "text-slate-600 hover:bg-slate-100"
                 }`}
         >
             {label}
 
             <span
                 className={`ml-1.5 ${active
-                        ? "opacity-90"
-                        : "text-slate-400"
+                    ? "opacity-90"
+                    : "text-slate-400"
                     }`}
             >
                 ({number(count)})
@@ -2792,8 +2880,8 @@ function DesktopOrderRow({
                             )
                         }
                         className={`px-3 py-2 rounded-lg text-xs font-black ${updating
-                                ? "bg-slate-300 text-slate-600"
-                                : "bg-blue-600 text-white hover:bg-blue-700"
+                            ? "bg-slate-300 text-slate-600"
+                            : "bg-blue-600 text-white hover:bg-blue-700"
                             }`}
                     >
                         {updating
@@ -3037,8 +3125,8 @@ function MobileOrderCard({
                     )
                 }
                 className={`w-full mt-3 py-2.5 rounded-xl text-sm font-black ${updating
-                        ? "bg-slate-300 text-slate-600"
-                        : "bg-blue-600 text-white hover:bg-blue-700"
+                    ? "bg-slate-300 text-slate-600"
+                    : "bg-blue-600 text-white hover:bg-blue-700"
                     }`}
             >
                 {updating

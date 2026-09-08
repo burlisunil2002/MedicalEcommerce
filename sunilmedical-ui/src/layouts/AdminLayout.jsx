@@ -57,8 +57,8 @@ export default function AdminLayout() {
             icon: RotateCcw
         },
         {
-            label: "Users",
-            path: "/admin/users",
+            label: "Seller Management",
+            path: "/admin/seller-management",
             icon: Users
         },
         {

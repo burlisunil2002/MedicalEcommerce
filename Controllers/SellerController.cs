@@ -1138,13 +1138,16 @@ public class SellerController : ControllerBase
     // =========================================================
 
     [Authorize(Roles = "Seller")]
+
     [HttpGet("orders")]
     public async Task<IActionResult> GetSellerOrders(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         [FromQuery] string? search = null,
         [FromQuery] string? paymentStatus = null,
-        [FromQuery] string? orderStatus = null)
+        [FromQuery] string? orderStatus = null,
+        [FromQuery] DateTime? fromDate = null,
+        [FromQuery] DateTime? toDate = null)
     {
         if (page < 1)
             page = 1;
@@ -1163,11 +1166,9 @@ public class SellerController : ControllerBase
             });
         }
 
-        var seller =
-            await _context.Sellers
-                .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    x => x.UserId == userId);
+        var seller = await _context.Sellers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.UserId == userId);
 
         if (seller == null)
         {
@@ -1178,283 +1179,319 @@ public class SellerController : ControllerBase
             });
         }
 
-        var query =
-            _context.OrderItems
-                .AsNoTracking()
-                .Where(x =>
-                    x.SellerId == seller.SellerId);
+        var sellerId = seller.SellerId;
 
-        // -----------------------------------------------------
+        // =====================================================
+        // BASE QUERY
+        // One row = one seller order item.
+        // =====================================================
+
+        var query =
+            from item in _context.OrderItems.AsNoTracking()
+            join order in _context.Orders.AsNoTracking()
+                on item.OrderId equals order.OrderId
+            join product in _context.Products.AsNoTracking()
+                on item.ProductId equals product.Id into productJoin
+            from product in productJoin.DefaultIfEmpty()
+            where item.SellerId == sellerId
+            select new
+            {
+                OrderItemId = item.OrderItemId,
+                OrderId = item.OrderId,
+                OrderNumber = order.OrderNumber,
+                OrderDate = order.OrderDate,
+
+                CustomerId = order.UserId,
+
+                ProductId = item.ProductId,
+                ProductName =
+                    !string.IsNullOrWhiteSpace(item.ProductName)
+                        ? item.ProductName
+                        : product != null
+                            ? product.Name
+                            : "Product",
+
+                Quantity = item.Quantity,
+                Price = item.Price,
+                DiscountAmount = item.DiscountAmount,
+                CouponDiscountAmount = item.CouponDiscountAmount,
+                TaxableAmount = item.TaxableAmount,
+                GSTPercentage = item.GSTPercentage,
+                GSTAmount = item.GSTAmount,
+                FinalPaidAmount = item.FinalPaidAmount,
+                LineTotal = item.LineTotal,
+
+                PaymentStatus = order.PaymentStatus ?? "Pending",
+                RazorpayPaymentId = order.RazorpayPaymentId ?? "-",
+
+                OrderStatus = item.OrderItemStatus ?? "Placed",
+
+                SellerId = item.SellerId,
+                SellerName = seller.BusinessName,
+
+                GrandTotal = order.GrandTotal,
+
+                ReturnStatus = item.ReturnStatus,
+                IsReturnEligible = item.IsReturnEligible,
+                ReturnEligibleTill = item.ReturnEligibleTill,
+
+                TrackingNumber = item.TrackingNumber,
+                CourierPartner = item.CourierPartner,
+
+                PackedDate = item.PackedDate,
+                ShippedDate = item.ShippedDate,
+                OutForDeliveryDate = item.OutForDeliveryDate,
+                DeliveredDate = item.DeliveredDate,
+                CancelledAt = item.CancelledAt
+            };
+
+        // =====================================================
         // SEARCH
-        // -----------------------------------------------------
+        // Order number + IDs + product + tracking + courier
+        // =====================================================
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            search = search.Trim();
+            var searchValue = search.Trim().ToLower();
 
-            query = query.Where(item =>
-                item.OrderId
-                    .ToString()
-                    .Contains(search) ||
-
-                item.Product.Name
-                    .Contains(search));
+            query = query.Where(x =>
+                (x.ProductName ?? "").ToLower().Contains(searchValue) ||
+                (x.OrderNumber ?? "").ToLower().Contains(searchValue) ||
+                x.OrderId.ToString().Contains(searchValue) ||
+                x.OrderItemId.ToString().Contains(searchValue) ||
+                (x.TrackingNumber ?? "").ToLower().Contains(searchValue) ||
+                (x.CourierPartner ?? "").ToLower().Contains(searchValue));
         }
 
-        // -----------------------------------------------------
-        // PAYMENT STATUS
-        // -----------------------------------------------------
+        // =====================================================
+        // DATE FILTER
+        // =====================================================
+
+        if (fromDate.HasValue)
+        {
+            var from = fromDate.Value.Date;
+            query = query.Where(x => x.OrderDate >= from);
+        }
+
+        if (toDate.HasValue)
+        {
+            var toExclusive = toDate.Value.Date.AddDays(1);
+            query = query.Where(x => x.OrderDate < toExclusive);
+        }
+
+        // =====================================================
+        // PAYMENT FILTER
+        // =====================================================
 
         if (!string.IsNullOrWhiteSpace(paymentStatus))
         {
-            query = query.Where(item =>
-                item.Order.PaymentStatus ==
-                paymentStatus);
+            query = query.Where(x =>
+                x.PaymentStatus == paymentStatus.Trim());
         }
 
-        // -----------------------------------------------------
-        // ITEM STATUS
-        // -----------------------------------------------------
+        // =====================================================
+        // ITEM STATUS FILTER
+        // =====================================================
 
         if (!string.IsNullOrWhiteSpace(orderStatus))
         {
-            query = query.Where(item =>
-                item.OrderItemStatus ==
-                orderStatus);
+            query = query.Where(x =>
+                x.OrderStatus == orderStatus.Trim());
         }
 
-        // -----------------------------------------------------
-        // STATISTICS
-        // -----------------------------------------------------
+        // =====================================================
+        // CORE STATISTICS - SINGLE AGGREGATE QUERY
+        // =====================================================
 
-        var totalOrderItems =
-            await query.CountAsync();
+        var core = await query
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                TotalOrderItems = g.Count(),
 
-        var totalOrders =
-            await query
-                .Select(x => x.OrderId)
-                .Distinct()
-                .CountAsync();
+                CompletedItems = g.Count(x =>
+                    x.PaymentStatus == "Completed" &&
+                    x.OrderStatus == "Delivered"),
 
-        var completedItems =
-            await query.CountAsync(item =>
-                item.Order.PaymentStatus == "Completed" &&
-                item.OrderItemStatus == "Delivered");
+                Placed = g.Count(x => x.OrderStatus == "Placed"),
+                Accepted = g.Count(x => x.OrderStatus == "Accepted"),
+                Packed = g.Count(x => x.OrderStatus == "Packed"),
+                Shipped = g.Count(x => x.OrderStatus == "Shipped"),
+                OutForDelivery = g.Count(x => x.OrderStatus == "OutForDelivery"),
+                Delivered = g.Count(x => x.OrderStatus == "Delivered"),
+                Cancelled = g.Count(x => x.OrderStatus == "Cancelled"),
 
-        var pendingItems =
-            totalOrderItems -
-            completedItems;
+                ReturnRequested = g.Count(x => x.ReturnStatus == "Requested"),
+                ReturnApproved = g.Count(x => x.ReturnStatus == "Approved"),
+                Returned = g.Count(x => x.ReturnStatus == "Returned"),
+                Refunded = g.Count(x => x.ReturnStatus == "Refunded"),
 
-        // -----------------------------------------------------
-        // PAYMENT
-        // -----------------------------------------------------
+                Revenue = g
+                    .Where(x =>
+                        x.PaymentStatus == "Completed" &&
+                        x.OrderStatus == "Delivered")
+                    .Sum(x => (decimal?)x.FinalPaidAmount) ?? 0m
+            })
+            .FirstOrDefaultAsync();
 
-        var completedPayments =
-            await query
-                .Where(x =>
-                    x.Order.PaymentStatus ==
-                    "Completed")
-                .Select(x => x.OrderId)
-                .Distinct()
-                .CountAsync();
+        var totalOrderItems = core?.TotalOrderItems ?? 0;
+        var completedItems = core?.CompletedItems ?? 0;
+        var pendingItems = totalOrderItems - completedItems;
 
-        var pendingPayments =
-            await query
-                .Where(x =>
-                    x.Order.PaymentStatus ==
-                    "Pending")
-                .Select(x => x.OrderId)
-                .Distinct()
-                .CountAsync();
+        // =====================================================
+        // UNIQUE ORDERS + CUSTOMERS
+        // =====================================================
 
-        var failedPayments =
-            await query
-                .Where(x =>
-                    x.Order.PaymentStatus ==
-                    "Failed")
-                .Select(x => x.OrderId)
-                .Distinct()
-                .CountAsync();
+        var totalOrders = await query
+            .Select(x => x.OrderId)
+            .Distinct()
+            .CountAsync();
 
-        var refundedPayments =
-            await query
-                .Where(x =>
-                    x.Order.PaymentStatus ==
-                    "Refunded")
-                .Select(x => x.OrderId)
-                .Distinct()
-                .CountAsync();
+        var customers = await query
+            .Where(x => x.CustomerId != null)
+            .Select(x => x.CustomerId)
+            .Distinct()
+            .CountAsync();
 
-        // -----------------------------------------------------
-        // DELIVERY
-        // -----------------------------------------------------
+        // =====================================================
+        // PAYMENT STATISTICS - UNIQUE ORDERS
+        // =====================================================
 
-        var placedItems =
-            await query.CountAsync(x =>
-                x.OrderItemStatus == "Placed");
+        var paymentRows = await query
+            .Select(x => new
+            {
+                x.OrderId,
+                x.PaymentStatus
+            })
+            .Distinct()
+            .GroupBy(x => x.PaymentStatus)
+            .Select(g => new
+            {
+                Status = g.Key,
+                Count = g.Count()
+            })
+            .ToListAsync();
 
-        var acceptedItems =
-            await query.CountAsync(x =>
-                x.OrderItemStatus == "Accepted");
+        int PaymentCount(params string[] statuses) =>
+            paymentRows
+                .Where(x => statuses.Contains(
+                    x.Status ?? "",
+                    StringComparer.OrdinalIgnoreCase))
+                .Sum(x => x.Count);
 
-        var packedItems =
-            await query.CountAsync(x =>
-                x.OrderItemStatus == "Packed");
+        var cashOnDelivery = PaymentCount("Cash On Delivery", "COD");
+        var initiatedPayments = PaymentCount("Initiated");
+        var pendingPayments = PaymentCount("Pending");
+        var completedPayments = PaymentCount("Completed");
+        var failedPayments = PaymentCount("Failed");
+        var refundPendingPayments = PaymentCount("Refund Pending");
+        var refundedPayments = PaymentCount("Refunded");
+        var cancelledPayments = PaymentCount("Cancelled");
 
-        var shippedItems =
-            await query.CountAsync(x =>
-                x.OrderItemStatus == "Shipped");
+        // =====================================================
+        // MONTHLY STATISTICS
+        // Same filters/search as the current seller view.
+        // =====================================================
 
-        var outForDeliveryItems =
-            await query.CountAsync(x =>
-                x.OrderItemStatus ==
-                "OutForDelivery");
+        var monthlyStatistics = await query
+            .GroupBy(x => new
+            {
+                Year = x.OrderDate.Year,
+                Month = x.OrderDate.Month
+            })
+            .Select(g => new
+            {
+                Year = g.Key.Year,
+                Month = g.Key.Month,
 
-        var deliveredItems =
-            await query.CountAsync(x =>
-                x.OrderItemStatus ==
-                "Delivered");
+                OrderItems = g.Count(),
+                Orders = g.Select(x => x.OrderId).Distinct().Count(),
 
-        var cancelledItems =
-            await query.CountAsync(x =>
-                x.OrderItemStatus ==
-                "Cancelled");
+                Customers = g
+                    .Where(x => x.CustomerId != null)
+                    .Select(x => x.CustomerId)
+                    .Distinct()
+                    .Count(),
 
-        // -----------------------------------------------------
-        // REVENUE
-        // -----------------------------------------------------
+                Completed = g.Count(x =>
+                    x.PaymentStatus == "Completed" &&
+                    x.OrderStatus == "Delivered"),
 
-        var revenue =
-            await query
-                .Where(x =>
-                    x.Order.PaymentStatus ==
-                        "Completed" &&
-                    x.OrderItemStatus ==
-                        "Delivered")
-                .SumAsync(x =>
-                    (decimal?)x.FinalPaidAmount) ??
-            0m;
+                Pending = g.Count(x =>
+                    !(x.PaymentStatus == "Completed" &&
+                      x.OrderStatus == "Delivered")),
 
-        // -----------------------------------------------------
-        // CUSTOMERS
-        // -----------------------------------------------------
+                Revenue = g
+                    .Where(x =>
+                        x.PaymentStatus == "Completed" &&
+                        x.OrderStatus == "Delivered")
+                    .Sum(x => (decimal?)x.FinalPaidAmount) ?? 0m,
 
-        var customers =
-            await query
-                .Select(x => x.Order.UserId)
-                .Where(x => x != null)
-                .Distinct()
-                .CountAsync();
+                Placed = g.Count(x => x.OrderStatus == "Placed"),
+                Accepted = g.Count(x => x.OrderStatus == "Accepted"),
+                Packed = g.Count(x => x.OrderStatus == "Packed"),
+                Shipped = g.Count(x => x.OrderStatus == "Shipped"),
+                OutForDelivery = g.Count(x => x.OrderStatus == "OutForDelivery"),
+                Delivered = g.Count(x => x.OrderStatus == "Delivered"),
+                Cancelled = g.Count(x => x.OrderStatus == "Cancelled"),
 
-        // -----------------------------------------------------
-        // RETURNS
-        // -----------------------------------------------------
+                ReturnRequested = g.Count(x => x.ReturnStatus == "Requested"),
+                ReturnApproved = g.Count(x => x.ReturnStatus == "Approved"),
+                Returned = g.Count(x => x.ReturnStatus == "Returned"),
+                Refunded = g.Count(x => x.ReturnStatus == "Refunded"),
 
-        var returnRequested =
-            await query.CountAsync(x =>
-                x.ReturnStatus == "Requested");
+                COD = g.Count(x =>
+                    x.PaymentStatus == "Cash On Delivery" ||
+                    x.PaymentStatus == "COD"),
 
-        var returnApproved =
-            await query.CountAsync(x =>
-                x.ReturnStatus == "Approved");
+                Initiated = g.Count(x =>
+                    x.PaymentStatus == "Initiated"),
 
-        var returned =
-            await query.CountAsync(x =>
-                x.ReturnStatus == "Returned");
+                PaymentPending = g.Count(x =>
+                    x.PaymentStatus == "Pending"),
 
-        var refunded =
-            await query.CountAsync(x =>
-                x.ReturnStatus == "Refunded");
+                PaymentCompleted = g.Count(x =>
+                    x.PaymentStatus == "Completed"),
 
-        // -----------------------------------------------------
+                PaymentFailed = g.Count(x =>
+                    x.PaymentStatus == "Failed"),
+
+                RefundPending = g.Count(x =>
+                    x.PaymentStatus == "Refund Pending"),
+
+                PaymentRefunded = g.Count(x =>
+                    x.PaymentStatus == "Refunded"),
+
+                PaymentCancelled = g.Count(x =>
+                    x.PaymentStatus == "Cancelled")
+            })
+            .OrderByDescending(x => x.Year)
+            .ThenByDescending(x => x.Month)
+            .ToListAsync();
+
+        // =====================================================
         // PAGINATION
-        // -----------------------------------------------------
+        // =====================================================
 
-        var totalPages =
-            totalOrderItems == 0
-                ? 0
-                : (int)Math.Ceiling(
-                    totalOrderItems /
-                    (double)pageSize);
+        var totalPages = totalOrderItems == 0
+            ? 0
+            : (int)Math.Ceiling(
+                totalOrderItems / (double)pageSize);
 
-        var orders =
-            await query
-                .Include(x => x.Order)
-                .Include(x => x.Product)
-                .OrderByDescending(
-                    x => x.Order.OrderDate)
-                .ThenByDescending(
-                    x => x.OrderId)
-                .ThenByDescending(
-                    x => x.OrderItemId)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .Select(item => new
-                {
-                    orderItemId =
-                        item.OrderItemId,
+        if (totalPages > 0 && page > totalPages)
+            page = totalPages;
 
-                    orderId =
-                        item.OrderId,
+        var orders = await query
+            .OrderByDescending(x => x.OrderDate)
+            .ThenByDescending(x => x.OrderId)
+            .ThenByDescending(x => x.OrderItemId)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
 
-                    orderDate =
-                        item.Order.OrderDate,
-
-                    productId =
-                        item.ProductId,
-
-                    productName =
-                        item.Product.Name,
-
-                    quantity =
-                        item.Quantity,
-
-                    price =
-                        item.Price,
-
-                    finalPaidAmount =
-                        item.FinalPaidAmount,
-
-                    paymentStatus =
-                        item.Order.PaymentStatus,
-
-                    orderStatus =
-                        item.OrderItemStatus,
-
-                    sellerId =
-                        item.SellerId,
-
-                    sellerName =
-                        seller.BusinessName,
-
-                    grandTotal =
-                        item.Order.GrandTotal,
-
-                    returnStatus =
-                        item.ReturnStatus,
-
-                    trackingNumber =
-                        item.TrackingNumber,
-
-                    courierPartner =
-                        item.CourierPartner,
-
-                    packedDate =
-                        item.PackedDate,
-
-                    shippedDate =
-                        item.ShippedDate,
-
-                    outForDeliveryDate =
-                        item.OutForDeliveryDate,
-
-                    deliveredDate =
-                        item.DeliveredDate,
-
-                    cancelledAt =
-                        item.CancelledAt
-                })
-                .ToListAsync();
+        // =====================================================
+        // RESPONSE
+        // =====================================================
 
         return Ok(new
         {
@@ -1481,78 +1518,55 @@ public class SellerController : ControllerBase
                 totalOrders,
                 totalOrderItems,
 
-                completed =
-                    completedItems,
-
+                completed = completedItems,
                 completedItems,
 
-                pending =
-                    pendingItems,
-
+                pending = pendingItems,
                 pendingItems,
-
-                revenue,
 
                 customers,
 
+                revenue = core?.Revenue ?? 0m,
+
                 payment = new
                 {
-                    pending =
-                        pendingPayments,
-
-                    completed =
-                        completedPayments,
-
-                    failed =
-                        failedPayments,
-
-                    refunded =
-                        refundedPayments
+                    cod = cashOnDelivery,
+                    cashOnDelivery,
+                    initiated = initiatedPayments,
+                    pending = pendingPayments,
+                    completed = completedPayments,
+                    failed = failedPayments,
+                    refundPending = refundPendingPayments,
+                    refunded = refundedPayments,
+                    cancelled = cancelledPayments
                 },
 
                 delivery = new
                 {
-                    placed =
-                        placedItems,
-
-                    accepted =
-                        acceptedItems,
-
-                    packed =
-                        packedItems,
-
-                    shipped =
-                        shippedItems,
-
-                    outForDelivery =
-                        outForDeliveryItems,
-
-                    delivered =
-                        deliveredItems,
-
-                    cancelled =
-                        cancelledItems
+                    placed = core?.Placed ?? 0,
+                    accepted = core?.Accepted ?? 0,
+                    packed = core?.Packed ?? 0,
+                    shipped = core?.Shipped ?? 0,
+                    outForDelivery = core?.OutForDelivery ?? 0,
+                    delivered = core?.Delivered ?? 0,
+                    cancelled = core?.Cancelled ?? 0
                 },
 
                 returns = new
                 {
-                    requested =
-                        returnRequested,
-
-                    approved =
-                        returnApproved,
-
-                    returned,
-
-                    refunded
+                    requested = core?.ReturnRequested ?? 0,
+                    approved = core?.ReturnApproved ?? 0,
+                    returned = core?.Returned ?? 0,
+                    refunded = core?.Refunded ?? 0
                 }
             },
+
+            monthlyStatistics,
 
             orders
         });
     }
 
-    // =========================================================
     // UPDATE SELLER ORDER ITEM STATUS
     // =========================================================
 
