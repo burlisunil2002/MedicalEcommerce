@@ -905,7 +905,7 @@ export default function AdminDashboard() {
                         label="Completed Revenue"
                         value={formatCurrency(stats.revenue)}
                         note="Paid + Delivered"
-                        icon={<IndianRupee size={10} />}
+                        icon={<IndianRupee size={15} />}
                         iconClass="bg-emerald-50 text-emerald-600"
                         valueClass="text-2xl sm:text-3xl text-emerald-600"
                     />
@@ -1694,7 +1694,7 @@ function MetricCard({
 
                 {/* Icon */}
                 <div
-                    className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 ${iconClass}`}
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${iconClass}`}
                 >
                     {icon}
                 </div>

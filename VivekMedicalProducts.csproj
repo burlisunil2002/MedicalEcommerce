@@ -7,87 +7,218 @@
     <UserSecretsId>25979922-5938-4c3b-96b3-1a8f0567100d</UserSecretsId>
   </PropertyGroup>
 
+
+  <!-- =========================================================
+       EXCLUDE REACT BUILD FILES FROM .NET COMPILATION
+       ========================================================= -->
+
   <ItemGroup>
     <Compile Remove="sunilmedical-ui\build\**" />
     <Compile Remove="wwwroot\build\**" />
+
     <Content Remove="sunilmedical-ui\build\**" />
     <Content Remove="wwwroot\build\**" />
+
     <EmbeddedResource Remove="sunilmedical-ui\build\**" />
     <EmbeddedResource Remove="wwwroot\build\**" />
+
     <None Remove="sunilmedical-ui\build\**" />
     <None Remove="wwwroot\build\**" />
   </ItemGroup>
 
+
+  <!-- =========================================================
+       EXCLUDE OLD / DUPLICATE DTO
+       ========================================================= -->
+
   <ItemGroup>
     <Compile Remove="DTOs\UpdateOrderItemStatusDTO.cs" />
+    <None Remove="DTOs\UpdateOrderItemStatusDTO.cs" />
   </ItemGroup>
+
+
+  <!-- =========================================================
+       TEMP / BACKUP FILES TO IGNORE
+       ========================================================= -->
 
   <ItemGroup>
     <None Remove="sunilmedical-ui\src\components\productDetails\fobqzzvc.kad~" />
     <None Remove="sunilmedical-ui\src\components\productDetails\kj3ac3bv.s0v~" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Compile Include="sunilmedical-ui\src\components\orders\OrderStatistics.jsx" />
-  </ItemGroup>
+
+  <!-- =========================================================
+       STATIC REACT ASSETS
+       ========================================================= -->
 
   <ItemGroup>
+
     <Content Include="sunilmedical-ui\public\images\bannerMRI.png">
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
+
     <Content Include="sunilmedical-ui\public\images\MadeInIndiaBanner.png">
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
+
     <Content Include="sunilmedical-ui\public\images\offerbanner.png">
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
+
     <Content Include="sunilmedical-ui\public\sunillogo.png">
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
+
   </ItemGroup>
 
+
+  <!-- =========================================================
+       NUGET PACKAGES
+       .NET 8 COMPATIBLE VERSIONS
+       ========================================================= -->
+
   <ItemGroup>
+
     <PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />
+
     <PackageReference Include="ClosedXML" Version="0.105.0" />
+
     <PackageReference Include="CloudinaryDotNet" Version="1.28.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.0" />
-    <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="8.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.4" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.4">
+
+
+    <!-- ASP.NET CORE IDENTITY -->
+
+    <PackageReference
+      Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore"
+      Version="8.0.4" />
+
+    <PackageReference
+      Include="Microsoft.AspNetCore.SpaServices.Extensions"
+      Version="8.0.0" />
+
+
+    <!-- ENTITY FRAMEWORK CORE -->
+
+    <PackageReference
+      Include="Microsoft.EntityFrameworkCore"
+      Version="8.0.4" />
+
+    <PackageReference
+      Include="Microsoft.EntityFrameworkCore.Design"
+      Version="8.0.4">
+
       <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+
+      <IncludeAssets>
+        runtime;
+        build;
+        native;
+        contentfiles;
+        analyzers;
+        buildtransitive
+      </IncludeAssets>
+
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.4" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.4">
+
+    <PackageReference
+      Include="Microsoft.EntityFrameworkCore.SqlServer"
+      Version="8.0.4" />
+
+    <PackageReference
+      Include="Microsoft.EntityFrameworkCore.Tools"
+      Version="8.0.4">
+
       <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+
+      <IncludeAssets>
+        runtime;
+        build;
+        native;
+        contentfiles;
+        analyzers;
+        buildtransitive
+      </IncludeAssets>
+
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.3" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.4" />
-    <PackageReference Include="Razorpay" Version="3.3.2" />
-    <PackageReference Include="Rotativa.AspNetCore" Version="1.4.0" />
-    <PackageReference Include="SendGrid" Version="9.29.3" />
-    <PackageReference Include="Twilio" Version="7.14.9" />
+
+
+    <!-- HTTP -->
+
+    <PackageReference
+      Include="Microsoft.Extensions.Http"
+      Version="8.0.4" />
+
+
+    <!-- JSON -->
+
+    <PackageReference
+      Include="Newtonsoft.Json"
+      Version="13.0.4" />
+
+
+    <!-- POSTGRESQL -->
+
+    <PackageReference
+      Include="Npgsql.EntityFrameworkCore.PostgreSQL"
+      Version="8.0.4" />
+
+
+    <!-- RAZORPAY -->
+
+    <PackageReference
+      Include="Razorpay"
+      Version="3.3.2" />
+
+
+    <!-- PDF -->
+
+    <PackageReference
+      Include="Rotativa.AspNetCore"
+      Version="1.4.0" />
+
+
+    <!-- EMAIL -->
+
+    <PackageReference
+      Include="SendGrid"
+      Version="9.29.3" />
+
+
+    <!-- SMS -->
+
+    <PackageReference
+      Include="Twilio"
+      Version="7.14.9" />
+
   </ItemGroup>
 
+
+  <!-- =========================================================
+       FOLDERS
+       ========================================================= -->
+
   <ItemGroup>
+
     <Folder Include="Migrations\" />
+
     <Folder Include="Views\Cart\" />
+
     <Folder Include="Views\Checkout\" />
+
     <Folder Include="wwwroot\quotations\" />
-  </ItemGroup>
 
-  <ItemGroup>
-    <None Include="DTOs\UpdateOrderItemStatusDTO.cs" />
   </ItemGroup>
 
 
-<Target Name = "PublishReact" BeforeTargets = "Publish" >
+  <!-- =========================================================
+       BUILD REACT APPLICATION BEFORE .NET BUILD
+       ========================================================= -->
+
+  <Target Name = "PublishReact" BeforeTargets = "Publish" >
 
 	<Message Text = "========== Building React Application ==========" Importance = "high" />
 
@@ -122,5 +253,5 @@
 		SkipUnchangedFiles="true" />
 
 	</Target>
-	
+
 </Project>

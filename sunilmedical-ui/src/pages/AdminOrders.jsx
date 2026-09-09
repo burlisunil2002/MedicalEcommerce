@@ -2246,7 +2246,7 @@ export default function AdminOrders() {
                                     </th>
 
                                     <th className="p-4">
-                                        Amount
+                                        Item Amount
                                     </th>
 
                                     <th className="p-4">
@@ -2768,18 +2768,9 @@ function DesktopOrderRow({
             <td className="p-4 align-top">
                 <p className="font-black text-emerald-600 whitespace-nowrap">
                     {money(
-                        isAdmin
-                            ? (
-                                order.grandTotal ??
-                                order.finalPaidAmount ??
-                                0
-                            )
-                            : (
-                                order.sellerAmount ??
-                                order.finalPaidAmount ??
-                                order.lineTotal ??
-                                0
-                            )
+                        order.finalPaidAmount ??
+                        order.lineTotal ??
+                        0
                     )}
                 </p>
             </td>
@@ -3001,20 +2992,11 @@ function MobileOrderCard({
                         )}
                     </Info>
 
-                    <Info label="Amount">
+                    <Info label="Item Amount">
                         {money(
-                            isAdmin
-                                ? (
-                                    order.grandTotal ??
-                                    order.finalPaidAmount ??
-                                    0
-                                )
-                                : (
-                                    order.sellerAmount ??
-                                    order.finalPaidAmount ??
-                                    order.lineTotal ??
-                                    0
-                                )
+                            order.finalPaidAmount ??
+                            order.lineTotal ??
+                            0
                         )}
                     </Info>
 

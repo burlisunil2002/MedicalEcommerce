@@ -1726,14 +1726,22 @@ public class SellerController : ControllerBase
             });
         }
 
-        // -----------------------------------------------------
-        // CANCELLATION
-        // -----------------------------------------------------
+        // =========================================================
+        // CANCELLATION RULE
+        // Customer can cancel before shipment.
+        // =========================================================
 
-        if (status == "Cancelled" &&
-            item.OrderItemStatus != "Placed" &&
-            item.OrderItemStatus != "Accepted" &&
-            item.OrderItemStatus != "Packed")
+        var cancellableStatuses = new[]
+        {
+    "Pending",
+    "Placed",
+    "Accepted",
+    "Packed"
+};
+
+        if (!cancellableStatuses.Contains(
+                item.OrderItemStatus,
+                StringComparer.OrdinalIgnoreCase))
         {
             return BadRequest(new
             {

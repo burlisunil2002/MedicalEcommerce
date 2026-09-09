@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { toast } from "react-toastify";
@@ -51,216 +51,120 @@ export default function MyOrdersPage() {
     // Load Orders
     //--------------------------------------------------
 
-    useEffect(() => {
-
-        loadOrders();
-
-    }, []);
-
-    async function loadOrders() {
-
+    const loadOrders = useCallback(async (showLoader = true) => {
         try {
-
-            setLoading(true);
+            if (showLoader) setLoading(true);
 
             const response = await axios.get("/api/order/my-orders");
 
             let data = [];
 
-            // Case 1: API returns an array
             if (Array.isArray(response.data)) {
-
                 data = response.data;
-
-            }
-
-            // Case 2: API returns { data: [...] }
-            else if (Array.isArray(response.data?.data)) {
-
+            } else if (Array.isArray(response.data?.data)) {
                 data = response.data.data;
-
-            }
-
-            // Case 3: API returns { orders: [...] }
-            else if (Array.isArray(response.data?.orders)) {
-
+            } else if (Array.isArray(response.data?.orders)) {
                 data = response.data.orders;
-
-            }
-
-            // Unknown response
-            else {
-
+            } else {
                 console.error("Unexpected API Response:", response.data);
-
                 toast.error("Invalid response received from server.");
-
-                data = [];
-
             }
 
-            console.log("Orders Array:", data);
+            const normalizedOrders = data
+                .filter(Boolean)
+                .map(order => ({
+                    ...order,
+                    items: Array.isArray(order?.items) ? order.items : []
+                }));
 
-            setOrders(data);
-
-        }
-        catch (error) {
-
+            setOrders(normalizedOrders);
+        } catch (error) {
             console.error("Load Orders Error:", error);
-
-            toast.error("Unable to load your orders.");
-
+            toast.error(
+                error?.response?.data?.message ||
+                "Unable to load your orders."
+            );
             setOrders([]);
-
+        } finally {
+            if (showLoader) setLoading(false);
         }
-        finally {
+    }, []);
 
-            setLoading(false);
-
-        }
-
-    }
+    useEffect(() => {
+        loadOrders(true);
+    }, [loadOrders]);
 
     //--------------------------------------------------
     // Overall Status
     //--------------------------------------------------
 
-    function getOverallStatus(order) {
+    const getOverallStatus = useCallback((order) => {
+        const items = Array.isArray(order?.items) ? order.items : [];
 
-        const statuses = order.items.map(x => x.itemStatus);
+        if (items.length === 0) return "Processing";
 
-        if (statuses.every(x => x === "Cancelled"))
-            return "Cancelled";
+        const statuses = items.map(item =>
+            String(item?.itemStatus || "").trim().toLowerCase()
+        );
 
-        if (statuses.every(x => x === "Delivered"))
-            return "Delivered";
-
-        if (statuses.includes("OutForDelivery"))
-            return "Out For Delivery";
-
-        if (statuses.includes("Shipped"))
-            return "Shipped";
-
-        if (statuses.includes("Packed"))
-            return "Packed";
-
-        if (statuses.includes("Pending"))
-            return "Pending";
+        if (statuses.every(x => x === "cancelled")) return "Cancelled";
+        if (statuses.every(x => x === "delivered")) return "Delivered";
+        if (statuses.includes("outfordelivery")) return "Out For Delivery";
+        if (statuses.includes("shipped")) return "Shipped";
+        if (statuses.includes("packed")) return "Packed";
+        if (statuses.includes("pending")) return "Pending";
 
         return "Processing";
-
-    }
+    }, []);
 
     //--------------------------------------------------
     // Filter Orders
     //--------------------------------------------------
 
     const filteredOrders = useMemo(() => {
-
-        if (!Array.isArray(orders)) {
-
-            console.error("Orders is not an array:", orders);
-
+        if (!Array.isArray(orders) || orders.length === 0) {
             return [];
-
         }
 
-        return orders.filter(order => {
+        const searchText = search.trim().toLowerCase();
 
+        return orders.filter(order => {
             const status = getOverallStatus(order);
 
-            const searchText = search.trim().toLowerCase();
-
             const matchesSearch =
-
                 !searchText ||
+                String(order?.orderNumber || "").toLowerCase().includes(searchText) ||
+                String(order?.paymentStatus || "").toLowerCase().includes(searchText) ||
+                status.toLowerCase().includes(searchText) ||
+                (Array.isArray(order?.items) &&
+                    order.items.some(item =>
+                        String(item?.productName || "").toLowerCase().includes(searchText) ||
+                        String(item?.variantName || "").toLowerCase().includes(searchText)
+                    ));
 
-                order.orderNumber?.toLowerCase().includes(searchText)
-
-                ||
-
-                order.paymentStatus?.toLowerCase().includes(searchText)
-
-                ||
-
-                getOverallStatus(order).toLowerCase().includes(searchText)
-
-                ||
-
-                order.items.some(item =>
-
-                    item.productName?.toLowerCase().includes(searchText)
-
-                    ||
-
-                    item.variantName?.toLowerCase().includes(searchText)
-
-                );
-
-            let matchesFilter = true;
+            if (!matchesSearch) return false;
 
             switch (selectedFilter) {
-
                 case "Active":
-
-                    matchesFilter =
-                        status !== "Delivered" &&
-                        status !== "Cancelled";
-
-                    break;
-
+                    return status !== "Delivered" && status !== "Cancelled";
                 case "Delivered":
-
-                    matchesFilter =
-                        status === "Delivered";
-
-                    break;
-
+                    return status === "Delivered";
                 case "Cancelled":
-
-                    matchesFilter =
-                        status === "Cancelled";
-
-                    break;
-
+                    return status === "Cancelled";
                 case "Pending":
-
-                    matchesFilter =
-                        status === "Pending";
-
-                    break;
-
+                    return status === "Pending";
                 case "Returns":
-
-                    matchesFilter =
-                        order.items.some(x =>
-                            x.returnStatus &&
-                            x.returnStatus !== "None"
-                        );
-
-                    break;
-
+                    return Array.isArray(order?.items) &&
+                        order.items.some(item => {
+                            const returnStatus = String(item?.returnStatus || "").trim().toLowerCase();
+                            return returnStatus && returnStatus !== "none";
+                        });
+                case "All":
                 default:
-
-                    matchesFilter = true;
-
-                    break;
-
+                    return true;
             }
-
-            return matchesSearch && matchesFilter;
-
         });
-
-    }, [
-
-        orders,
-
-        search,
-
-        selectedFilter
-
-    ]);
+    }, [orders, search, selectedFilter, getOverallStatus]);
 
     //--------------------------------------------------
     // Handlers
@@ -375,7 +279,7 @@ export default function MyOrdersPage() {
 
             toast.success("Order cancelled successfully.");
 
-            await loadOrders();
+            await loadOrders(false);
 
         }
 
@@ -448,7 +352,7 @@ export default function MyOrdersPage() {
 
             toast.success("Return request submitted.");
 
-            await loadOrders();
+            await loadOrders(false);
 
         }
 
