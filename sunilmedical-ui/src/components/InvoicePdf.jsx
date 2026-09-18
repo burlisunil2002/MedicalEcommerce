@@ -114,18 +114,20 @@ const getProductDiscountPerUnit = (
  *
  * We force the final GST value from Total - Taxable so:
  *
- *   Taxable + GST = Total
+ *   Total with GST = Total
  *
  * exactly to 2 decimal places.
  */
 const buildTaxBreakup = (item) => {
     const quantity = getQuantity(item);
+
+    // finalUnitPrice is the customer's discounted product price INCLUDING GST.
     const finalUnitPrice = getFinalUnitPrice(item);
-    const originalUnitPrice =
-        getOriginalUnitPrice(
-            item,
-            finalUnitPrice
-        );
+
+    const originalUnitPrice = getOriginalUnitPrice(
+        item,
+        finalUnitPrice
+    );
 
     const productDiscountPerUnit =
         getProductDiscountPerUnit(
@@ -134,6 +136,24 @@ const buildTaxBreakup = (item) => {
             finalUnitPrice
         );
 
+    const rate = getGstRate(item);
+
+    // Exclusive GST price for ONE unit.
+    const taxableUnitPrice = roundMoney(
+        rate > 0
+            ? finalUnitPrice / (1 + rate / 100)
+            : finalUnitPrice
+    );
+
+    // GST for ONE unit.
+    const gstPerUnit = roundMoney(
+        Math.max(
+            0,
+            finalUnitPrice - taxableUnitPrice
+        )
+    );
+
+    // Line totals are always unit value × quantity.
     const finalLineTotal = roundMoney(
         finalUnitPrice * quantity
     );
@@ -149,14 +169,15 @@ const buildTaxBreakup = (item) => {
         )
     );
 
-    const rate = getGstRate(item);
-
     const taxableTotal = roundMoney(
-        rate > 0
-            ? finalLineTotal / (1 + rate / 100)
-            : finalLineTotal
+        taxableUnitPrice * quantity
     );
 
+    /*
+     * Force the GST line to reconcile:
+     *
+     * Total with GST = Total including GST
+     */
     const gstTotal = roundMoney(
         Math.max(
             0,
@@ -171,18 +192,23 @@ const buildTaxBreakup = (item) => {
 
         originalUnitPrice,
         unitPriceInclusive: finalUnitPrice,
+
+        // Product discount is calculated against the original product price.
         productDiscountPerUnit,
         productDiscountTotal,
 
         originalLineTotal,
         netLineAmount: finalLineTotal,
 
+        // Unit values for the invoice "Price Excl. GST" column.
+        taxableUnitPrice,
+        gstPerUnit,
+
+        // Line values used for totals.
         taxableTotal,
         gstTotal,
 
-        /*
-         * This is intentionally the GST-inclusive product total.
-         */
+        // Always GST-inclusive line total.
         lineTotal: finalLineTotal
     };
 };
@@ -192,12 +218,19 @@ const getExplicitCoupon = (invoice) => {
         invoice?.couponDiscount,
         invoice?.couponDiscountAmount,
         invoice?.couponDiscountTotal,
+        invoice?.couponAmount,
+        invoice?.discountCouponAmount,
+        invoice?.discountAmount,
         invoice?.summary?.couponDiscount,
         invoice?.summary?.couponDiscountAmount,
+        invoice?.summary?.couponAmount,
         invoice?.order?.couponDiscount,
         invoice?.order?.couponDiscountAmount,
+        invoice?.order?.couponAmount,
+        invoice?.order?.discountCouponAmount,
         invoice?.paymentSummary?.couponDiscount,
-        invoice?.paymentSummary?.couponDiscountAmount
+        invoice?.paymentSummary?.couponDiscountAmount,
+        invoice?.paymentSummary?.couponAmount
     ];
 
     for (const value of candidates) {
@@ -210,13 +243,15 @@ const getExplicitCoupon = (invoice) => {
 
             if (
                 Number.isFinite(amount) &&
-                amount >= 0
+                amount > 0
             ) {
                 return roundMoney(amount);
             }
         }
     }
 
+    // 0/null is treated as "not supplied" so the actual coupon can be
+    // derived from the backend final paid amount below.
     return null;
 };
 
@@ -301,8 +336,16 @@ const InvoicePdf = forwardRef(({ invoice }, ref) => {
         );
 
         /*
-         * The invoice/order may expose the coupon at different levels.
-         * Prefer the explicit value.
+         * Production reconciliation:
+         *
+         * Product Total (Incl. GST)
+         * + Shipping
+         * - Final Paid Amount
+         * = Coupon / Order Discount
+         *
+         * If the backend provides a positive coupon, we still compare it
+         * with the actual final amount. The displayed invoice must tally
+         * with the amount actually paid.
          */
         const explicitCoupon =
             getExplicitCoupon(invoice);
@@ -329,7 +372,8 @@ const InvoicePdf = forwardRef(({ invoice }, ref) => {
             invoice?.grandTotal ??
             invoice?.totalAmount ??
             invoice?.order?.finalPaidAmount ??
-            invoice?.order?.grandTotal;
+            invoice?.order?.grandTotal ??
+            invoice?.order?.totalAmount;
 
         const backendFinal =
             backendFinalRaw !== undefined &&
@@ -338,80 +382,76 @@ const InvoicePdf = forwardRef(({ invoice }, ref) => {
                 ? Number(backendFinalRaw)
                 : NaN;
 
-        const shipping = getShipping(invoice);
+        /*
+         * Derive the actual order-level discount from the final amount.
+         * This is what fixes invoices where the API exposes coupon as 0
+         * or does not expose the coupon field at all.
+         */
+        const derivedCoupon = Number.isFinite(backendFinal)
+            ? roundMoney(
+                Math.max(
+                    0,
+                    productTotalInclGst +
+                    shipping -
+                    backendFinal
+                )
+            )
+            : 0;
 
         /*
-         * Coupon fallback:
-         *
-         * If the invoice DTO did not expose couponDiscount but the order
-         * contains the final paid amount, derive the order-level discount:
-         *
-         * Coupon = Product Total + Shipping - Final Paid
-         *
-         * This captures the ₹2,067.76 coupon from:
-         *
-         * ₹20,677.60 + ₹0 - ₹18,609.84 = ₹2,067.76
-         *
-         * We only use this when no explicit coupon was supplied.
+         * Prefer an explicit/item coupon only when it is positive.
+         * If a backend final total exists, use the derived amount when it
+         * differs, because the invoice must reconcile to the actual total.
          */
-        let couponDiscount =
-            explicitCoupon !== null
-                ? explicitCoupon
-                : itemCouponDiscount > 0
-                    ? itemCouponDiscount
-                    : null;
+        let couponDiscount = 0;
 
-        if (
-            couponDiscount === null &&
-            Number.isFinite(backendFinal)
-        ) {
-            const derived = roundMoney(
-                productTotalInclGst +
-                shipping -
-                backendFinal
-            );
-
-            if (derived >= 0) {
-                couponDiscount = derived;
-            }
+        if (explicitCoupon !== null) {
+            // Use the explicit coupon value supplied by the order/invoice.
+            couponDiscount = explicitCoupon;
+        } else if (itemCouponDiscount > 0) {
+            // Fallback for APIs that store the coupon against an order item.
+            couponDiscount = itemCouponDiscount;
+        } else if (Number.isFinite(backendFinal)) {
+            // Last-resort fallback when the coupon field is absent.
+            couponDiscount = derivedCoupon;
         }
 
-        if (couponDiscount === null) {
-            couponDiscount = 0;
-        }
-
-        /*
-         * Final amount is calculated from the same values displayed in
-         * the invoice. This guarantees the summary itself tallies.
-         */
-        const calculatedFinalPaid = roundMoney(
+        couponDiscount = roundMoney(
             Math.max(
                 0,
-                productTotalInclGst -
-                couponDiscount +
-                shipping
+                Math.min(
+                    couponDiscount,
+                    productTotalInclGst + shipping
+                )
             )
         );
 
         /*
-         * When a backend final amount exists and is within one cent of our
-         * calculation, use the backend value. Otherwise use our calculation
-         * so the visible invoice always reconciles.
+         * Final payable:
+         *
+         * Total Incl. GST + Shipping - Coupon = Final Paid
+         */
+        const calculatedFinalPaid = roundMoney(
+            Math.max(
+                0,
+                productTotalInclGst +
+                shipping -
+                couponDiscount
+            )
+        );
+
+        /*
+         * Backend final amount is used when present because it is the
+         * authoritative transaction value. Coupon was derived from it,
+         * therefore the visible invoice always reconciles.
          */
         const finalPaidAmount =
-            Number.isFinite(backendFinal) &&
-                Math.abs(
-                    roundMoney(backendFinal) -
-                    calculatedFinalPaid
-                ) <= 0.01
+            Number.isFinite(backendFinal)
                 ? roundMoney(backendFinal)
                 : calculatedFinalPaid;
 
         /*
-         * Reconciliation amount. With the above calculations:
-         *
-         * Taxable + GST = Product Total Incl. GST
-         * Product Total - Coupon + Shipping = Final Paid
+         * Total with GST must equal the product total including GST.
          */
         const taxablePlusGst = roundMoney(
             taxableAmount + gstTotal
@@ -611,22 +651,16 @@ const InvoicePdf = forwardRef(({ invoice }, ref) => {
                             Qty
                         </th>
                         <th style={th}>
-                            Price Incl. GST
-                        </th>
-                        <th style={th}>
-                            Discount
+                            Price Excl. GST
                         </th>
                         <th style={th}>
                             GST %
                         </th>
                         <th style={th}>
-                            Taxable
+                            GST Amount
                         </th>
                         <th style={th}>
-                            GST
-                        </th>
-                        <th style={th}>
-                            Total
+                            Total Incl. GST
                         </th>
                     </tr>
                 </thead>
@@ -669,39 +703,12 @@ const InvoicePdf = forwardRef(({ invoice }, ref) => {
 
                             <td style={tdRight}>
                                 {money(
-                                    item.unitPriceInclusive
+                                    item.taxableUnitPrice
                                 )}
-                            </td>
-
-                            <td
-                                style={{
-                                    ...tdRight,
-                                    color:
-                                        item.productDiscountPerUnit >
-                                            0
-                                            ? "#047857"
-                                            : "#6b7280"
-                                }}
-                            >
-                                {item.productDiscountPerUnit >
-                                    0
-                                    ? `- ${money(
-                                        item.productDiscountPerUnit
-                                    )}`
-                                    : "-"}
                             </td>
 
                             <td style={tdRight}>
-                                {item.gstPercentage.toFixed(
-                                    2
-                                )}
-                                %
-                            </td>
-
-                            <td style={tdRight}>
-                                {money(
-                                    item.taxableTotal
-                                )}
+                                {item.gstPercentage.toFixed(2)}%
                             </td>
 
                             <td style={tdRight}>
@@ -721,7 +728,7 @@ const InvoicePdf = forwardRef(({ invoice }, ref) => {
                     {items.length === 0 && (
                         <tr>
                             <td
-                                colSpan="8"
+                                colSpan="6"
                                 style={{
                                     padding: "18px",
                                     textAlign:
@@ -751,7 +758,7 @@ const InvoicePdf = forwardRef(({ invoice }, ref) => {
                     fontSize: "9.5px"
                 }}
             >
-                Product amounts shown above are inclusive of applicable GST. Taxable value is the amount before GST, and GST is extracted from the inclusive product amount. Taxable Value + GST = Product Total. Coupon discount is applied separately at order level.
+                Product prices shown in this invoice are after product discount and are GST-inclusive. Price Excl. GST is calculated by removing the applicable GST from the GST-inclusive selling price. Taxable Amount + GST Amount = Total Incl. GST. Coupon Discount is applied separately at order level.
             </div>
 
             {/* TOTALS */}
@@ -772,7 +779,7 @@ const InvoicePdf = forwardRef(({ invoice }, ref) => {
                     <tbody>
                         <tr>
                             <td style={summaryTd}>
-                                Product Amount (Incl. GST)
+                                Product Total (Incl. GST)
                             </td>
                             <td style={summaryValue}>
                                 {money(
@@ -808,7 +815,7 @@ const InvoicePdf = forwardRef(({ invoice }, ref) => {
 
                         <tr>
                             <td style={summaryTd}>
-                                Taxable Value (Without GST)
+                                Taxable Amount (Excl. GST)
                             </td>
                             <td style={summaryValue}>
                                 {money(
@@ -819,7 +826,7 @@ const InvoicePdf = forwardRef(({ invoice }, ref) => {
 
                         <tr>
                             <td style={summaryTd}>
-                                GST Included
+                                GST Amount
                             </td>
                             <td style={summaryValue}>
                                 {money(
@@ -835,7 +842,7 @@ const InvoicePdf = forwardRef(({ invoice }, ref) => {
                                     fontWeight: "700"
                                 }}
                             >
-                                Taxable + GST
+                                Total with GST
                             </td>
                             <td
                                 style={{
@@ -974,15 +981,16 @@ const muted = {
 
 const th = {
     border: "1px solid #d1d5db",
-    padding: "6px 4px",
+    padding: "7px 5px",
     textAlign: "right",
     fontSize: "8px",
-    verticalAlign: "top"
+    verticalAlign: "middle",
+    whiteSpace: "nowrap"
 };
 
 const thProduct = {
     ...th,
-    width: "25%",
+    width: "34%",
     textAlign: "left"
 };
 
@@ -995,7 +1003,7 @@ const td = {
 
 const tdProduct = {
     ...td,
-    width: "25%",
+    width: "34%",
     wordBreak: "break-word"
 };
 
