@@ -1,673 +1,461 @@
-﻿import { useState, useEffect } from "react";
+﻿import React, { memo, useCallback, useEffect, useState } from "react";
 
 const STATES = [
-    "Andhra Pradesh",
-    "Arunachal Pradesh",
-    "Assam",
-    "Bihar",
-    "Chhattisgarh",
-    "Goa",
-    "Gujarat",
-    "Haryana",
-    "Himachal Pradesh",
-    "Jharkhand",
-    "Karnataka",
-    "Kerala",
-    "Madhya Pradesh",
-    "Maharashtra",
-    "Odisha",
-    "Punjab",
-    "Rajasthan",
-    "Tamil Nadu",
-    "Telangana",
-    "Uttar Pradesh",
-    "Uttarakhand",
-    "West Bengal"
+    "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
+    "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand",
+    "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Odisha",
+    "Punjab", "Rajasthan", "Tamil Nadu", "Telangana", "Uttar Pradesh",
+    "Uttarakhand", "West Bengal"
 ];
 
-export default function AddressForm({
-    initialData = {},
-    onSave
-}) {
+const EMPTY_FORM = {
+    fullName: "",
+    mobileNumber: "",
+    addressLine1: "",
+    addressLine2: "",
+    landmark: "",
+    city: "",
+    state: "",
+    pincode: "",
+    addressType: "Home"
+};
 
+const inputClass = (error) =>
+    `w-full min-h-12 rounded-xl border px-4 py-3 text-sm sm:text-base outline-none transition
+    ${error
+        ? "border-red-500 bg-red-50 focus:border-red-500"
+        : "border-gray-300 bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"}`;
+
+const cleanName = (value) =>
+    value
+        .replace(/[^A-Za-zÀ-ÖØ-öø-ÿ.' -]/g, "")
+        .replace(/\s{2,}/g, " ")
+        .replace(/^\s+/, "")
+        .slice(0, 60);
+
+const cleanLetters = (value, max = 60) =>
+    value
+        .replace(/[^A-Za-zÀ-ÖØ-öø-ÿ.' -]/g, "")
+        .replace(/\s{2,}/g, " ")
+        .replace(/^\s+/, "")
+        .slice(0, max);
+
+const cleanDigits = (value, max) =>
+    value.replace(/\D/g, "").slice(0, max);
+
+const cleanAddress = (value, max) =>
+    value
+        .replace(/[<>]/g, "")
+        .replace(/\s{2,}/g, " ")
+        .replace(/^\s+/, "")
+        .slice(0, max);
+
+const Field = memo(function Field({
+    label,
+    required = false,
+    optional = false,
+    error,
+    children
+}) {
+    return (
+        <div>
+            <label className="block text-sm font-semibold text-gray-800 mb-2">
+                {label}
+                {required && (
+                    <span className="text-red-500 ml-1">*</span>
+                )}
+                {optional && (
+                    <span className="text-gray-400 font-normal ml-1">
+                        (optional)
+                    </span>
+                )}
+            </label>
+
+            {children}
+
+            {error && (
+                <p
+                    className="text-red-500 text-xs sm:text-sm mt-1.5"
+                    role="alert"
+                >
+                    {error}
+                </p>
+            )}
+        </div>
+    );
+});
+
+function AddressForm({ initialData = {}, onSave }) {
+    const [form, setForm] = useState(EMPTY_FORM);
+    const [errors, setErrors] = useState({});
     const [loading, setLoading] = useState(false);
 
-    const [form, setForm] = useState({
-
-        fullName: "",
-
-        mobileNumber: "",
-
-        addressLine1: "",
-
-        addressLine2: "",
-
-        landmark: "",
-
-        city: "",
-
-        state: "",
-
-        pincode: "",
-
-        addressType: "Home"
-
-    });
-
-    const [errors, setErrors] = useState({});
+    const isEditing = Boolean(initialData?.id);
 
     useEffect(() => {
-
         setForm({
-
-            fullName: initialData.fullName || "",
-
-            mobileNumber: initialData.mobileNumber || "",
-
-            addressLine1: initialData.addressLine1 || "",
-
-            addressLine2: initialData.addressLine2 || "",
-
-            landmark: initialData.landmark || "",
-
-            city: initialData.city || "",
-
-            state: initialData.state || "",
-
-            pincode: initialData.pincode || "",
-
-            addressType: initialData.addressType || "Home"
-
+            ...EMPTY_FORM,
+            fullName: initialData?.fullName || "",
+            mobileNumber: initialData?.mobileNumber || "",
+            addressLine1: initialData?.addressLine1 || "",
+            addressLine2: initialData?.addressLine2 || "",
+            landmark: initialData?.landmark || "",
+            city: initialData?.city || "",
+            state: initialData?.state || "",
+            pincode: initialData?.pincode || "",
+            addressType: initialData?.addressType || "Home"
         });
-
+        setErrors({});
     }, [initialData]);
 
-    const change = (e) => {
+    const change = useCallback((event) => {
+        const { name, value } = event.target;
 
-        const { name, value } = e.target;
+        const cleaners = {
+            fullName: (v) => cleanName(v),
+            mobileNumber: (v) => cleanDigits(v, 10),
+            addressLine1: (v) => cleanAddress(v, 150),
+            addressLine2: (v) => cleanAddress(v, 100),
+            landmark: (v) => cleanAddress(v, 80),
+            city: (v) => cleanLetters(v, 60),
+            pincode: (v) => cleanDigits(v, 6)
+        };
 
-        setForm(prev => ({
+        const nextValue = cleaners[name]
+            ? cleaners[name](value)
+            : value;
+
+        setForm((prev) => ({
             ...prev,
-            [name]: value
+            [name]: nextValue
         }));
 
-        setErrors(prev => ({
-            ...prev,
-            [name]: ""
-        }));
+        setErrors((prev) => {
+            if (!prev[name]) return prev;
 
-    };
+            const next = { ...prev };
+            delete next[name];
+            return next;
+        });
+    }, []);
 
-    const validate = () => {
+    const validate = useCallback(() => {
+        const e = {};
 
-        let e = {};
+        const fullName = form.fullName.trim();
+        const mobile = form.mobileNumber.trim();
+        const line1 = form.addressLine1.trim();
+        const line2 = form.addressLine2.trim();
+        const landmark = form.landmark.trim();
+        const city = form.city.trim();
+        const pincode = form.pincode.trim();
 
-        if (!form.fullName.trim()) {
-
-            e.fullName = "Full Name is required";
-
-        }
-        else if (
-            !/^[A-Za-z ]+$/.test(form.fullName)
-        ) {
-
-            e.fullName =
-                "Only alphabets are allowed";
-
-        }
-        else if (
-            form.fullName.trim().length < 3
-        ) {
-
-            e.fullName =
-                "Enter valid Full Name";
-
+        if (!fullName) {
+            e.fullName = "Enter your full name";
+        } else if (fullName.length < 3) {
+            e.fullName = "Enter a valid name";
+        } else if (!/^[A-Za-zÀ-ÖØ-öø-ÿ.' -]+$/.test(fullName)) {
+            e.fullName = "Use letters only";
         }
 
-        if (
-            !/^[6-9]\d{9}$/.test(
-                form.mobileNumber
-            )
-        ) {
-
-            e.mobileNumber =
-                "Enter valid Mobile Number";
-
+        if (!/^[6-9]\d{9}$/.test(mobile)) {
+            e.mobileNumber = "Enter a valid 10-digit mobile number";
         }
 
-        if (!form.addressLine1.trim()) {
-
+        if (!line1) {
             e.addressLine1 =
-                "House No / Street is required";
-
+                "Enter your house, flat, building or street";
+        } else if (line1.length < 5) {
+            e.addressLine1 = "Enter a more complete address";
         }
-        else if (
-            form.addressLine1.length < 10
+
+        if (line2 && line2.length < 2) {
+            e.addressLine2 =
+                "Enter a valid locality or leave this blank";
+        }
+
+        if (landmark && landmark.length < 2) {
+            e.landmark =
+                "Enter a valid landmark or leave this blank";
+        }
+
+        if (!city) {
+            e.city = "Enter your city";
+        } else if (
+            !/^[A-Za-zÀ-ÖØ-öø-ÿ.' -]+$/.test(city)
         ) {
-
-            e.addressLine1 =
-                "Address is too short";
-
+            e.city = "Use letters only";
+        } else if (city.length < 2) {
+            e.city = "Enter a valid city";
         }
 
-        if (!form.city.trim()) {
-
-            e.city = "Enter City";
-
-        }
-        else if (
-            !/^[A-Za-z ]+$/.test(
-                form.city
-            )
-        ) {
-
-            e.city =
-                "Invalid City";
-
+        if (!STATES.includes(form.state)) {
+            e.state = "Select your state";
         }
 
-        if (!form.state) {
-
-            e.state = "Select State";
-
-        }
-
-        if (
-            !/^\d{6}$/.test(
-                form.pincode
-            )
-        ) {
-
-            e.pincode =
-                "Invalid Pincode";
-
+        if (!/^\d{6}$/.test(pincode)) {
+            e.pincode = "Enter a valid 6-digit pincode";
         }
 
         setErrors(e);
-
         return Object.keys(e).length === 0;
+    }, [form]);
 
-    };
+    const save = useCallback(async () => {
+        if (loading || !onSave || !validate()) return;
 
-    const save = async () => {
-
-        if (!validate()) return;
+        const payload = {
+            ...form,
+            fullName: form.fullName.trim(),
+            mobileNumber: form.mobileNumber.trim(),
+            addressLine1: form.addressLine1.trim(),
+            addressLine2: form.addressLine2.trim(),
+            landmark: form.landmark.trim(),
+            city: form.city.trim(),
+            state: form.state.trim(),
+            pincode: form.pincode.trim()
+        };
 
         try {
-
             setLoading(true);
-
-            await onSave(form);
-
-        }
-        finally {
-
+            await onSave(payload);
+        } finally {
             setLoading(false);
-
         }
+    }, [form, loading, onSave, validate]);
 
-    };
+    const reset = useCallback(() => {
+        setForm(EMPTY_FORM);
+        setErrors({});
+    }, []);
 
     return (
+        <div className="w-full max-w-4xl mx-auto bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="px-4 sm:px-6 py-4 sm:py-5 border-b bg-gradient-to-r from-emerald-50 to-white">
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
+                    {isEditing ? "Edit Address" : "Add New Address"}
+                </h2>
 
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-200 overflow-hidden">
-
-            {/* Header */}
-
-            <div className="px-6 py-5 border-b bg-gradient-to-r from-emerald-50 to-white">
-
-                <div className="flex items-center gap-3">
-
-                    <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-2xl">
-
-                        📍
-
-                    </div>
-
-                    <div>
-
-                        <h2 className="text-2xl font-bold text-gray-800">
-
-                            {initialData?.id
-                                ? "Edit Address"
-                                : "Add New Address"}
-
-                        </h2>
-
-                        <p className="text-gray-500 text-sm mt-1">
-
-                            Please enter your delivery details.
-
-                        </p>
-
-                    </div>
-
-                </div>
-
+                <p className="text-gray-500 text-sm mt-1">
+                    Enter your delivery address accurately.
+                </p>
             </div>
 
-            <div className="p-6">
-
-                <div className="grid lg:grid-cols-2 gap-5">
-
-                    {/* Full Name */}
-
-                    <div>
-
-                        <label className="block text-sm font-semibold mb-2">
-
-                            Full Name
-                            <span className="text-red-500">*</span>
-                        </label>
-
+            <div className="p-4 sm:p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+                    <Field
+                        label="Full Name"
+                        required
+                        error={errors.fullName}
+                    >
                         <input
                             type="text"
                             name="fullName"
                             value={form.fullName}
                             onChange={change}
-                            placeholder="Enter your full name"
-                            className={`w-full rounded-xl border px-4 py-3 outline-none transition
-                    ${errors.fullName
-                                    ? "border-red-500"
-                                    : "border-gray-300 focus:border-emerald-500"
-                                }`}
+                            placeholder="Enter full name"
+                            autoComplete="name"
+                            maxLength={60}
+                            className={inputClass(errors.fullName)}
                         />
+                    </Field>
 
-                        {errors.fullName &&
-
-                            <p className="text-red-500 text-sm mt-1">
-
-                                {errors.fullName}
-
-                            </p>
-
-                        }
-
-                    </div>
-
-                    {/* Mobile */}
-
-                    <div>
-
-                        <label className="block text-sm font-semibold mb-2">
-
-                            Mobile Number
-                            <span className="text-red-500">*</span>
-
-                        </label>
-
+                    <Field
+                        label="Mobile Number"
+                        required
+                        error={errors.mobileNumber}
+                    >
                         <input
                             type="tel"
-                            maxLength={10}
                             name="mobileNumber"
                             value={form.mobileNumber}
                             onChange={change}
-                            placeholder="10 Digit Mobile Number"
-                            className={`w-full rounded-xl border px-4 py-3 outline-none transition
-                    ${errors.mobileNumber
-                                    ? "border-red-500"
-                                    : "border-gray-300 focus:border-emerald-500"
-                                }`}
+                            placeholder="10-digit mobile number"
+                            autoComplete="tel"
+                            inputMode="numeric"
+                            maxLength={10}
+                            className={inputClass(errors.mobileNumber)}
                         />
-
-                        {errors.mobileNumber &&
-
-                            <p className="text-red-500 text-sm mt-1">
-
-                                {errors.mobileNumber}
-
-                            </p>
-
-                        }
-
-                    </div>
-
-                    {/* Address Line 1 */}
+                    </Field>
 
                     <div className="lg:col-span-2">
-
-                        <label className="block text-sm font-semibold mb-2">
-
-                            House No / Building / Street
-                            <span className="text-red-500">*</span>
-
-                        </label>
-
-                        <input
-                            name="addressLine1"
-                            value={form.addressLine1}
-                            onChange={change}
-                            placeholder="Flat No, Apartment, Street"
-                            className={`w-full rounded-xl border px-4 py-3 outline-none transition
-                    ${errors.addressLine1
-                                    ? "border-red-500"
-                                    : "border-gray-300 focus:border-emerald-500"
-                                }`}
-                        />
-
-                        {errors.addressLine1 &&
-
-                            <p className="text-red-500 text-sm mt-1">
-
-                                {errors.addressLine1}
-
-                            </p>
-
-                        }
-
+                        <Field
+                            label="House No / Building / Street"
+                            required
+                            error={errors.addressLine1}
+                        >
+                            <input
+                                type="text"
+                                name="addressLine1"
+                                value={form.addressLine1}
+                                onChange={change}
+                                placeholder="Flat / House No, Building, Street"
+                                autoComplete="street-address"
+                                maxLength={150}
+                                className={inputClass(errors.addressLine1)}
+                            />
+                        </Field>
                     </div>
-
-                    {/* Address Line 2 */}
 
                     <div className="lg:col-span-2">
-
-                        <label className="block text-sm font-semibold mb-2">
-
-                            Area / Locality
-
-                        </label>
-
-                        <input
-                            name="addressLine2"
-                            value={form.addressLine2}
-                            onChange={change}
-                            placeholder="Area, Colony, Locality"
-                            className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:border-emerald-500 outline-none"
-                        />
-
+                        <Field
+                            label="Area / Locality"
+                            optional
+                            error={errors.addressLine2}
+                        >
+                            <input
+                                type="text"
+                                name="addressLine2"
+                                value={form.addressLine2}
+                                onChange={change}
+                                placeholder="Area, Colony, Locality"
+                                autoComplete="address-line2"
+                                maxLength={100}
+                                className={inputClass(errors.addressLine2)}
+                            />
+                        </Field>
                     </div>
-
-                    {/* Landmark */}
 
                     <div className="lg:col-span-2">
-
-                        <label className="block text-sm font-semibold mb-2">
-
-                            Landmark
-
-                        </label>
-
-                        <input
-                            name="landmark"
-                            value={form.landmark}
-                            onChange={change}
-                            placeholder="Near Temple / School / Hospital"
-                            className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:border-emerald-500 outline-none"
-                        />
-
+                        <Field
+                            label="Landmark"
+                            optional
+                            error={errors.landmark}
+                        >
+                            <input
+                                type="text"
+                                name="landmark"
+                                value={form.landmark}
+                                onChange={change}
+                                placeholder="Nearby hospital, school, temple, etc."
+                                maxLength={80}
+                                className={inputClass(errors.landmark)}
+                            />
+                        </Field>
                     </div>
-                    {/* City */}
 
-                    <div>
-
-                        <label className="block text-sm font-semibold mb-2">
-
-                            City
-                            <span className="text-red-500">*</span>
-
-                        </label>
-
+                    <Field
+                        label="City"
+                        required
+                        error={errors.city}
+                    >
                         <input
+                            type="text"
                             name="city"
                             value={form.city}
                             onChange={change}
-                            placeholder="Enter City"
-                            className={`w-full rounded-xl border px-4 py-3 outline-none transition
-                    ${errors.city
-                                    ? "border-red-500"
-                                    : "border-gray-300 focus:border-emerald-500"
-                                }`}
+                            placeholder="Enter city"
+                            autoComplete="address-level2"
+                            maxLength={60}
+                            className={inputClass(errors.city)}
                         />
+                    </Field>
 
-                        {errors.city && (
-
-                            <p className="text-red-500 text-sm mt-1">
-
-                                {errors.city}
-
-                            </p>
-
-                        )}
-
-                    </div>
-
-                    {/* State */}
-
-                    <div>
-
-                        <label className="block text-sm font-semibold mb-2">
-
-                            State
-                            <span className="text-red-500">*</span>
-
-                        </label>
-
+                    <Field
+                        label="State"
+                        required
+                        error={errors.state}
+                    >
                         <select
                             name="state"
                             value={form.state}
                             onChange={change}
-                            className={`w-full rounded-xl border px-4 py-3 outline-none transition
-                    ${errors.state
-                                    ? "border-red-500"
-                                    : "border-gray-300 focus:border-emerald-500"
-                                }`}
+                            autoComplete="address-level1"
+                            className={inputClass(errors.state)}
                         >
-
                             <option value="">
-
-                                Select State
-
+                                Select state
                             </option>
 
-                            {STATES.map(state => (
-
+                            {STATES.map((state) => (
                                 <option
                                     key={state}
                                     value={state}
                                 >
-
                                     {state}
-
                                 </option>
-
                             ))}
-
                         </select>
+                    </Field>
 
-                        {errors.state && (
-
-                            <p className="text-red-500 text-sm mt-1">
-
-                                {errors.state}
-
-                            </p>
-
-                        )}
-
-                    </div>
-
-                    {/* Pincode */}
-
-                    <div>
-
-                        <label className="block text-sm font-semibold mb-2">
-
-                            Pincode
-                            <span className="text-red-500">*</span>
-
-                        </label>
-
+                    <Field
+                        label="Pincode"
+                        required
+                        error={errors.pincode}
+                    >
                         <input
-                            maxLength={6}
+                            type="text"
                             name="pincode"
                             value={form.pincode}
                             onChange={change}
-                            placeholder="6 Digit Pincode"
-                            className={`w-full rounded-xl border px-4 py-3 outline-none transition
-                    ${errors.pincode
-                                    ? "border-red-500"
-                                    : "border-gray-300 focus:border-emerald-500"
-                                }`}
+                            placeholder="6-digit pincode"
+                            autoComplete="postal-code"
+                            inputMode="numeric"
+                            maxLength={6}
+                            className={inputClass(errors.pincode)}
                         />
-
-                        {errors.pincode && (
-
-                            <p className="text-red-500 text-sm mt-1">
-
-                                {errors.pincode}
-
-                            </p>
-
-                        )}
-
-                    </div>
-
+                    </Field>
                 </div>
 
-                {/* Address Type */}
-
-                <div className="mt-8">
-
-                    <label className="block text-sm font-semibold mb-4">
-
+                <div className="mt-6 sm:mt-8">
+                    <label className="block text-sm font-semibold text-gray-800 mb-3">
                         Address Type
-
                     </label>
 
-                    <div className="grid grid-cols-3 gap-4">
-
-                        {["Home", "Office", "Other"].map(type => (
-
+                    <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                        {["Home", "Office", "Other"].map((type) => (
                             <button
                                 key={type}
                                 type="button"
                                 onClick={() =>
-                                    setForm({
-                                        ...form,
+                                    setForm((prev) => ({
+                                        ...prev,
                                         addressType: type
-                                    })
+                                    }))
                                 }
-                                className={`rounded-2xl border-2 py-4 transition-all duration-300
-                        ${form.addressType === type
+                                className={`rounded-xl sm:rounded-2xl border-2 py-3 sm:py-4 px-2 font-semibold text-sm sm:text-base transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500
+                                ${form.addressType === type
                                         ? "border-emerald-600 bg-emerald-50 text-emerald-700"
-                                        : "border-gray-200 hover:border-emerald-400"
+                                        : "border-gray-200 text-gray-700 hover:border-emerald-400"
                                     }`}
+                                aria-pressed={
+                                    form.addressType === type
+                                }
                             >
-
-                                <div className="text-3xl">
-
-                                    {type === "Home"
-                                        ? "🏠"
-                                        : type === "Office"
-                                            ? "🏢"
-                                            : "📍"}
-
-                                </div>
-
-                                <div className="font-semibold mt-2">
-
-                                    {type}
-
-                                </div>
-
+                                {type}
                             </button>
-
                         ))}
-
                     </div>
-
                 </div>
 
-                {/* Footer */}
-
-                <div className="mt-10 border-t pt-6 flex flex-col-reverse sm:flex-row justify-end gap-4">
-
-                    {initialData?.id && (
-
+                <div className="mt-8 border-t pt-5 sm:pt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+                    {isEditing && (
                         <button
                             type="button"
-                            onClick={() => {
-
-                                setForm({
-                                    fullName: "",
-                                    mobileNumber: "",
-                                    addressLine1: "",
-                                    addressLine2: "",
-                                    landmark: "",
-                                    city: "",
-                                    state: "",
-                                    pincode: "",
-                                    addressType: "Home"
-                                });
-
-                                setErrors({});
-
-                            }}
-                            className="px-6 py-3 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 transition"
+                            onClick={reset}
+                            disabled={loading}
+                            className="w-full sm:w-auto px-6 py-3 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition"
                         >
-
-                            Cancel
-
+                            Reset
                         </button>
-
                     )}
 
                     <button
                         type="button"
                         onClick={save}
                         disabled={loading}
-                        className={`px-8 py-3 rounded-xl text-white font-semibold transition-all duration-300 shadow-lg
-                ${loading
-                                ? "bg-gray-400 cursor-not-allowed"
-                                : "bg-emerald-600 hover:bg-emerald-700 hover:scale-[1.02]"
-                            }`}
+                        className="w-full sm:w-auto px-7 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm disabled:bg-gray-400 disabled:cursor-not-allowed transition"
                     >
-
                         {loading
-                            ? (
-                                <div className="flex items-center justify-center gap-2">
-
-                                    <svg
-                                        className="animate-spin h-5 w-5"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                    >
-
-                                        <circle
-                                            className="opacity-25"
-                                            cx="12"
-                                            cy="12"
-                                            r="10"
-                                            stroke="currentColor"
-                                            strokeWidth="4"
-                                        />
-
-                                        <path
-                                            className="opacity-75"
-                                            fill="currentColor"
-                                            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                                        />
-
-                                    </svg>
-
-                                    Saving...
-
-                                </div>
-                            )
-                            : (
-                                initialData?.id
-                                    ? "Update Address"
-                                    : "Save Address"
-                            )}
-
+                            ? "Saving..."
+                            : isEditing
+                                ? "Update Address"
+                                : "Save Address"}
                     </button>
-
                 </div>
-
             </div>
-
         </div>
-
     );
 }
+
+export default memo(AddressForm);

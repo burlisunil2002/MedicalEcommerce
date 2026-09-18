@@ -92,24 +92,16 @@
 
     <!-- ASP.NET CORE IDENTITY -->
 
-    <PackageReference
-      Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore"
-      Version="8.0.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.4" />
 
-    <PackageReference
-      Include="Microsoft.AspNetCore.SpaServices.Extensions"
-      Version="8.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="8.0.0" />
 
 
     <!-- ENTITY FRAMEWORK CORE -->
 
-    <PackageReference
-      Include="Microsoft.EntityFrameworkCore"
-      Version="8.0.4" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.4" />
 
-    <PackageReference
-      Include="Microsoft.EntityFrameworkCore.Design"
-      Version="8.0.4">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.4">
 
       <PrivateAssets>all</PrivateAssets>
 
@@ -124,13 +116,9 @@
 
     </PackageReference>
 
-    <PackageReference
-      Include="Microsoft.EntityFrameworkCore.SqlServer"
-      Version="8.0.4" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.4" />
 
-    <PackageReference
-      Include="Microsoft.EntityFrameworkCore.Tools"
-      Version="8.0.4">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.4">
 
       <PrivateAssets>all</PrivateAssets>
 
@@ -148,51 +136,37 @@
 
     <!-- HTTP -->
 
-    <PackageReference
-      Include="Microsoft.Extensions.Http"
-      Version="8.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.4" />
 
 
     <!-- JSON -->
 
-    <PackageReference
-      Include="Newtonsoft.Json"
-      Version="13.0.4" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
 
 
     <!-- POSTGRESQL -->
 
-    <PackageReference
-      Include="Npgsql.EntityFrameworkCore.PostgreSQL"
-      Version="8.0.4" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.4" />
 
 
     <!-- RAZORPAY -->
 
-    <PackageReference
-      Include="Razorpay"
-      Version="3.3.2" />
+    <PackageReference Include="Razorpay" Version="3.3.2" />
 
 
     <!-- PDF -->
 
-    <PackageReference
-      Include="Rotativa.AspNetCore"
-      Version="1.4.0" />
+    <PackageReference Include="Rotativa.AspNetCore" Version="1.4.0" />
 
 
     <!-- EMAIL -->
 
-    <PackageReference
-      Include="SendGrid"
-      Version="9.29.3" />
+    <PackageReference Include="SendGrid" Version="9.29.3" />
 
 
     <!-- SMS -->
 
-    <PackageReference
-      Include="Twilio"
-      Version="7.14.9" />
+    <PackageReference Include="Twilio" Version="7.14.9" />
 
   </ItemGroup>
 
@@ -218,39 +192,26 @@
        BUILD REACT APPLICATION BEFORE .NET BUILD
        ========================================================= -->
 
-  <Target Name = "PublishReact" BeforeTargets = "Publish" >
+	<Target Name="ReactBuild" BeforeTargets="Build">
 
-	<Message Text = "========== Building React Application ==========" Importance = "high" />
+		<Message Text="Building React..." Importance="high" />
 
-	<!--Install dependencies-->
-	<Exec
-      WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
-      Command = "npm ci"
-      Condition = "Exists('$(MSBuildProjectDirectory)\sunilmedical-ui\package-lock.json')" />
+		<Exec WorkingDirectory="$(MSBuildProjectDirectory)\sunilmedical-ui" Command="npm install" Condition="!Exists('$(MSBuildProjectDirectory)\sunilmedical-ui\node_modules')" />
 
-	<Exec
-      WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
-      Command = "npm install"
-      Condition = "!Exists('$(MSBuildProjectDirectory)\sunilmedical-ui\package-lock.json')" />
+		<Exec WorkingDirectory="$(MSBuildProjectDirectory)\sunilmedical-ui" Command="npm run build" />
 
-	<!--Build React-->
-	<Exec
-      WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
-      Command = "npm run build" />
+		<RemoveDir Directories="$(ProjectDir)wwwroot\react" ContinueOnError="true" />
 
-	<!--Create publish React folder -->
-	<MakeDir Directories="$(PublishDir)wwwroot\react" />
+		<MakeDir Directories="$(ProjectDir)wwwroot\react" />
 
-	<!-- Collect React build files -->
-	<ItemGroup>
-		<ReactBuildFiles Include="$(MSBuildProjectDirectory)\sunilmedical-ui\build\**\*" />
-	</ItemGroup>
 
-	<!-- Copy React build into publish folder -->
-	<Copy
-		SourceFiles="@(ReactBuildFiles)"
-		DestinationFiles="@(ReactBuildFiles->'$(PublishDir)wwwroot\react\%(RecursiveDir)%(Filename)%(Extension)')"
-		SkipUnchangedFiles="true" />
+		<ItemGroup>
+
+		<ReactFiles Include="$(ProjectDir)sunilmedical-ui\build\**\*" />
+
+		</ItemGroup>
+
+		<Copy SourceFiles="@(ReactFiles)" DestinationFiles="@(ReactFiles->'$(ProjectDir)wwwroot\react\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
 
 	</Target>
 

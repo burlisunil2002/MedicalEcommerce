@@ -36,6 +36,18 @@ export default function OrderItemCard({
     // Status Badge
     //----------------------------------------------------------
 
+    const originalPrice = Number(item.price) || 0;
+    const discount = Number(item.discountAmount) || 0;
+    const finalPrice = Math.max(0, originalPrice - discount);
+    
+
+    const quantity = Math.max(
+        1,
+        Number(item?.quantity) || 1
+    );
+
+    const itemTotal = finalPrice * quantity;
+
     const getStatusStyle = () => {
 
         switch (item.itemStatus) {
@@ -183,13 +195,9 @@ export default function OrderItemCard({
                                     Price
 
                                 </p>
-
                                 <h4 className="font-bold text-slate-800">
-
-                                    ₹{Number(item.price).toLocaleString()}
-
+                                    ₹{finalPrice.toLocaleString("en-IN")}
                                 </h4>
-
                             </div>
 
                             <div>
@@ -211,15 +219,11 @@ export default function OrderItemCard({
                             <div>
 
                                 <p className="text-xs text-slate-500">
-
                                     Total
-
                                 </p>
 
                                 <h4 className="font-bold text-green-600">
-
-                                    ₹{Number(item.itemTotal).toLocaleString()}
-
+                                    ₹{Number(itemTotal).toLocaleString("en-IN")}
                                 </h4>
 
                             </div>

@@ -1,142 +1,412 @@
-﻿import { FaCheckCircle, FaEdit, FaHome, FaBuilding, FaMapMarkerAlt } from "react-icons/fa";
+﻿import React, {
+    memo,
+    useCallback
+} from "react";
 
-export default function AddressCard({
-    address,
-    selected,
-    onSelect,
-    onEdit
-}) {
+import {
+    FaCheckCircle,
+    FaEdit,
+    FaHome,
+    FaBuilding,
+    FaMapMarkerAlt
+} from "react-icons/fa";
 
-    const getAddressIcon = () => {
 
-        switch (address.addressType) {
+const ADDRESS_ICONS = {
+    Office: FaBuilding,
+    Other: FaMapMarkerAlt,
+    Home: FaHome
+};
 
-            case "Office":
-                return <FaBuilding className="text-blue-600 text-lg" />;
 
-            case "Other":
-                return <FaMapMarkerAlt className="text-purple-600 text-lg" />;
+const ADDRESS_ICON_COLORS = {
+    Office: "text-blue-600 bg-blue-50",
+    Other: "text-purple-600 bg-purple-50",
+    Home: "text-emerald-600 bg-emerald-50"
+};
 
-            default:
-                return <FaHome className="text-emerald-600 text-lg" />;
 
-        }
+const AddressCard = memo(
+    function AddressCard({
+        address,
+        selected = false,
+        onSelect,
+        onEdit
+    }) {
 
-    };
+        const type =
+            address?.addressType ||
+            "Home";
 
-    return (
 
-        <div
-            onClick={onSelect}
-            className={`relative rounded-2xl border-2 p-5 cursor-pointer transition-all duration-300 hover:shadow-lg
-            ${selected
-                    ? "border-emerald-500 bg-emerald-50 shadow-md"
-                    : "border-gray-200 bg-white hover:border-emerald-300"
-                }`}
-        >
+        const Icon =
+            ADDRESS_ICONS[type] ||
+            FaHome;
 
-            {/* Selected Badge */}
 
-            {selected && (
+        const iconStyle =
+            ADDRESS_ICON_COLORS[type] ||
+            ADDRESS_ICON_COLORS.Home;
 
-                <div className="absolute top-4 right-4">
 
-                    <FaCheckCircle className="text-emerald-600 text-2xl" />
+        const handleSelect =
+            useCallback(() => {
 
-                </div>
+                if (
+                    onSelect &&
+                    address
+                ) {
+                    onSelect(address);
+                }
 
-            )}
+            }, [
+                onSelect,
+                address
+            ]);
 
-            <div className="flex justify-between gap-4">
 
-                <div className="flex gap-4 flex-1">
+        const handleEdit =
+            useCallback(
+                event => {
 
-                    <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
+                    event.stopPropagation();
 
-                        {getAddressIcon()}
+                    if (
+                        onEdit &&
+                        address
+                    ) {
+                        onEdit(address);
+                    }
 
-                    </div>
+                },
+                [
+                    onEdit,
+                    address
+                ]
+            );
 
-                    <div className="flex-1">
 
-                        <div className="flex items-center gap-3 flex-wrap">
+        return (
+            <article
+                className={`
+                    relative
+                    w-full
+                    rounded-2xl
+                    border-2
+                    bg-white
+                    transition-all
+                    duration-200
+                    ${
+                        selected
+                            ? `
+                                border-emerald-500
+                                bg-emerald-50/40
+                                shadow-sm
+                              `
+                            : `
+                                border-gray-200
+                                hover:border-emerald-300
+                                hover:shadow-sm
+                              `
+                    }
+                `}
+            >
 
-                            <h3 className="font-bold text-lg text-gray-800">
+                {/* =================================================
+                    SELECT BUTTON
+                ================================================= */}
 
-                                {address.fullName}
+                <button
+                    type="button"
+                    onClick={
+                        handleSelect
+                    }
+                    aria-pressed={
+                        selected
+                    }
+                    className="
+                        w-full
+                        cursor-pointer
+                        text-left
+                        focus:outline-none
+                        focus:ring-2
+                        focus:ring-emerald-500
+                        focus:ring-inset
+                        rounded-2xl
+                        p-4
+                        sm:p-5
+                    "
+                >
 
-                            </h3>
+                    <div
+                        className="
+                            flex
+                            items-start
+                            gap-3
+                            sm:gap-4
+                            pr-8
+                        "
+                    >
 
-                            <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-semibold">
+                        {/* ICON */}
 
-                                {address.addressType || "Home"}
+                        <div
+                            className={`
+                                flex
+                                h-11
+                                w-11
+                                shrink-0
+                                items-center
+                                justify-center
+                                rounded-full
+                                ${iconStyle}
+                            `}
+                            aria-hidden="true"
+                        >
+                            <Icon
+                                className="
+                                    text-base
+                                "
+                            />
+                        </div>
 
-                            </span>
+
+                        {/* DETAILS */}
+
+                        <div
+                            className="
+                                min-w-0
+                                flex-1
+                            "
+                        >
+
+                            <div
+                                className="
+                                    flex
+                                    flex-wrap
+                                    items-center
+                                    gap-2
+                                "
+                            >
+
+                                <h3
+                                    className="
+                                        text-base
+                                        font-bold
+                                        text-gray-900
+                                        break-words
+                                    "
+                                >
+                                    {address?.fullName ||
+                                        "Customer"}
+                                </h3>
+
+
+                                <span
+                                    className={`
+                                        rounded-full
+                                        px-2.5
+                                        py-1
+                                        text-[10px]
+                                        font-bold
+                                        uppercase
+                                        tracking-wide
+                                        ${
+                                            selected
+                                                ? "bg-emerald-100 text-emerald-700"
+                                                : "bg-gray-100 text-gray-600"
+                                        }
+                                    `}
+                                >
+                                    {type}
+                                </span>
+
+                            </div>
+
+
+                            {/* ADDRESS */}
+
+                            <div
+                                className="
+                                    mt-3
+                                    space-y-1
+                                    text-sm
+                                    leading-5
+                                    text-gray-600
+                                "
+                            >
+
+                                {address?.addressLine1 && (
+                                    <p className="break-words">
+                                        {address.addressLine1}
+                                    </p>
+                                )}
+
+                                {address?.addressLine2 && (
+                                    <p className="break-words">
+                                        {address.addressLine2}
+                                    </p>
+                                )}
+
+                                {address?.landmark && (
+                                    <p
+                                        className="
+                                            text-xs
+                                            text-gray-500
+                                        "
+                                    >
+                                        <span className="font-semibold">
+                                            Landmark:
+                                        </span>{" "}
+                                        {address.landmark}
+                                    </p>
+                                )}
+
+                                {(address?.city ||
+                                    address?.state ||
+                                    address?.pincode) && (
+
+                                    <p className="break-words">
+
+                                        {address?.city}
+
+                                        {address?.city &&
+                                        address?.state
+                                            ? ", "
+                                            : ""}
+
+                                        {address?.state}
+
+                                        {address?.pincode
+                                            ? ` - ${address.pincode}`
+                                            : ""}
+
+                                    </p>
+                                )}
+
+                                {address?.mobileNumber && (
+                                    <p
+                                        className="
+                                            pt-1
+                                            font-medium
+                                            text-gray-800
+                                        "
+                                    >
+                                        📞{" "}
+                                        {address.mobileNumber}
+                                    </p>
+                                )}
+
+                            </div>
 
                         </div>
 
-                        <p className="text-gray-700 mt-3">
+                    </div>
 
-                            {address.addressLine1}
 
-                        </p>
+                    {/* SELECT INDICATOR */}
 
-                        {address.addressLine2 && (
+                    <div
+                        className="
+                            absolute
+                            right-4
+                            top-4
+                        "
+                    >
 
-                            <p className="text-gray-700">
+                        {selected ? (
 
-                                {address.addressLine2}
+                            <FaCheckCircle
+                                className="
+                                    text-xl
+                                    text-emerald-600
+                                "
+                                aria-label="Selected address"
+                            />
 
-                            </p>
+                        ) : (
+
+                            <span
+                                className="
+                                    block
+                                    h-5
+                                    w-5
+                                    rounded-full
+                                    border-2
+                                    border-gray-300
+                                "
+                                aria-hidden="true"
+                            />
 
                         )}
-
-                        {address.landmark && (
-
-                            <p className="text-gray-500 text-sm mt-1">
-
-                                Landmark :
-                                <span className="font-medium">
-
-                                    {" "}
-                                    {address.landmark}
-
-                                </span>
-
-                            </p>
-
-                        )}
-
-                        <p className="text-gray-700 mt-2">
-
-                            {address.city}, {address.state} - {address.pincode}
-
-                        </p>
-
-                        <p className="text-gray-700 font-medium mt-2">
-
-                            📞 {address.mobileNumber}
-
-                        </p>
 
                     </div>
 
-                </div>
+                </button>
 
-                <div>
+
+                {/* =================================================
+                    EDIT
+                ================================================= */}
+
+                <div
+                    className="
+                        flex
+                        items-center
+                        justify-between
+                        border-t
+                        border-gray-100
+                        px-4
+                        py-2
+                        sm:px-5
+                    "
+                >
+
+                    <span
+                        className="
+                            text-[11px]
+                            text-gray-400
+                        "
+                    >
+                        {selected
+                            ? "Selected for delivery"
+                            : "Click address to select"}
+                    </span>
+
 
                     <button
-                        onClick={(e) => {
-
-                            e.stopPropagation();
-
-                            onEdit(address);
-
-                        }}
-                        className="flex items-center gap-2 text-emerald-600 hover:text-emerald-700 font-semibold transition"
+                        type="button"
+                        onClick={
+                            handleEdit
+                        }
+                        className="
+                            inline-flex
+                            min-h-9
+                            items-center
+                            gap-1.5
+                            rounded-lg
+                            px-3
+                            py-1.5
+                            text-sm
+                            font-semibold
+                            text-emerald-600
+                            transition
+                            hover:bg-emerald-50
+                            hover:text-emerald-700
+                            focus:outline-none
+                            focus:ring-2
+                            focus:ring-emerald-500
+                            focus:ring-offset-1
+                        "
+                        aria-label={`Edit address for ${
+                            address?.fullName ||
+                            "customer"
+                        }`}
                     >
 
-                        <FaEdit />
+                        <FaEdit
+                            aria-hidden="true"
+                        />
 
                         Edit
 
@@ -144,10 +414,10 @@ export default function AddressCard({
 
                 </div>
 
-            </div>
+            </article>
+        );
+    }
+);
 
-        </div>
 
-    );
-
-}
+export default AddressCard;

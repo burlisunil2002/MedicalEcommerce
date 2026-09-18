@@ -4,345 +4,623 @@
     useState,
     useEffect,
     useCallback,
-    useMemo
+    useMemo,
+    useRef,
 } from "react";
 
 import API from "../services/api";
 
-const CartContext = createContext();
+const CartContext = createContext(null);
 
 export const useCart = () => useContext(CartContext);
 
 export const CartProvider = ({ children }) => {
-
-    // ==========================
-    // STATE
-    // ==========================
-
-    const [items, setItems] = useState([]);
+    /*
+     * Cart state contract:
+     * null  = initial request has not completed
+     * []    = server confirmed an empty cart
+     * [...] = cart contains items
+     */
+    const [items, setItems] = useState(null);
     const [summary, setSummary] = useState({});
     const [cartCount, setCartCount] = useState(0);
     const [loading, setLoading] = useState(true);
 
-    // ==========================
-    // HELPERS
-    // ==========================
+    const mountedRef = useRef(false);
+    const requestIdRef = useRef(0);
+
+    /*
+     * Prevent an older mutation response from overwriting
+     * a newer cart state.
+     */
+    const mutationIdRef = useRef(0);
 
     const syncCartResponse = useCallback((data) => {
-
         if (!data) return;
 
-        if (typeof data.cartCount === "number")
+        if (typeof data.cartCount === "number") {
             setCartCount(data.cartCount);
+        }
 
-        if (data.summary)
+        if (data.summary) {
             setSummary(data.summary);
+        }
 
+        if (Array.isArray(data.items)) {
+            setItems(data.items);
+        } else if (Array.isArray(data.cartItems)) {
+            setItems(data.cartItems);
+        }
     }, []);
 
     const resetCart = useCallback(() => {
+        if (!mountedRef.current) return;
 
         setItems([]);
         setSummary({});
         setCartCount(0);
-
     }, []);
 
-    // ==========================
-    // LOAD CART
-    // ==========================
-    const loadCart = useCallback(async () => {
+    /*
+     * Load the cart.
+     *
+     * silent=true:
+     * - used for background synchronization
+     * - never shows the initial loader
+     * - never clears existing cart data on a temporary failure
+     */
+    const loadCart = useCallback(
+        async ({ silent = false } = {}) => {
+            const requestId = ++requestIdRef.current;
 
-        try {
-
-            setLoading(true);
-
-            const res = await API.get("/api/cart/full");
-
-            setItems(res.data.items || []);
-
-            syncCartResponse(res.data);
-
-        } catch (err) {
-
-            console.error("Load Cart Error:", err);
-
-            resetCart();
-
-        } finally {
-
-            setLoading(false);
-
-        }
-
-    }, [syncCartResponse, resetCart]);
-
-
-
-    // ==========================
-    // ADD TO CART
-    // ==========================
-    const addToCart = useCallback(async (
-        productId,
-        variantId,
-        quantity = 1
-    ) => {
-
-        const pid = Number(productId);
-        const vid = Number(variantId);
-        const qty = Number(quantity);
-
-        try {
-
-            const res = await API.post(
-                "/api/cart/add",
-                {
-                    productId: pid,
-                    variantId: vid,
-                    quantity: qty
-                }
-            );
-
-            console.log("ADD CART RESPONSE:", res.data);
-
-            // Update badge immediately from backend
-            if (
-                typeof res.data?.cartCount === "number"
-            ) {
-                setCartCount(
-                    res.data.cartCount
-                );
+            if (!silent && mountedRef.current) {
+                setLoading(true);
             }
 
-            // 🔥 IMPORTANT
-            // Get the real cart data after successful add
-            await loadCart();
+            try {
+                const response = await API.get("/api/cart/full");
+                const data = response?.data;
 
-            return true;
-
-        }
-        catch (err) {
-
-            console.error(
-                "Add To Cart Error:",
-                err
-            );
-
-            return false;
-        }
-
-    }, [loadCart]);
-
-    // ==========================
-    // UPDATE CART
-    // ==========================
-    const updateCart = useCallback(async (
-        productId,
-        variantId,
-        quantity
-    ) => {
-
-        const pid = Number(productId);
-        const vid = Number(variantId);
-
-        // Backup for rollback
-        const previousItems = [...items];
-
-        // Optimistic UI Update
-        setItems(prev =>
-            prev.map(item => {
-
+                /*
+                 * Ignore stale GET responses.
+                 */
                 if (
-                    Number(item.productId) === pid &&
-                    Number(item.variantId) === vid
+                    requestId !== requestIdRef.current ||
+                    !mountedRef.current
                 ) {
-                    return {
-                        ...item,
-                        quantity,
-                        lineTotal:
-                            (item.finalPrice || item.price) * quantity
-                    };
+                    return data;
                 }
 
-                return item;
+                /*
+                 * Only replace items when the server explicitly
+                 * returned an array.
+                 */
+                if (Array.isArray(data?.items)) {
+                    setItems(data.items);
+                } else if (Array.isArray(data?.cartItems)) {
+                    setItems(data.cartItems);
+                }
 
-            })
-        );
+                if (data?.summary) {
+                    setSummary(data.summary);
+                }
 
-        try {
+                if (
+                    typeof data?.cartCount === "number"
+                ) {
+                    setCartCount(data.cartCount);
+                }
 
-            const res = await API.put("/api/cart/update", {
-                productId,
-                variantId,
-                quantity
+                return data;
+            } catch (error) {
+                console.error(
+                    "Load Cart Error:",
+                    error
+                );
+
+                /*
+                 * IMPORTANT:
+                 *
+                 * A background request must never wipe
+                 * already-visible cart data.
+                 */
+                if (!silent && mountedRef.current) {
+                    resetCart();
+                }
+
+                return null;
+            } finally {
+                if (
+                    !silent &&
+                    mountedRef.current &&
+                    requestId === requestIdRef.current
+                ) {
+                    setLoading(false);
+                }
+            }
+        },
+        [resetCart]
+    );
+
+    /*
+     * ADD TO CART
+     *
+     * Backend response is preferred as the authoritative state.
+     * If the endpoint only returns success/count, perform a
+     * silent reconciliation request.
+     */
+    const addToCart = useCallback(
+        async (
+            productId,
+            variantId,
+            quantity = 1
+        ) => {
+            const pid = Number(productId);
+            const vid = Number(variantId);
+            const qty = Number(quantity);
+
+            if (
+                !Number.isInteger(pid) ||
+                pid <= 0 ||
+                !Number.isInteger(qty) ||
+                qty <= 0
+            ) {
+                return false;
+            }
+
+            const mutationId =
+                ++mutationIdRef.current;
+
+            try {
+                const response = await API.post(
+                    "/api/cart/add",
+                    {
+                        productId: pid,
+                        variantId:
+                            Number.isInteger(vid) &&
+                                vid > 0
+                                ? vid
+                                : null,
+                        quantity: qty,
+                    }
+                );
+
+                const data = response?.data;
+
+                if (
+                    !mountedRef.current ||
+                    mutationId !==
+                    mutationIdRef.current
+                ) {
+                    return true;
+                }
+
+                syncCartResponse(data);
+
+                /*
+                 * If the add endpoint doesn't return the
+                 * complete cart, reconcile in background.
+                 */
+                if (
+                    !Array.isArray(data?.items) &&
+                    !Array.isArray(data?.cartItems)
+                ) {
+                    await loadCart({
+                        silent: true,
+                    });
+                }
+
+                window.dispatchEvent(
+                    new Event("cartUpdated")
+                );
+
+                return true;
+            } catch (error) {
+                console.error(
+                    "Add To Cart Error:",
+                    error
+                );
+
+                return false;
+            }
+        },
+        [loadCart, syncCartResponse]
+    );
+
+    /*
+     * UPDATE CART
+     *
+     * Optimistic UI:
+     * quantity changes immediately.
+     * Server response then reconciles the state.
+     */
+    const updateCart = useCallback(
+        async (
+            productId,
+            variantId,
+            quantity
+        ) => {
+            const pid = Number(productId);
+            const vid = Number(variantId);
+            const qty = Number(quantity);
+
+            if (
+                !Number.isInteger(pid) ||
+                pid <= 0 ||
+                !Number.isInteger(vid) ||
+                vid <= 0 ||
+                !Number.isInteger(qty) ||
+                qty < 1
+            ) {
+                return false;
+            }
+
+            const previousItems = items
+                ? [...items]
+                : null;
+
+            const mutationId =
+                ++mutationIdRef.current;
+
+            /*
+             * Optimistic item update.
+             */
+            setItems((previous) => {
+                if (!Array.isArray(previous)) {
+                    return previous;
+                }
+
+                return previous.map((item) => {
+                    if (
+                        Number(item?.productId) !== pid ||
+                        Number(item?.variantId) !== vid
+                    ) {
+                        return item;
+                    }
+
+                    const unitPrice = Number(
+                        item?.finalPrice ??
+                        item?.sellingPrice ??
+                        item?.unitPrice ??
+                        item?.price ??
+                        item?.product?.finalPrice ??
+                        item?.product?.sellingPrice ??
+                        item?.product?.price ??
+                        0
+                    );
+
+                    return {
+                        ...item,
+                        quantity: qty,
+                        lineTotal:
+                            unitPrice * qty,
+                    };
+                });
             });
 
-            syncCartResponse(res.data);
+            try {
+                const response = await API.put(
+                    "/api/cart/update",
+                    {
+                        productId: pid,
+                        variantId: vid,
+                        quantity: qty,
+                    }
+                );
 
-            // If backend returns updated items
-            if (res.data.items)
-                setItems(res.data.items);
+                const data = response?.data;
 
-        }
-        catch (err) {
+                if (
+                    !mountedRef.current ||
+                    mutationId !==
+                    mutationIdRef.current
+                ) {
+                    return true;
+                }
 
-            console.error("Update Cart Error:", err);
+                syncCartResponse(data);
 
-            // Rollback
-            setItems(previousItems);
+                /*
+                 * If backend doesn't return the updated
+                 * item list, synchronize silently.
+                 */
+                if (
+                    !Array.isArray(data?.items) &&
+                    !Array.isArray(data?.cartItems)
+                ) {
+                    await loadCart({
+                        silent: true,
+                    });
+                }
 
-        }
+                window.dispatchEvent(
+                    new Event("cartUpdated")
+                );
 
-    }, [items, syncCartResponse]);
+                return true;
+            } catch (error) {
+                console.error(
+                    "Update Cart Error:",
+                    error
+                );
 
+                /*
+                 * Roll back only if this is still the
+                 * latest mutation.
+                 */
+                if (
+                    mountedRef.current &&
+                    mutationId ===
+                    mutationIdRef.current &&
+                    previousItems
+                ) {
+                    setItems(previousItems);
+                }
 
-    // ==========================
-    // REMOVE ITEM
-    // ==========================
-    const removeFromCart = useCallback(async (
-        productId,
-        variantId
-    ) => {
+                return false;
+            }
+        },
+        [items, loadCart, syncCartResponse]
+    );
 
-        const pid = Number(productId);
-        const vid = Number(variantId);
+    /*
+     * REMOVE FROM CART
+     *
+     * Optimistically removes the item immediately.
+     */
+    const removeFromCart = useCallback(
+        async (
+            productId,
+            variantId
+        ) => {
+            const pid = Number(productId);
+            const vid = Number(variantId);
 
-        // Backup
-        const previousItems = [...items];
+            if (
+                !Number.isInteger(pid) ||
+                pid <= 0 ||
+                !Number.isInteger(vid) ||
+                vid <= 0
+            ) {
+                return false;
+            }
 
-        // Optimistic Remove
-        setItems(prev =>
-            prev.filter(item =>
-                !(
-                    Number(item.productId) === pid &&
-                    Number(item.variantId) === vid
-                )
-            )
-        );
+            const previousItems = items
+                ? [...items]
+                : null;
 
-        try {
+            const mutationId =
+                ++mutationIdRef.current;
 
-            const res = await API.delete(
-                `/api/cart/remove/${variantId}`
+            setItems((previous) => {
+                if (!Array.isArray(previous)) {
+                    return previous;
+                }
+
+                return previous.filter(
+                    (item) =>
+                        !(
+                            Number(
+                                item?.productId
+                            ) === pid &&
+                            Number(
+                                item?.variantId
+                            ) === vid
+                        )
+                );
+            });
+
+            try {
+                /*
+                 * Keep your existing backend contract:
+                 * DELETE /api/cart/remove/{variantId}
+                 */
+                const response =
+                    await API.delete(
+                        `/api/cart/remove/${vid}`
+                    );
+
+                const data =
+                    response?.data;
+
+                if (
+                    !mountedRef.current ||
+                    mutationId !==
+                    mutationIdRef.current
+                ) {
+                    return true;
+                }
+
+                syncCartResponse(data);
+
+                if (
+                    !Array.isArray(data?.items) &&
+                    !Array.isArray(data?.cartItems)
+                ) {
+                    await loadCart({
+                        silent: true,
+                    });
+                }
+
+                window.dispatchEvent(
+                    new Event("cartUpdated")
+                );
+
+                return true;
+            } catch (error) {
+                console.error(
+                    "Remove Cart Error:",
+                    error
+                );
+
+                if (
+                    mountedRef.current &&
+                    mutationId ===
+                    mutationIdRef.current &&
+                    previousItems
+                ) {
+                    setItems(previousItems);
+                }
+
+                return false;
+            }
+        },
+        [items, loadCart, syncCartResponse]
+    );
+
+    /*
+     * APPLY COUPON
+     *
+     * Coupon application is intentionally kept in CartContext.
+     * Checkout and Review should only display the resulting
+     * coupon discount returned by the server.
+     */
+    const applyCoupon = useCallback(
+        async (code) => {
+            const normalizedCode =
+                String(code ?? "").trim();
+
+            if (!normalizedCode) {
+                return {
+                    success: false,
+                    message:
+                        "Please select a coupon.",
+                };
+            }
+
+            try {
+                const response =
+                    await API.post(
+                        "/api/cart/apply-coupon",
+                        {
+                            code: normalizedCode,
+                        }
+                    );
+
+                const data =
+                    response?.data;
+
+                syncCartResponse(data);
+
+                window.dispatchEvent(
+                    new Event("cartUpdated")
+                );
+
+                return data;
+            } catch (error) {
+                console.error(
+                    "Apply Coupon Error:",
+                    error
+                );
+
+                return {
+                    success: false,
+                    message:
+                        error?.response?.data
+                            ?.message ||
+                        "Invalid coupon.",
+                };
+            }
+        },
+        [syncCartResponse]
+    );
+
+    const getQty = useCallback(
+        (productId, variantId) => {
+            if (!Array.isArray(items)) {
+                return 0;
+            }
+
+            return (
+                items.find(
+                    (item) =>
+                        Number(
+                            item?.productId
+                        ) ===
+                        Number(productId) &&
+                        Number(
+                            item?.variantId
+                        ) ===
+                        Number(variantId)
+                )?.quantity ?? 0
             );
+        },
+        [items]
+    );
 
-            syncCartResponse(res.data);
-
-            if (res.data.items)
-                setItems(res.data.items);
-
-        }
-        catch (err) {
-
-            console.error("Remove Cart Error:", err);
-
-            // Rollback
-            setItems(previousItems);
-
-        }
-
-    }, [items, syncCartResponse]);
-
-    // ==========================
-    // APPLY COUPON
-    // ==========================
-    const applyCoupon = useCallback(async (code) => {
-
-        try {
-
-            const res = await API.post(
-                "/api/cart/apply-coupon",
-                { code }
-            );
-
-            syncCartResponse(res.data);
-
-            if (res.data.items)
-                setItems(res.data.items);
-
-            return res.data;
-
-        }
-        catch (err) {
-
-            console.error("Apply Coupon Error:", err);
-
-            return {
-                success: false,
-                message:
-                    err.response?.data?.message ??
-                    "Invalid coupon."
-            };
-
-        }
-
-    }, [syncCartResponse]);
-
-
-    // ==========================
-    // GET QUANTITY
-    // ==========================
-    const getQty = useCallback((productId, variantId) => {
-
-        return items.find(x =>
-            Number(x.productId) === Number(productId) &&
-            Number(x.variantId) === Number(variantId)
-        )?.quantity ?? 0;
-
-    }, [items]);
-
-
-    // ==========================
-    // INITIAL LOAD
-    // ==========================
+    /*
+     * INITIAL LOAD
+     */
     useEffect(() => {
+        mountedRef.current = true;
 
         loadCart();
 
+        return () => {
+            mountedRef.current = false;
+            requestIdRef.current += 1;
+            mutationIdRef.current += 1;
+        };
     }, [loadCart]);
 
+    /*
+     * Optional synchronization for components/pages that
+     * update the cart outside this context.
+     */
+    useEffect(() => {
+        const handleCartUpdated = () => {
+            loadCart({
+                silent: true,
+            });
+        };
 
-    // ==========================
-    // CONTEXT VALUE
-    // ==========================
-    const value = useMemo(() => ({
+        window.addEventListener(
+            "cartUpdated",
+            handleCartUpdated
+        );
 
-        items,
-        summary,
-        cartCount,
-        loading,
+        return () => {
+            window.removeEventListener(
+                "cartUpdated",
+                handleCartUpdated
+            );
+        };
+    }, [loadCart]);
 
-        addToCart,
-        updateCart,
-        removeFromCart,
-        applyCoupon,
-        getQty,
-        loadCart
+    const value = useMemo(
+        () => ({
+            items,
+            summary,
+            cartCount,
+            loading,
 
-    }), [
-        items,
-        summary,
-        cartCount,
-        loading,
-        addToCart,
-        updateCart,
-        removeFromCart,
-        applyCoupon,
-        getQty,
-        loadCart
-    ]);
+            addToCart,
+            updateCart,
+            removeFromCart,
+            applyCoupon,
+            getQty,
+            loadCart,
+        }),
+        [
+            items,
+            summary,
+            cartCount,
+            loading,
 
-
-    return (
-
-        <CartContext.Provider value={value}>
-
-            {children}
-
-        </CartContext.Provider>
-
+            addToCart,
+            updateCart,
+            removeFromCart,
+            applyCoupon,
+            getQty,
+            loadCart,
+        ]
     );
 
+    return (
+        <CartContext.Provider value={value}>
+            {children}
+        </CartContext.Provider>
+    );
 };
 
 export default CartContext;

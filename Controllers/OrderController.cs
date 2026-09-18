@@ -2,6 +2,7 @@
 using DocumentFormat.OpenXml.InkML;
 using DocumentFormat.OpenXml.Spreadsheet;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -24,11 +25,44 @@ using VivekMedicalProducts.ViewModels;
 using static ClosedXML.Excel.XLPredefinedFormat;
 using DateTime = System.DateTime;
 
-
-
-
 namespace VivekMedicalProducts.Controllers
 {
+    // ============================================================
+    // STATUS CONSTANTS
+    // Replaces magic strings scattered across the controller.
+    // Using these everywhere removes an entire class of typo bugs
+    // (e.g. "Cancled" silently never matching "Cancelled").
+    // ============================================================
+    public static class OrderItemStatuses
+    {
+        public const string Pending = "Pending";
+        public const string Placed = "Placed";
+        public const string Accepted = "Accepted";
+        public const string Packed = "Packed";
+        public const string Shipped = "Shipped";
+        public const string OutForDelivery = "OutForDelivery";
+        public const string Delivered = "Delivered";
+        public const string Cancelled = "Cancelled";
+    }
+
+    public static class PaymentStatuses
+    {
+        public const string CashOnDelivery = "Cash On Delivery";
+        public const string Created = "Created";
+        public const string Completed = "Completed";
+        public const string PartiallyRefunded = "PartiallyRefunded";
+        public const string Cancelled = "Cancelled";
+        public const string Failed = "Failed";
+    }
+
+    public static class ReturnStatuses
+    {
+        public const string None = "None";
+        public const string Requested = "Requested";
+        public const string Rejected = "Rejected";
+        public const string RefundCompleted = "RefundCompleted";
+    }
+
     [ApiController]
     [Route("api/order")]
     public class OrderController : ControllerBase
@@ -43,12 +77,20 @@ namespace VivekMedicalProducts.Controllers
         private readonly ICheckoutService _checkoutService;
         private readonly ISmsService _sms;
         private readonly ILogger<OrderController> _logger;
+        private readonly IWebHostEnvironment _env;
 
-
-
-
-        public OrderController(IConfiguration config, ApplicationDbContext context, IUserContextService userContext, IFileStorageService fileStorageService, ICheckoutService checkoutService,
-InvoiceService invoiceService, EmailService emailService, ICartCalculationService calc, ISmsService sms, ILogger<OrderController> logger)
+        public OrderController(
+            IConfiguration config,
+            ApplicationDbContext context,
+            IUserContextService userContext,
+            IFileStorageService fileStorageService,
+            ICheckoutService checkoutService,
+            InvoiceService invoiceService,
+            EmailService emailService,
+            ICartCalculationService calc,
+            ISmsService sms,
+            ILogger<OrderController> logger,
+            IWebHostEnvironment env)
         {
             _config = config;
             _context = context;
@@ -60,66 +102,231 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
             _checkoutService = checkoutService;
             _sms = sms;
             _logger = logger;
+            _env = env;
         }
 
-        private string GetOrCreateGuestId()
-        {
-            if (!Request.Cookies.TryGetValue("guest_id", out string guestId)
-                || string.IsNullOrEmpty(guestId))
-            {
-                guestId = Guid.NewGuid().ToString();
+        // ============================================================
+        // SHARED HELPERS
+        // ============================================================
 
-                Response.Cookies.Append("guest_id", guestId, new CookieOptions
+        /// <summary>
+        /// Standard error response. Logs the full exception server-side with
+        /// context, but only echoes internal exception details to the client
+        /// in Development. In Production the client gets a safe, generic
+        /// message — never raw SQL/exception text.
+        /// </summary>
+        private IActionResult ErrorResponse(
+            Exception ex,
+            string logContext,
+            int statusCode = StatusCodes.Status400BadRequest,
+            string? userId = null)
+        {
+            _logger.LogError(
+                ex,
+                "{Context} | UserId={UserId}",
+                logContext,
+                userId ?? "unknown");
+
+            var message = _env.IsDevelopment()
+                ? (ex.InnerException?.Message ?? ex.Message)
+                : "Something went wrong while processing your request. Please try again.";
+
+            return StatusCode(statusCode, new
+            {
+                success = false,
+                message
+            });
+        }
+
+        /// <summary>
+        /// Constant-time HMAC-SHA256 signature check. Used for both the
+        /// Razorpay webhook and payment verification so we never regress to
+        /// a plain string comparison (which leaks timing information).
+        /// </summary>
+        private static bool VerifyHmacSignature(string payload, string secret, string receivedSignature)
+        {
+            using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
+            var expected = Convert.ToHexString(
+                    hmac.ComputeHash(Encoding.UTF8.GetBytes(payload)))
+                .ToLowerInvariant();
+
+            return CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(expected),
+                Encoding.UTF8.GetBytes(receivedSignature ?? string.Empty));
+        }
+
+        private static string GenerateOrderNumber() =>
+            $"ORD-{DateTime.UtcNow:yyyyMMddHHmmssfff}-{Random.Shared.Next(1000, 9999)}";
+
+        /// <summary>
+        /// Builds OrderItemModel rows for a set of cart lines against a
+        /// freshly created order. Single source of truth for pricing math
+        /// (discount, GST, coupon-share allocation) — previously duplicated
+        /// almost verbatim between PlaceCOD and VerifyPayment, which is how
+        /// pricing bugs quietly diverge between COD and prepaid orders.
+        /// </summary>
+        private List<OrderItemModel> BuildOrderItems(
+            int orderId,
+            IEnumerable<CartModel> carts,
+            decimal couponDiscountTotal)
+        {
+            var cartList = carts.ToList();
+
+            decimal totalTaxableAmount = cartList.Sum(item =>
+            {
+                decimal originalPrice = item.ProductVariant?.Price ?? 0;
+                decimal discountPercent = item.Product?.DiscountPercentage ?? 0;
+
+                decimal discountAmount = item.Product?.IsHotDeal == true
+                    ? originalPrice * discountPercent / 100m
+                    : 0;
+
+                decimal finalPrice = originalPrice - discountAmount;
+                return finalPrice * item.Quantity;
+            });
+
+            return cartList.Select(item =>
+            {
+                decimal originalPrice = item.ProductVariant?.Price ?? 0;
+                decimal discountPercent = item.Product?.DiscountPercentage ?? 0;
+
+                decimal discountAmount = item.Product?.IsHotDeal == true
+                    ? originalPrice * discountPercent / 100m
+                    : 0;
+
+                decimal finalUnitPrice = originalPrice - discountAmount;
+                decimal taxableAmount = finalUnitPrice * item.Quantity;
+
+                decimal gstPercent = item.Product?.GSTPercentage ?? 0;
+                decimal gstAmount = taxableAmount * gstPercent / 100m;
+
+                decimal couponShare = 0;
+
+                if (couponDiscountTotal > 0 && totalTaxableAmount > 0)
                 {
-                    HttpOnly = true,
-                    Secure = true, // 🔥 important for production
-                    SameSite = SameSiteMode.Lax,
-                    Path = "/",
-                    IsEssential = true,
-                    Expires = DateTime.UtcNow.AddDays(7)
+                    couponShare = (taxableAmount / totalTaxableAmount) * couponDiscountTotal;
+                }
+
+                decimal finalPaidAmount = taxableAmount + gstAmount - couponShare;
+
+                return new OrderItemModel
+                {
+                    OrderId = orderId,
+                    SellerId = item.SellerId,
+                    ProductId = item.ProductId,
+                    ProductVariantId = item.ProductVariantId,
+                    ProductName = item.Product?.Name ?? "",
+                    Quantity = item.Quantity,
+
+                    Price = Math.Round(originalPrice, 2),
+                    DiscountAmount = Math.Round(discountAmount, 2),
+                    CouponDiscountAmount = Math.Round(couponShare, 2),
+                    TaxableAmount = Math.Round(taxableAmount, 2),
+                    GSTPercentage = gstPercent,
+                    GSTAmount = Math.Round(gstAmount, 2),
+                    NetAmount = Math.Round(finalPaidAmount, 2),
+                    FinalPaidAmount = Math.Round(finalPaidAmount, 2),
+                    LineTotal = Math.Round(finalPaidAmount, 2),
+
+                    OrderItemStatus = OrderItemStatuses.Placed,
+
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow,
+                    ItemOrderModifiedDate = DateTime.UtcNow,
+
+                    // Delivery
+                    PackedDate = null,
+                    ShippedDate = null,
+                    OutForDeliveryDate = null,
+                    DeliveredDate = null,
+
+                    // Return
+                    IsReturnEligible = false,
+                    ReturnEligibleTill = null,
+                    ReturnStatus = ReturnStatuses.None,
+                    ReturnReason = null,
+                    ReturnRemarks = null,
+                    ReturnRequestedDate = null,
+                    ReturnApprovedDate = null,
+                    PickupDate = null,
+
+                    // Refund
+                    RefundAmount = null,
+                    RefundStatus = "None",
+                    RefundCompletedDate = null,
+
+                    // Cancellation
+                    CancelledAt = null,
+                    CancelledReason = null,
+                    CancelledBy = null,
+
+                    // Logistics
+                    TrackingNumber = null,
+                    CourierPartner = null,
+                    ReturnReviewedBy = null
+                };
+            }).ToList();
+        }
+
+        /// <summary>
+        /// Derives a single human-facing order status from its line items.
+        /// Previously copy-pasted in three different endpoints with slightly
+        /// different logic each time — now there is exactly one definition.
+        /// </summary>
+        private static string DeriveOrderStatus(IEnumerable<string?> itemStatuses)
+        {
+            var statuses = itemStatuses.ToList();
+
+            if (statuses.Count > 0 && statuses.All(s => s == OrderItemStatuses.Cancelled))
+                return "Cancelled";
+
+            if (statuses.Count > 0 && statuses.All(s => s == OrderItemStatuses.Delivered))
+                return "Delivered";
+
+            if (statuses.Any(s => s == OrderItemStatuses.OutForDelivery))
+                return "Out For Delivery";
+
+            if (statuses.Any(s => s == OrderItemStatuses.Shipped))
+                return "Shipped";
+
+            if (statuses.Any(s => s == OrderItemStatuses.Packed))
+                return "Packed";
+
+            return "Placed";
+        }
+
+        // ============================================================
+        // PLACE COD ORDER
+        // ============================================================
+        [HttpPost("place-cod")]
+        public async Task<IActionResult> PlaceCOD(CancellationToken cancellationToken)
+        {
+            var userId = _userContext.GetUserId();
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized(new
+                {
+                    success = false,
+                    redirect = "/login",
+                    message = "Please login first"
                 });
             }
 
-            return guestId;
-        }
-
-        [HttpPost("place-cod")]
-        public async Task<IActionResult> PlaceCOD()
-        {
-            using var transaction =
-                await _context.Database.BeginTransactionAsync();
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
 
             try
             {
-                var userId = _userContext.GetUserId();
+                _logger.LogInformation(
+                    "Placing COD order | UserId={UserId} | Authenticated={Authenticated}",
+                    userId,
+                    User?.Identity?.IsAuthenticated);
 
-                Console.WriteLine("========== CREATE ORDER ==========");
-                Console.WriteLine($"Environment: {_config["ASPNETCORE_ENVIRONMENT"]}");
-                Console.WriteLine($"UserId exists: {!string.IsNullOrWhiteSpace(userId)}");
-                Console.WriteLine($"Authenticated: {User?.Identity?.IsAuthenticated}");
-                Console.WriteLine($"Authentication Type: {User?.Identity?.AuthenticationType}");
-                Console.WriteLine("==================================");
-
-                if (string.IsNullOrEmpty(userId))
-                {
-                    return Unauthorized(new
-                    {
-                        success = false,
-                        redirect = "/login",
-                        message = "Please login first"
-                    });
-                }
-
-                var checkoutSession =
-    await _checkoutService.GetCurrentSessionAsync();
+                var checkoutSession = await _checkoutService.GetCurrentSessionAsync();
 
                 if (checkoutSession == null)
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Checkout session not found."
-                    });
+                    return BadRequest(new { success = false, message = "Checkout session not found." });
                 }
 
                 if (!checkoutSession.IsActive)
@@ -130,337 +337,114 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
                 var address = await _context.UserAddresses
                     .FirstOrDefaultAsync(x =>
                         x.Id == checkoutSession.SelectedAddressId &&
-                        x.UserId == userId);
+                        x.UserId == userId,
+                        cancellationToken);
 
                 if (address == null)
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Please select a delivery address."
-                    });
+                    return BadRequest(new { success = false, message = "Please select a delivery address." });
                 }
 
                 var carts = await _checkoutService.GetCurrentCartAsync();
 
-                Console.WriteLine($"Cart Count: {carts.Count}");
-
                 if (!carts.Any())
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Cart is empty."
-                    });
+                    return BadRequest(new { success = false, message = "Cart is empty." });
                 }
 
-                var couponCode =
-    checkoutSession.CouponCode;
+                var totals = await _calc.CalculateAsync(userId, null, checkoutSession.CouponCode);
 
-                // Totals
-                var totals =
-                    await _calc.CalculateAsync(
-                        userId,
-                        null,
-                        couponCode);
-
-                var sellerId =
-                    carts.FirstOrDefault()?.SellerId;
-
-                // Create Order
                 var order = new OrderModel
                 {
                     UserId = userId,
-
                     UserAddressId = address.Id,
-
                     UserAddress = address,
-
-                    OrderNumber = $"ORD-{DateTime.UtcNow.Ticks}",
-
+                    OrderNumber = GenerateOrderNumber(),
                     GrandTotal = totals.Total,
-
                     Currency = "INR",
-
-                    PaymentStatus = "Cash On Delivery",
-
+                    PaymentStatus = PaymentStatuses.CashOnDelivery,
                     IsPaymentVerified = false,
-
                     PaymentVerifiedAt = null,
-
                     OrderDate = DateTime.UtcNow,
-
                     OrderModifiedDate = DateTime.UtcNow,
-
                     CreatedBy = userId,
-
-                    IpAddress =
-        HttpContext.Connection.RemoteIpAddress?.ToString(),
-
-                    UserAgent =
-        Request.Headers["User-Agent"].ToString()
+                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                    UserAgent = Request.Headers["User-Agent"].ToString()
                 };
 
                 _context.Orders.Add(order);
+                await _context.SaveChangesAsync(cancellationToken); // OrderId generated here
 
-                await _context.SaveChangesAsync();   // OrderId generated here
-
-                decimal totalTaxableAmount =
-                    carts.Sum(item =>
-                    {
-                        decimal originalPrice =
-                            item.ProductVariant?.Price ?? 0;
-
-                        decimal discountPercent =
-                            item.Product?.DiscountPercentage ?? 0;
-
-                        decimal discountAmount =
-                            item.Product?.IsHotDeal == true
-                                ? originalPrice *
-                                  discountPercent / 100m
-                                : 0;
-
-                        decimal finalPrice =
-                            originalPrice -
-                            discountAmount;
-
-                        return finalPrice *
-                               item.Quantity;
-                    });
-
-                var orderItems = carts.Select(item =>
-                {
-                    decimal originalPrice =
-                        item.ProductVariant?.Price ?? 0;
-
-                    decimal discountPercent =
-                        item.Product?.DiscountPercentage ?? 0;
-
-                    decimal discountAmount =
-                        item.Product?.IsHotDeal == true
-                            ? originalPrice * discountPercent / 100m
-                            : 0;
-
-                    decimal finalUnitPrice =
-                        originalPrice - discountAmount;
-
-                    decimal taxableAmount =
-                        finalUnitPrice * item.Quantity;
-
-                    decimal gstPercent =
-                        item.Product?.GSTPercentage ?? 0;
-
-                    decimal gstAmount =
-                        taxableAmount * gstPercent / 100m;
-
-                    decimal couponShare = 0;
-
-                    if (totals.CouponDiscount > 0 &&
-                        totalTaxableAmount > 0)
-                    {
-                        couponShare =
-                            (taxableAmount / totalTaxableAmount)
-                            * totals.CouponDiscount;
-                    }
-
-                    decimal finalPaidAmount =
-                        taxableAmount +
-                        gstAmount -
-                        couponShare;
-
-                    return new OrderItemModel
-                    {
-                        OrderId = order.OrderId,
-
-                        SellerId = item.SellerId,
-
-                        ProductId = item.ProductId,
-
-                        ProductVariantId = item.ProductVariantId,
-
-                        ProductName = item.Product?.Name ?? "",
-
-                        Quantity = item.Quantity,
-
-                        Price = Math.Round(originalPrice, 2),
-
-                        DiscountAmount =
-         Math.Round(discountAmount, 2),
-
-                        CouponDiscountAmount =
-         Math.Round(couponShare, 2),
-
-                        TaxableAmount =
-         Math.Round(taxableAmount, 2),
-
-                        GSTPercentage = gstPercent,
-
-                        GSTAmount =
-         Math.Round(gstAmount, 2),
-
-                        NetAmount =
-         Math.Round(finalPaidAmount, 2),
-
-                        FinalPaidAmount =
-         Math.Round(finalPaidAmount, 2),
-
-                        LineTotal =
-         Math.Round(finalPaidAmount, 2),
-
-                        OrderItemStatus = "Placed",
-
-                        CreatedAt = DateTime.UtcNow,
-
-                        UpdatedAt = DateTime.UtcNow,
-
-                        ItemOrderModifiedDate = DateTime.UtcNow,
-
-                        // Delivery
-
-                        PackedDate = null,
-
-                        ShippedDate = null,
-
-                        OutForDeliveryDate = null,
-
-                        DeliveredDate = null,
-
-                        // Return
-
-                        IsReturnEligible = false,
-
-                        ReturnEligibleTill = null,
-
-                        ReturnStatus = "None",
-
-                        ReturnReason = null,
-
-                        ReturnRemarks = null,
-
-                        ReturnRequestedDate = null,
-
-                        ReturnApprovedDate = null,
-
-                        PickupDate = null,
-
-                        // Refund
-
-                        RefundAmount = null,
-
-                        RefundStatus = "None",
-
-                        RefundCompletedDate = null,
-
-                        // Cancellation
-
-                        CancelledAt = null,
-
-                        CancelledReason = null,
-
-                        CancelledBy = null,
-
-                        // Logistics
-
-                        TrackingNumber = null,
-
-                        CourierPartner = null,
-
-                        ReturnReviewedBy = null
-                    };
-
-                }).ToList();
+                var orderItems = BuildOrderItems(order.OrderId, carts, totals.CouponDiscount);
 
                 _context.OrderItems.AddRange(orderItems);
-
                 _context.Carts.RemoveRange(carts);
-
                 _context.CheckoutSessions.Remove(checkoutSession);
 
-                await _context.SaveChangesAsync();      // Save everything together
+                await _context.SaveChangesAsync(cancellationToken);
 
                 order.UserAddress = address;
                 order.OrderItems = orderItems;
 
                 await _sms.SendOrderPlacedAsync(order);
 
-                await transaction.CommitAsync();
-                // Send Invoice
-                _ = Task.Run(async () =>
+                await transaction.CommitAsync(cancellationToken);
+
+                // Send invoice email in-line (post-commit) rather than via
+                // Task.Run: the previous fire-and-forget task could outlive
+                // the request's scoped DbContext / ControllerContext (which
+                // Rotativa's PDF renderer depends on), silently dropping
+                // invoices in production. A failure here never fails the
+                // order — it's just logged.
+                try
                 {
-                    try
-                    {
-                        await SendInvoiceEmailAsync(order.OrderId);
-                    }
-                    catch
-                    {
-                        // Ignore email errors
-                    }
-                });
+                    await SendInvoiceEmailAsync(order.OrderId);
+                }
+                catch (Exception invoiceEx)
+                {
+                    _logger.LogError(invoiceEx, "Invoice email failed for OrderId={OrderId}", order.OrderId);
+                }
 
                 return Ok(new
                 {
                     success = true,
-
                     orderId = order.OrderId,
-
                     orderNumber = order.OrderNumber,
-
                     paymentStatus = order.PaymentStatus,
-
                     items = orderItems.Select(x => new
                     {
                         orderItemId = x.OrderItemId,
                         productId = x.ProductId,
                         itemStatus = x.OrderItemStatus
                     }),
-
                     message = "Order placed successfully."
                 });
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
-
-                return BadRequest(new
-                {
-                    success = false,
-
-                    message =
-                        ex.InnerException?.Message ??
-                        ex.Message
-                });
+                await transaction.RollbackAsync(cancellationToken);
+                return ErrorResponse(ex, "Failed to place COD order.", userId: userId);
             }
         }
 
-        // ================= CREATE ORDER =================
+        // ================= CREATE ORDER (Razorpay) =================
         [HttpPost("create")]
-        public async Task<IActionResult> CreateOrder()
+        public async Task<IActionResult> CreateOrder(CancellationToken cancellationToken)
         {
+            var userId = _userContext.GetUserId();
+
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Unauthorized(new { success = false, redirect = "/login", message = "Please login first." });
+            }
+
             try
             {
-                var userId = _userContext.GetUserId();
-
-                if (string.IsNullOrWhiteSpace(userId))
-                {
-                    return Unauthorized(new
-                    {
-                        success = false,
-                        redirect = "/login",
-                        message = "Please login first."
-                    });
-                }
-
-                // Active Checkout Session
-                var checkoutSession =
- await _checkoutService.GetCurrentSessionAsync();
+                var checkoutSession = await _checkoutService.GetCurrentSessionAsync();
 
                 if (checkoutSession == null)
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Checkout session not found."
-                    });
+                    return BadRequest(new { success = false, message = "Checkout session not found." });
                 }
 
                 if (!checkoutSession.IsActive)
@@ -469,40 +453,26 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
                     checkoutSession.ModifiedDate = DateTime.UtcNow;
                 }
 
-                // Selected Address
                 var address = await _context.UserAddresses
                     .FirstOrDefaultAsync(x =>
                         x.Id == checkoutSession.SelectedAddressId &&
-                        x.UserId == userId);
+                        x.UserId == userId,
+                        cancellationToken);
 
                 if (address == null)
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Please select a delivery address."
-                    });
+                    return BadRequest(new { success = false, message = "Please select a delivery address." });
                 }
 
-                // Cart
                 var carts = await _checkoutService.GetCurrentCartAsync();
 
                 if (!carts.Any())
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Your cart is empty."
-                    });
+                    return BadRequest(new { success = false, message = "Your cart is empty." });
                 }
 
-                // Recalculate totals
-                var totals = await _calc.CalculateAsync(
-                    userId,
-                    null,
-                    checkoutSession.CouponCode);
+                var totals = await _calc.CalculateAsync(userId, null, checkoutSession.CouponCode);
 
-                // Keep checkout session synchronized
                 if (checkoutSession.GrandTotal != totals.Total ||
                     checkoutSession.SubTotal != totals.Subtotal ||
                     checkoutSession.GSTAmount != totals.GST ||
@@ -515,418 +485,203 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
                     checkoutSession.ShippingCharge = totals.Delivery;
                     checkoutSession.GrandTotal = totals.Total;
 
-                    await _context.SaveChangesAsync();
+                    await _context.SaveChangesAsync(cancellationToken);
                 }
 
-                // Razorpay Amount (Paise)
-                var amountInPaise =
-                    Convert.ToInt32(Math.Round(totals.Total * 100));
+                var amountInPaise = Convert.ToInt32(Math.Round(totals.Total * 100));
 
-                // Razorpay Client
                 var razorpayKey = _config["Razorpay:Key"];
                 var razorpaySecret = _config["Razorpay:Secret"];
 
-                var client = new RazorpayClient(
-                    razorpayKey,
-                    razorpaySecret);
+                var client = new RazorpayClient(razorpayKey, razorpaySecret);
 
-                // Unique Receipt Number
-                var receipt =
-                    $"PAY-{Guid.NewGuid():N}"
-                    .Substring(0, 20)
-                    .ToUpper();
+                var receipt = $"PAY-{Guid.NewGuid():N}".Substring(0, 20).ToUpper();
 
-                // Create Razorpay Order
-                var razorpayOrder =
-                    client.Order.Create(new Dictionary<string, object>
-                    {
-                { "amount", amountInPaise },
-                { "currency", "INR" },
-                { "receipt", receipt }
-                    });
+                var razorpayOrder = client.Order.Create(new Dictionary<string, object>
+                {
+                    { "amount", amountInPaise },
+                    { "currency", "INR" },
+                    { "receipt", receipt }
+                });
 
-                var razorpayOrderId =
-                    razorpayOrder["id"].ToString();
+                var razorpayOrderId = razorpayOrder["id"].ToString();
 
-                // Close any previous pending payment session
+                // Close any previous pending payment session for this user
+                // so stale sessions can't be verified later against a new cart.
                 var oldSessions = await _context.PaymentSessions
-                    .Where(x =>
-                        x.UserId == userId &&
-                        !x.IsCompleted)
-                    .ToListAsync();
+                    .Where(x => x.UserId == userId && !x.IsCompleted)
+                    .ToListAsync(cancellationToken);
 
                 foreach (var old in oldSessions)
                 {
                     old.IsCompleted = true;
-                    old.PaymentStatus = "Cancelled";
-                    old.FailureReason =
-                        "Superseded by new payment session.";
+                    old.PaymentStatus = PaymentStatuses.Cancelled;
+                    old.FailureReason = "Superseded by new payment session.";
                 }
 
-                // Create Payment Session
                 var session = new PaymentSession
                 {
                     CheckoutSessionId = checkoutSession.Id,
-
                     UserId = userId,
-
                     RazorpayOrderId = razorpayOrderId,
-
                     Amount = totals.Total,
-
                     Currency = checkoutSession.Currency,
-
                     CouponCode = checkoutSession.CouponCode,
-
                     CouponDiscount = totals.CouponDiscount,
-
-                    PaymentStatus = "Created",
-
+                    PaymentStatus = PaymentStatuses.Created,
                     CreatedDate = DateTime.UtcNow,
-
                     ExpiryDate = DateTime.UtcNow.AddMinutes(30),
-
                     IsCompleted = false,
-
-                    IpAddress =
-                        HttpContext.Connection.RemoteIpAddress?.ToString(),
-
-                    UserAgent =
-                        Request.Headers["User-Agent"].ToString()
+                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                    UserAgent = Request.Headers["User-Agent"].ToString()
                 };
 
                 _context.PaymentSessions.Add(session);
-
-                await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync(cancellationToken);
 
                 return Ok(new
                 {
                     success = true,
-
                     paymentSessionId = session.Id,
-
                     razorpayOrderId,
-
                     amount = amountInPaise,
-
                     currency = checkoutSession.Currency,
-
                     razorpayKey = _config["Razorpay:Key"],
-
                     expiresAt = session.ExpiryDate
                 });
             }
             catch (Exception ex)
             {
-                return BadRequest(new
-                {
-                    success = false,
-                    message =
-                        ex.InnerException?.Message ??
-                        ex.Message
-                });
+                return ErrorResponse(ex, "Failed to create Razorpay order.", userId: userId);
             }
         }
 
-
         // ================= VERIFY PAYMENT =================
         [HttpPost("verify-payment")]
-        public async Task<IActionResult> VerifyPayment(
-    [FromBody] PaymentDto model)
+        public async Task<IActionResult> VerifyPayment([FromBody] PaymentDto model, CancellationToken cancellationToken)
         {
-            await using var transaction =
-     await _context.Database.BeginTransactionAsync();
+            var userId = _userContext.GetUserId();
+
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Unauthorized(new { success = false, redirect = "/login", message = "Please login first." });
+            }
+
+            if (model == null ||
+                string.IsNullOrWhiteSpace(model.razorpay_order_id) ||
+                string.IsNullOrWhiteSpace(model.razorpay_payment_id) ||
+                string.IsNullOrWhiteSpace(model.razorpay_signature))
+            {
+                return BadRequest(new { success = false, message = "Invalid payment details." });
+            }
+
+            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
 
             try
             {
-                if (model == null ||
-                    string.IsNullOrWhiteSpace(model.razorpay_order_id) ||
-                    string.IsNullOrWhiteSpace(model.razorpay_payment_id) ||
-                    string.IsNullOrWhiteSpace(model.razorpay_signature))
-                {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Invalid payment details."
-                    });
-                }
-
-                // Payment Session
-                var session =
-                    await _context.PaymentSessions
-                    .FirstOrDefaultAsync(x =>
-                        x.RazorpayOrderId ==
-                        model.razorpay_order_id);
+                var session = await _context.PaymentSessions
+                    .FirstOrDefaultAsync(x => x.RazorpayOrderId == model.razorpay_order_id, cancellationToken);
 
                 if (session == null)
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Payment session not found."
-                    });
+                    return BadRequest(new { success = false, message = "Payment session not found." });
+                }
+
+                // Ownership check: the caller must be the user the session
+                // belongs to. Without this, anyone who intercepts/guesses a
+                // razorpay_order_id could trigger order creation on someone
+                // else's checkout session.
+                if (!string.Equals(session.UserId, userId, StringComparison.Ordinal))
+                {
+                    _logger.LogWarning(
+                        "VerifyPayment ownership mismatch. SessionUserId={SessionUserId} CallerUserId={CallerUserId}",
+                        session.UserId, userId);
+
+                    return Forbid();
                 }
 
                 if (session.IsCompleted)
                 {
-                    return Ok(new
-                    {
-                        success = true,
-                        redirect = "order-success/:id"
-                    });
+                    return Ok(new { success = true, redirect = "order-success/:id" });
                 }
 
                 if (session.ExpiryDate < DateTime.UtcNow)
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Payment session expired."
-                    });
+                    return BadRequest(new { success = false, message = "Payment session expired." });
                 }
 
-                // Verify Razorpay Signature
-                var payload =
-                    $"{model.razorpay_order_id}|{model.razorpay_payment_id}";
+                // Constant-time signature check (previously a plain string
+                // "!=" comparison here, which is timing-attack prone).
+                var payload = $"{model.razorpay_order_id}|{model.razorpay_payment_id}";
+                var secret = _config["Razorpay:Secret"] ?? string.Empty;
 
-                using var hmac =
-                    new HMACSHA256(
-                        Encoding.UTF8.GetBytes(
-                            _config["Razorpay:Secret"]));
-
-                var generated =
-                    Convert.ToHexString(
-                        hmac.ComputeHash(
-                            Encoding.UTF8.GetBytes(payload)))
-                    .ToLowerInvariant();
-
-                if (generated != model.razorpay_signature)
+                if (!VerifyHmacSignature(payload, secret, model.razorpay_signature))
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Payment verification failed."
-                    });
+                    _logger.LogWarning(
+                        "Razorpay signature mismatch for OrderId={RazorpayOrderId}",
+                        model.razorpay_order_id);
+
+                    return BadRequest(new { success = false, message = "Payment verification failed." });
                 }
 
-                // Load Checkout Session
-                var checkoutSession =
-     await _checkoutService.GetCurrentSessionAsync();
+                var checkoutSession = await _checkoutService.GetCurrentSessionAsync();
 
                 if (checkoutSession == null)
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Checkout session not found."
-                    });
+                    return BadRequest(new { success = false, message = "Checkout session not found." });
                 }
 
-                var userId = checkoutSession.UserId;
-
-                // Address
                 var address = await _context.UserAddresses
                     .FirstOrDefaultAsync(x =>
                         x.Id == checkoutSession.SelectedAddressId &&
-                        x.UserId == userId);
+                        x.UserId == userId,
+                        cancellationToken);
 
                 if (address == null)
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Delivery address not found."
-                    });
+                    return BadRequest(new { success = false, message = "Delivery address not found." });
                 }
 
-                // Cart
-                var carts =
-     await _checkoutService.GetCurrentCartAsync();
+                var carts = await _checkoutService.GetCurrentCartAsync();
 
                 if (!carts.Any())
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Cart is empty."
-                    });
+                    return BadRequest(new { success = false, message = "Cart is empty." });
                 }
 
-                // Latest Totals
-                var totals = await _calc.CalculateAsync(
-                    userId,
-                    null,
-                    checkoutSession.CouponCode);
+                var totals = await _calc.CalculateAsync(userId, null, checkoutSession.CouponCode);
 
-                var sellerId = carts.FirstOrDefault()?.SellerId;
-                // Create Order
                 var order = new OrderModel
                 {
                     UserId = userId,
-
                     UserAddressId = address.Id,
-
                     UserAddress = address,
-
-
-                    OrderNumber = $"ORD-{DateTime.UtcNow.Ticks}",
-
+                    OrderNumber = GenerateOrderNumber(),
                     GrandTotal = totals.Total,
-
                     Currency = checkoutSession.Currency,
-
-                    PaymentStatus = "Completed",
-
+                    PaymentStatus = PaymentStatuses.Completed,
                     RazorpayOrderId = model.razorpay_order_id,
-
                     RazorpayPaymentId = model.razorpay_payment_id,
-
                     RazorpaySignature = model.razorpay_signature,
-
                     IsPaymentVerified = true,
-
                     PaymentVerifiedAt = DateTime.UtcNow,
-
                     OrderDate = DateTime.UtcNow,
-
                     OrderModifiedDate = DateTime.UtcNow,
-
                     CreatedBy = userId,
-
-                    IpAddress = HttpContext.Connection
-        .RemoteIpAddress?
-        .ToString(),
-
-                    UserAgent = Request.Headers["User-Agent"]
-        .ToString()
+                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                    UserAgent = Request.Headers["User-Agent"].ToString()
                 };
 
                 _context.Orders.Add(order);
+                await _context.SaveChangesAsync(cancellationToken);
 
-                await _context.SaveChangesAsync();
-
-                decimal totalTaxableAmount =
-                    carts.Sum(item =>
-                    {
-                        decimal originalPrice =
-                            item.ProductVariant?.Price ?? 0;
-
-                        decimal discountPercent =
-                            item.Product?.DiscountPercentage ?? 0;
-
-                        decimal discountAmount =
-                            item.Product?.IsHotDeal == true
-                                ? originalPrice *
-                                  discountPercent / 100m
-                                : 0;
-
-                        decimal finalPrice =
-                            originalPrice -
-                            discountAmount;
-
-                        return finalPrice *
-                               item.Quantity;
-                    });
-
-                var orderItems = carts.Select(item =>
-                {
-                    decimal originalPrice =
-                        item.ProductVariant?.Price ?? 0;
-
-                    decimal discountPercent =
-                        item.Product?.DiscountPercentage ?? 0;
-
-                    decimal discountAmount =
-                        item.Product?.IsHotDeal == true
-                            ? originalPrice * discountPercent / 100m
-                            : 0;
-
-                    decimal finalUnitPrice =
-                        originalPrice - discountAmount;
-
-                    decimal taxableAmount =
-                        finalUnitPrice * item.Quantity;
-
-                    decimal gstPercent =
-                        item.Product?.GSTPercentage ?? 0;
-
-                    decimal gstAmount =
-                        taxableAmount * gstPercent / 100m;
-
-                    decimal couponShare = 0;
-
-                    if (totals.CouponDiscount > 0 &&
-                        totalTaxableAmount > 0)
-                    {
-                        couponShare =
-                            (taxableAmount / totalTaxableAmount)
-                            * totals.CouponDiscount;
-                    }
-
-                    decimal finalPaidAmount =
-                        taxableAmount +
-                        gstAmount -
-                        couponShare;
-
-                    return new OrderItemModel
-                    {
-                        OrderId = order.OrderId,
-
-                        SellerId = item.SellerId,
-
-                        ProductId = item.ProductId,
-
-                        ProductVariantId = item.ProductVariantId,
-
-                        ProductName = item.Product?.Name ?? "",
-
-                        Quantity = item.Quantity,
-
-                        Price = Math.Round(originalPrice, 2),
-
-                        DiscountAmount = Math.Round(discountAmount, 2),
-
-                        CouponDiscountAmount =
-         Math.Round(couponShare, 2),
-
-                        TaxableAmount =
-         Math.Round(taxableAmount, 2),
-
-                        GSTPercentage = gstPercent,
-
-                        GSTAmount =
-         Math.Round(gstAmount, 2),
-
-                        NetAmount =
-         Math.Round(finalPaidAmount, 2),
-
-                        FinalPaidAmount =
-         Math.Round(finalPaidAmount, 2),
-
-                        LineTotal =
-         Math.Round(finalPaidAmount, 2),
-
-                        OrderItemStatus = "Placed",
-
-                        CreatedAt = DateTime.UtcNow,
-
-                        UpdatedAt = DateTime.UtcNow,
-
-                        ItemOrderModifiedDate = DateTime.UtcNow,
-
-                        IsReturnEligible = false,
-
-                        ReturnStatus = "None"
-                    };
-
-                }).ToList();
+                var orderItems = BuildOrderItems(order.OrderId, carts, totals.CouponDiscount);
 
                 _context.OrderItems.AddRange(orderItems);
-
                 _context.Carts.RemoveRange(carts);
 
                 session.IsCompleted = true;
-                session.PaymentStatus = "Completed";
+                session.PaymentStatus = PaymentStatuses.Completed;
                 session.PaymentCompletedDate = DateTime.UtcNow;
                 session.RazorpayPaymentId = model.razorpay_payment_id;
 
@@ -939,220 +694,221 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
                 checkoutSession.GrandTotal = 0;
                 checkoutSession.ShippingCharge = 0;
 
-                await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync(cancellationToken);
 
                 order.UserAddress = address;
                 order.OrderItems = orderItems;
 
                 await _sms.SendOrderPlacedAsync(order);
 
-                await transaction.CommitAsync();
+                await transaction.CommitAsync(cancellationToken);
 
-                _ = Task.Run(async () =>
+                try
                 {
-                    try
-                    {
-                        await SendInvoiceEmailAsync(order.OrderId);
-                    }
-                    catch
-                    {
-                    }
-                });
+                    await SendInvoiceEmailAsync(order.OrderId);
+                }
+                catch (Exception invoiceEx)
+                {
+                    _logger.LogError(invoiceEx, "Invoice email failed for OrderId={OrderId}", order.OrderId);
+                }
 
                 return Ok(new
                 {
                     success = true,
-
                     orderId = order.OrderId,
-
                     redirect = "order-success/:id"
                 });
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
-
-                return BadRequest(new
-                {
-                    success = false,
-                    message = ex.InnerException?.Message ?? ex.Message
-                });
+                await transaction.RollbackAsync(cancellationToken);
+                return ErrorResponse(ex, "Payment verification failed unexpectedly.", userId: userId);
             }
         }
 
-
-
         // ================= PAYMENT FAILED =================
         [HttpPost("payment-failed")]
-        public async Task<IActionResult> PaymentFailed([FromBody] PaymentDto dto)
+        public async Task<IActionResult> PaymentFailed([FromBody] PaymentDto dto, CancellationToken cancellationToken)
         {
+            var userId = _userContext.GetUserId();
+
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Unauthorized(new { success = false, redirect = "/login", message = "Please login first." });
+            }
+
+            if (dto == null || string.IsNullOrWhiteSpace(dto.razorpay_order_id))
+            {
+                return BadRequest(new { success = false, message = "Invalid request." });
+            }
+
+            // Ownership filter added: previously any caller could flip any
+            // session's completion flag just by knowing/guessing an order id.
             var session = await _context.PaymentSessions
                 .FirstOrDefaultAsync(x =>
-                    x.RazorpayOrderId == dto.razorpay_order_id);
+                    x.RazorpayOrderId == dto.razorpay_order_id &&
+                    x.UserId == userId,
+                    cancellationToken);
 
             if (session != null)
             {
                 session.IsCompleted = false;
+                session.PaymentStatus = PaymentStatuses.Failed;
 
-                // Optional:
-                // session.PaymentStatus = "Failed";
-
-                await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync(cancellationToken);
             }
 
-            return Ok(new
-            {
-                success = true
-            });
+            return Ok(new { success = true });
         }
 
         // ================= WEBHOOK =================
         [AllowAnonymous]
         [HttpPost("webhook")]
-        public async Task<IActionResult> RazorpayWebhook()
+        public async Task<IActionResult> RazorpayWebhook(CancellationToken cancellationToken)
         {
             try
             {
                 var webhookSecret = _config["Razorpay:WebhookSecret"];
 
                 if (string.IsNullOrWhiteSpace(webhookSecret))
+                {
+                    _logger.LogError("Razorpay webhook secret is not configured.");
                     return Unauthorized();
+                }
 
                 string body;
-
                 using (var reader = new StreamReader(Request.Body))
                 {
                     body = await reader.ReadToEndAsync();
                 }
 
-                var receivedSignature =
-                    Request.Headers["X-Razorpay-Signature"].ToString();
+                var receivedSignature = Request.Headers["X-Razorpay-Signature"].ToString();
 
-                var expectedSignature =
-                    ComputeHmac(body, webhookSecret);
-
-                if (!CryptographicOperations.FixedTimeEquals(
-                        Encoding.UTF8.GetBytes(expectedSignature),
-                        Encoding.UTF8.GetBytes(receivedSignature)))
+                if (!VerifyHmacSignature(body, webhookSecret, receivedSignature))
                 {
+                    _logger.LogWarning("Razorpay webhook signature verification failed.");
                     return Unauthorized();
                 }
 
                 dynamic data = JsonConvert.DeserializeObject(body)!;
 
                 string eventType = data.@event;
+                string razorpayOrderId = data?.payload?.payment?.entity?.order_id;
+                string razorpayPaymentId = data?.payload?.payment?.entity?.id;
 
-                string razorpayOrderId =
-                    data?.payload?.payment?.entity?.order_id;
-
-                string razorpayPaymentId =
-                    data?.payload?.payment?.entity?.id;
-
-                var session =
-                    await _context.PaymentSessions
-                        .FirstOrDefaultAsync(x =>
-                            x.RazorpayOrderId ==
-                            razorpayOrderId);
+                var session = await _context.PaymentSessions
+                    .FirstOrDefaultAsync(x => x.RazorpayOrderId == razorpayOrderId, cancellationToken);
 
                 if (session == null)
+                {
+                    _logger.LogWarning(
+                        "Razorpay webhook received for unknown session. RazorpayOrderId={RazorpayOrderId} Event={Event}",
+                        razorpayOrderId, eventType);
                     return Ok();
+                }
 
                 switch (eventType)
                 {
                     case "payment.captured":
-
                         session.IsCompleted = true;
 
-                        // Optional if you add these columns later
-                        // session.PaymentStatus = "Captured";
-                        // session.RazorpayPaymentId = razorpayPaymentId;
+                        // IMPORTANT PRODUCTION GAP (flagged, not silently
+                        // patched): this webhook does not create the Order
+                        // itself — order creation currently only happens in
+                        // VerifyPayment, driven by the frontend after
+                        // redirect. If a user closes the browser right after
+                        // paying (before the frontend calls verify-payment),
+                        // Razorpay will report the payment as captured but
+                        // no Order row will ever exist. Fixing this properly
+                        // requires ICheckoutService to expose a
+                        // GetCartByUserIdAsync(userId) that doesn't depend on
+                        // the current HTTP/cookie context, so this webhook
+                        // (which has no logged-in user/cookies) can finalize
+                        // the order itself. Until that's done, we at least
+                        // surface it loudly so ops can reconcile manually.
+                        var orderExists = await _context.Orders
+                            .AsNoTracking()
+                            .AnyAsync(o => o.RazorpayOrderId == razorpayOrderId, cancellationToken);
+
+                        if (!orderExists)
+                        {
+                            _logger.LogCritical(
+                                "Payment captured but no Order exists yet. RazorpayOrderId={RazorpayOrderId} RazorpayPaymentId={RazorpayPaymentId} UserId={UserId}. Needs manual reconciliation if verify-payment never runs.",
+                                razorpayOrderId, razorpayPaymentId, session.UserId);
+                        }
 
                         break;
 
                     case "payment.failed":
-
                         session.IsCompleted = false;
-
-                        // Optional
-                        // session.PaymentStatus = "Failed";
-
+                        session.PaymentStatus = PaymentStatuses.Failed;
                         break;
 
                     default:
-
                         return Ok();
                 }
 
-                await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync(cancellationToken);
 
                 return Ok();
             }
-            catch
+            catch (Exception ex)
             {
-                // Prevent Razorpay from continuously retrying
+                // Still return 200 so Razorpay doesn't hammer us with
+                // retries, but the previous version swallowed this
+                // completely — now it's at least logged for visibility.
+                _logger.LogError(ex, "Unhandled error while processing Razorpay webhook.");
                 return Ok();
             }
         }
 
         [HttpPut("cancel-item/{orderItemId}")]
         public async Task<IActionResult> CancelOrderItem(
-      int orderItemId,
-      [FromBody] CancelOrderRequest request)
+            int orderItemId,
+            [FromBody] CancelOrderRequest request,
+            CancellationToken cancellationToken)
         {
-            using var transaction =
-                await _context.Database.BeginTransactionAsync();
+            var userId = _userContext.GetUserId();
+
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Unauthorized(new { success = false, message = "Please login first." });
+            }
+
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
 
             try
             {
-                var userId = _userContext.GetUserId();
-
-                if (string.IsNullOrWhiteSpace(userId))
-                {
-                    return Unauthorized(new
-                    {
-                        success = false,
-                        message = "Please login first."
-                    });
-                }
-
                 var orderItem = await _context.OrderItems
                     .Include(x => x.Order)
                     .FirstOrDefaultAsync(x =>
                         x.OrderItemId == orderItemId &&
-                        x.Order.UserId == userId);
+                        x.Order.UserId == userId,
+                        cancellationToken);
 
                 if (orderItem == null)
                 {
-                    return NotFound(new
-                    {
-                        success = false,
-                        message = "Order item not found."
-                    });
+                    return NotFound(new { success = false, message = "Order item not found." });
                 }
 
-                if (orderItem.OrderItemStatus == "Cancelled")
+                if (orderItem.OrderItemStatus == OrderItemStatuses.Cancelled)
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Item is already cancelled."
-                    });
+                    return BadRequest(new { success = false, message = "Item is already cancelled." });
                 }
 
-                // =========================================================
-                // CANCELLATION RULE
-                // Customer can cancel before shipment.
-                // Allowed: Pending, Placed, Accepted, Packed
-                // Not allowed: Shipped, OutForDelivery, Delivered, Returned, Cancelled
-                // =========================================================
-
+                // Customer can cancel before shipment only.
                 var currentStatus = (orderItem.OrderItemStatus ?? string.Empty).Trim();
 
-                var canCancel =
-                    currentStatus.Equals("Pending", StringComparison.OrdinalIgnoreCase) ||
-                    currentStatus.Equals("Placed", StringComparison.OrdinalIgnoreCase) ||
-                    currentStatus.Equals("Accepted", StringComparison.OrdinalIgnoreCase) ||
-                    currentStatus.Equals("Packed", StringComparison.OrdinalIgnoreCase);
+                var cancellableStatuses = new[]
+                {
+                    OrderItemStatuses.Pending,
+                    OrderItemStatuses.Placed,
+                    OrderItemStatuses.Accepted,
+                    OrderItemStatuses.Packed
+                };
+
+                var canCancel = cancellableStatuses.Any(s =>
+                    s.Equals(currentStatus, StringComparison.OrdinalIgnoreCase));
 
                 if (!canCancel)
                 {
@@ -1163,121 +919,87 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
                     });
                 }
 
-                // Cancel Item
-
-                orderItem.OrderItemStatus = "Cancelled";
-
+                orderItem.OrderItemStatus = OrderItemStatuses.Cancelled;
                 orderItem.CancelledAt = DateTime.UtcNow;
-
                 orderItem.CancelledBy = userId;
                 orderItem.CancelledReason = request?.ReasonType ?? "Other";
-
                 orderItem.ReturnRemarks = request?.Remarks;
+                orderItem.UpdatedAt = DateTime.UtcNow;
+                orderItem.ItemOrderModifiedDate = DateTime.UtcNow;
 
-                orderItem.UpdatedAt =
-                    DateTime.UtcNow;
-
-                orderItem.ItemOrderModifiedDate =
-                    DateTime.UtcNow;
-
-                // Refund (Prepaid Orders)
-
-                if (orderItem.Order.PaymentStatus == "Completed")
+                if (orderItem.Order.PaymentStatus == PaymentStatuses.Completed)
                 {
                     orderItem.RefundStatus = "Initiated";
-
-                    orderItem.RefundAmount =
-                        orderItem.FinalPaidAmount;
+                    orderItem.RefundAmount = orderItem.FinalPaidAmount;
                 }
 
-                // Check if all items are cancelled
-
-                var remainingItems =
-                    await _context.OrderItems
+                var remainingItems = await _context.OrderItems
                     .Where(x =>
                         x.OrderId == orderItem.OrderId &&
-                        x.OrderItemStatus != "Cancelled")
-                    .CountAsync();
+                        x.OrderItemStatus != OrderItemStatuses.Cancelled)
+                    .CountAsync(cancellationToken);
 
                 if (remainingItems == 0)
                 {
-                    if (orderItem.Order.PaymentStatus == "Completed")
-                    {
-                        orderItem.Order.PaymentStatus =
-                            "PartiallyRefunded";
-                    }
-                    else
-                    {
-                        orderItem.Order.PaymentStatus =
-                            "Cancelled";
-                    }
+                    orderItem.Order.PaymentStatus = orderItem.Order.PaymentStatus == PaymentStatuses.Completed
+                        ? PaymentStatuses.PartiallyRefunded
+                        : PaymentStatuses.Cancelled;
 
-                    orderItem.Order.OrderModifiedDate =
-                        DateTime.UtcNow;
-
-                    orderItem.Order.UpdatedBy =
-                        userId;
+                    orderItem.Order.OrderModifiedDate = DateTime.UtcNow;
+                    orderItem.Order.UpdatedBy = userId;
                 }
 
-                await _context.SaveChangesAsync();
-
-                await transaction.CommitAsync();
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
 
                 return Ok(new
                 {
                     success = true,
-                    message =
-                                       orderItem.Order.PaymentStatus == "Completed"
-                    ? "Item cancelled successfully. Refund has been initiated."
-                    : "Item cancelled successfully."
+                    message = orderItem.Order.PaymentStatus == PaymentStatuses.Completed ||
+                               orderItem.Order.PaymentStatus == PaymentStatuses.PartiallyRefunded
+                        ? "Item cancelled successfully. Refund has been initiated."
+                        : "Item cancelled successfully."
                 });
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
-
-                return BadRequest(new
-                {
-                    success = false,
-                    message = ex.InnerException?.Message ?? ex.Message
-                });
+                await transaction.RollbackAsync(cancellationToken);
+                return ErrorResponse(ex, "Failed to cancel order item.", userId: userId);
             }
         }
 
         public class CancelOrderRequest
         {
             public string ReasonType { get; set; } = "";
-            // Customer Changed Mind
-            // Ordered by Mistake
-            // Price Too High
-            // Found Better Product
-            // Expected Delivery Too Late
-            // Other
-
             public string? Remarks { get; set; }
         }
 
-
-
         [HttpGet("check-payment-status/{razorpayOrderId}")]
-        public async Task<IActionResult> CheckPaymentStatus(string razorpayOrderId)
+        public async Task<IActionResult> CheckPaymentStatus(string razorpayOrderId, CancellationToken cancellationToken)
         {
+            var userId = _userContext.GetUserId();
+
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Unauthorized(new { success = false, redirect = "/login", message = "Please login first." });
+            }
+
             try
             {
+                // Ownership filter added — previously any authenticated (or
+                // even anonymous) caller could poll any other user's
+                // payment/order status just by knowing a Razorpay order id.
                 var session = await _context.PaymentSessions
                     .FirstOrDefaultAsync(x =>
-                        x.RazorpayOrderId == razorpayOrderId);
+                        x.RazorpayOrderId == razorpayOrderId &&
+                        x.UserId == userId,
+                        cancellationToken);
 
                 if (session == null)
                 {
-                    return Ok(new
-                    {
-                        success = false,
-                        message = "Payment session not found."
-                    });
+                    return Ok(new { success = false, message = "Payment session not found." });
                 }
 
-                // Payment not completed yet
                 if (!session.IsCompleted)
                 {
                     return Ok(new
@@ -1288,11 +1010,12 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
                     });
                 }
 
-                // Order created after payment verification
                 var order = await _context.Orders
                     .Include(x => x.OrderItems)
                     .FirstOrDefaultAsync(x =>
-                        x.RazorpayOrderId == razorpayOrderId);
+                        x.RazorpayOrderId == razorpayOrderId &&
+                        x.UserId == userId,
+                        cancellationToken);
 
                 if (order == null)
                 {
@@ -1304,388 +1027,226 @@ InvoiceService invoiceService, EmailService emailService, ICartCalculationServic
                     });
                 }
 
-                // Item summary
                 var itemSummary = order.OrderItems
                     .GroupBy(x => x.OrderItemStatus)
-                    .Select(x => new
-                    {
-                        status = x.Key,
-                        count = x.Count()
-                    })
+                    .Select(x => new { status = x.Key, count = x.Count() })
                     .ToList();
 
                 return Ok(new
                 {
                     success = true,
-
                     orderId = order.OrderId,
-
                     orderNumber = order.OrderNumber,
-
                     paymentStatus = order.PaymentStatus,
-
                     isPaymentVerified = order.IsPaymentVerified,
-
                     totalItems = order.OrderItems.Count,
-
                     itemStatuses = itemSummary,
-
                     redirect = $"/order-success/{order.OrderId}"
                 });
             }
             catch (Exception ex)
             {
-                return BadRequest(new
-                {
-                    success = false,
-                    message = ex.InnerException?.Message ?? ex.Message
-                });
+                return ErrorResponse(ex, "Failed to check payment status.", userId: userId);
             }
         }
 
-
         [Authorize]
         [HttpGet("success-order/{id}")]
-        public async Task<IActionResult> SuccessOrder(int id)
+        public async Task<IActionResult> SuccessOrder(int id, CancellationToken cancellationToken)
         {
+            var userId = _userContext.GetUserId();
+
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Unauthorized(new { success = false, message = "Please login first." });
+            }
+
             try
             {
-                var userId = _userContext.GetUserId();
-
-                if (string.IsNullOrWhiteSpace(userId))
-                {
-                    return Unauthorized(new
-                    {
-                        success = false,
-                        message = "Please login first."
-                    });
-                }
-
                 var order = await _context.Orders
                     .AsNoTracking()
                     .Include(x => x.UserAddress)
-                    .Include(x => x.OrderItems)
-                        .ThenInclude(x => x.Product)
-                    .Include(x => x.OrderItems)
-                        .ThenInclude(x => x.ProductVariant)
-                            .ThenInclude(x => x.Images)
-                    .FirstOrDefaultAsync(x =>
-                        x.OrderId == id &&
-                        x.UserId == userId);
+                    .Include(x => x.OrderItems).ThenInclude(x => x.Product)
+                    .Include(x => x.OrderItems).ThenInclude(x => x.ProductVariant).ThenInclude(x => x.Images)
+                    .FirstOrDefaultAsync(x => x.OrderId == id && x.UserId == userId, cancellationToken);
 
                 if (order == null)
                 {
-                    return NotFound(new
-                    {
-                        success = false,
-                        message = "Order not found."
-                    });
+                    return NotFound(new { success = false, message = "Order not found." });
                 }
 
-                //------------------------------------------------------
-                // Derive Overall Order Status
-                //------------------------------------------------------
-
-                string orderStatus = "Placed";
-
-                var statuses = order.OrderItems
-                    .Select(x => x.OrderItemStatus)
-                    .ToList();
-
-                if (statuses.All(x => x == "Cancelled"))
-                    orderStatus = "Cancelled";
-                else if (statuses.All(x => x == "Delivered"))
-                    orderStatus = "Delivered";
-                else if (statuses.Any(x => x == "OutForDelivery"))
-                    orderStatus = "Out For Delivery";
-                else if (statuses.Any(x => x == "Shipped"))
-                    orderStatus = "Shipped";
-                else if (statuses.Any(x => x == "Packed"))
-                    orderStatus = "Packed";
-                else
-                    orderStatus = "Placed";
-
-                //------------------------------------------------------
-                // Response
-                //------------------------------------------------------
+                var orderStatus = DeriveOrderStatus(order.OrderItems.Select(x => x.OrderItemStatus));
 
                 return Ok(new
                 {
                     success = true,
-
                     order = new
                     {
                         orderId = order.OrderId,
-
                         orderNumber = order.OrderNumber,
-
                         orderDate = order.OrderDate,
-
                         paymentStatus = order.PaymentStatus,
-
                         paymentMethod = order.PaymentMethod,
-
                         orderStatus = orderStatus,
-
                         grandTotal = order.GrandTotal,
-
                         currency = order.Currency,
-
                         estimatedDelivery = order.OrderDate.AddDays(4),
 
                         customer = new
                         {
                             name = order.UserAddress?.FullName,
-
                             mobile = order.UserAddress?.MobileNumber,
-
-                            address =
-                                $"{order.UserAddress?.AddressLine1}, {order.UserAddress?.AddressLine2}",
-
+                            address = $"{order.UserAddress?.AddressLine1}, {order.UserAddress?.AddressLine2}",
                             city = order.UserAddress?.City,
-
                             state = order.UserAddress?.State,
-
                             pincode = order.UserAddress?.Pincode
                         },
 
-                        items = order.OrderItems
-                            .Select(i => new
-                            {
-                                orderItemId = i.OrderItemId,
+                        items = order.OrderItems.Select(i => new
+                        {
+                            orderItemId = i.OrderItemId,
+                            sellerId = i.SellerId,
+                            productId = i.ProductId,
+                            productName = i.ProductName,
+                            variantName = i.ProductVariant?.Model ?? "",
 
-                                sellerId = i.SellerId,
+                            image = i.ProductVariant != null && i.ProductVariant.Images.Any()
+                                ? i.ProductVariant.Images
+                                    .OrderBy(x => x.DisplayOrder)
+                                    .Select(x => x.ImageUrl)
+                                    .FirstOrDefault()
+                                : i.Product.ImageUrl,
 
-                                productId = i.ProductId,
-
-                                productName = i.ProductName,
-
-                                variantName = i.ProductVariant?.Model ?? "",
-
-                                image =
-                                    i.ProductVariant != null &&
-                                    i.ProductVariant.Images.Any()
-                                        ? i.ProductVariant.Images
-                                            .OrderBy(x => x.DisplayOrder)
-                                            .Select(x => x.ImageUrl)
-                                            .FirstOrDefault()
-                                        : i.Product.ImageUrl,
-
-                                quantity = i.Quantity,
-
-                                price = i.Price,
-
-                                discount = i.DiscountAmount,
-
-                                taxableAmount = i.TaxableAmount,
-
-                                gstPercentage = i.GSTPercentage,
-
-                                gst = i.GSTAmount,
-
-                                couponDiscount = i.CouponDiscountAmount,
-
-                                finalPaidAmount = i.FinalPaidAmount,
-
-                                total = i.LineTotal,
-
-                                itemStatus = i.OrderItemStatus,
-
-                                packedDate = i.PackedDate,
-
-                                shippedDate = i.ShippedDate,
-
-                                outForDeliveryDate = i.OutForDeliveryDate,
-
-                                deliveredDate = i.DeliveredDate,
-
-                                trackingNumber = i.TrackingNumber,
-
-                                courierPartner = i.CourierPartner,
-
-                                returnStatus = i.ReturnStatus,
-
-                                isReturnEligible = i.IsReturnEligible,
-
-                                returnEligibleTill = i.ReturnEligibleTill,
-
-                                cancelledAt = i.CancelledAt
-                            })
-                            .ToList()
+                            quantity = i.Quantity,
+                            price = i.Price,
+                            discount = i.DiscountAmount,
+                            taxableAmount = i.TaxableAmount,
+                            gstPercentage = i.GSTPercentage,
+                            gst = i.GSTAmount,
+                            couponDiscount = i.CouponDiscountAmount,
+                            finalPaidAmount = i.FinalPaidAmount,
+                            total = i.LineTotal,
+                            itemStatus = i.OrderItemStatus,
+                            packedDate = i.PackedDate,
+                            shippedDate = i.ShippedDate,
+                            outForDeliveryDate = i.OutForDeliveryDate,
+                            deliveredDate = i.DeliveredDate,
+                            trackingNumber = i.TrackingNumber,
+                            courierPartner = i.CourierPartner,
+                            returnStatus = i.ReturnStatus,
+                            isReturnEligible = i.IsReturnEligible,
+                            returnEligibleTill = i.ReturnEligibleTill,
+                            cancelledAt = i.CancelledAt
+                        }).ToList()
                     }
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    success = false,
-                    message = ex.Message,
-                    inner = ex.InnerException?.Message
-                });
+                return ErrorResponse(ex, "Failed to load order success page.", StatusCodes.Status500InternalServerError, userId);
             }
         }
-
 
         [Authorize]
         [HttpPost("request-return/{orderItemId}")]
         public async Task<IActionResult> RequestReturn(
-int orderItemId,
-[FromForm] RequestReturnDto dto)
+            int orderItemId,
+            [FromForm] RequestReturnDto dto,
+            CancellationToken cancellationToken)
         {
             dto.OrderItemId = orderItemId;
 
+            var userId = _userContext.GetUserId();
+
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Unauthorized(new { success = false, message = "Please login first." });
+            }
+
+            if (dto.OrderItemId <= 0)
+            {
+                return BadRequest(new { success = false, message = "Invalid order item." });
+            }
+
             try
             {
-                var userId = _userContext.GetUserId();
-
-                if (string.IsNullOrWhiteSpace(userId))
-                {
-                    return Unauthorized(new
-                    {
-                        success = false,
-                        message = "Please login first."
-                    });
-                }
-
-                if (dto.OrderItemId <= 0)
-                {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Invalid order item."
-                    });
-                }
-
                 var orderItem = await _context.OrderItems
                     .Include(x => x.Order)
                     .FirstOrDefaultAsync(x =>
                         x.OrderItemId == dto.OrderItemId &&
-                        x.Order.UserId == userId);
+                        x.Order.UserId == userId,
+                        cancellationToken);
 
                 if (orderItem == null)
                 {
-                    return NotFound(new
-                    {
-                        success = false,
-                        message = "Order item not found."
-                    });
+                    return NotFound(new { success = false, message = "Order item not found." });
                 }
 
-                // Only delivered items can be returned
-                if (orderItem.OrderItemStatus != "Delivered")
+                if (orderItem.OrderItemStatus != OrderItemStatuses.Delivered)
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Only delivered items can be returned."
-                    });
+                    return BadRequest(new { success = false, message = "Only delivered items can be returned." });
                 }
 
-                // Return eligibility
                 if (!orderItem.IsReturnEligible)
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "This item is not eligible for return."
-                    });
+                    return BadRequest(new { success = false, message = "This item is not eligible for return." });
                 }
 
-                // Return window
                 if (!orderItem.ReturnEligibleTill.HasValue)
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Return window information is unavailable."
-                    });
+                    return BadRequest(new { success = false, message = "Return window information is unavailable." });
                 }
 
                 if (DateTime.UtcNow > orderItem.ReturnEligibleTill.Value)
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Return period has expired."
-                    });
+                    return BadRequest(new { success = false, message = "Return period has expired." });
                 }
 
-                // Already requested
                 if (!string.IsNullOrWhiteSpace(orderItem.ReturnStatus) &&
-                    orderItem.ReturnStatus != "None")
+                    orderItem.ReturnStatus != ReturnStatuses.None)
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "A return request has already been submitted for this item."
-                    });
+                    return BadRequest(new { success = false, message = "A return request has already been submitted for this item." });
                 }
 
-                // Double check in Return table
                 bool alreadyExists = await _context.OrderReturns
                     .AnyAsync(x =>
                         x.OrderItemId == dto.OrderItemId &&
-                        x.Status != "Rejected");
+                        x.Status != ReturnStatuses.Rejected,
+                        cancellationToken);
 
                 if (alreadyExists)
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "A return request already exists for this item."
-                    });
+                    return BadRequest(new { success = false, message = "A return request already exists for this item." });
                 }
 
-                string? image1 = null;
-                string? image2 = null;
-                string? image3 = null;
+                string? image1 = dto.Image1 != null ? await _fileStorageService.UploadAsync(dto.Image1, "ReturnImages") : null;
+                string? image2 = dto.Image2 != null ? await _fileStorageService.UploadAsync(dto.Image2, "ReturnImages") : null;
+                string? image3 = dto.Image3 != null ? await _fileStorageService.UploadAsync(dto.Image3, "ReturnImages") : null;
 
-                if (dto.Image1 != null)
-                {
-                    image1 = await _fileStorageService.UploadAsync(dto.Image1, "ReturnImages");
-                }
-
-                if (dto.Image2 != null)
-                {
-                    image2 = await _fileStorageService.UploadAsync(dto.Image2, "ReturnImages");
-                }
-
-                if (dto.Image3 != null)
-                {
-                    image3 = await _fileStorageService.UploadAsync(dto.Image3, "ReturnImages");
-                }
-
-                // Create Return Request
                 var returnRequest = new OrderReturnModel
                 {
                     OrderId = orderItem.OrderId,
                     OrderItemId = orderItem.OrderItemId,
                     UserId = userId,
-
                     Reason = dto.Reason,
                     Remarks = dto.Remarks,
-
                     Image1 = image1,
                     Image2 = image2,
                     Image3 = image3,
-
-                    Status = "Requested",
+                    Status = ReturnStatuses.Requested,
                     RequestedDate = DateTime.UtcNow
                 };
 
                 _context.OrderReturns.Add(returnRequest);
 
-                // Update Order Item
-                orderItem.ReturnStatus = "Requested";
+                orderItem.ReturnStatus = ReturnStatuses.Requested;
                 orderItem.ReturnReason = dto.Reason;
                 orderItem.ReturnRemarks = dto.Remarks;
                 orderItem.ReturnRequestedDate = DateTime.UtcNow;
-
                 orderItem.UpdatedAt = DateTime.UtcNow;
                 orderItem.ItemOrderModifiedDate = DateTime.UtcNow;
 
-                await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync(cancellationToken);
 
                 return Ok(new
                 {
@@ -1698,32 +1259,28 @@ int orderItemId,
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    success = false,
-                    message = ex.Message,
-                    inner = ex.InnerException?.Message
-                });
+                return ErrorResponse(ex, "Failed to submit return request.", StatusCodes.Status500InternalServerError, userId);
             }
         }
 
         [Authorize(Roles = "Admin,Seller")]
         [HttpGet("returns")]
         public async Task<IActionResult> GetReturns(
-     int page = 1,
-     int pageSize = 10,
-     string? search = null,
-     string? status = null)
+            int page = 1,
+            int pageSize = 10,
+            string? search = null,
+            string? status = null,
+            CancellationToken cancellationToken = default)
         {
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 1, 50);
+
             var isAdmin = User.IsInRole("Admin");
 
             var query = _context.OrderReturns
-                .Include(r => r.Order)
-                    .ThenInclude(o => o.UserAddress)
-                .Include(r => r.OrderItem)
-                    .ThenInclude(i => i.Product)
-                .Include(r => r.OrderItem)
-                    .ThenInclude(i => i.ProductVariant)
+                .Include(r => r.Order).ThenInclude(o => o.UserAddress)
+                .Include(r => r.OrderItem).ThenInclude(i => i.Product)
+                .Include(r => r.OrderItem).ThenInclude(i => i.ProductVariant)
                 .AsQueryable();
 
             if (!isAdmin)
@@ -1733,20 +1290,20 @@ int orderItemId,
                 var sellerId = await _context.Sellers
                     .Where(s => s.UserId == userId)
                     .Select(s => s.SellerId)
-                    .FirstOrDefaultAsync();
+                    .FirstOrDefaultAsync(cancellationToken);
 
                 query = query.Where(r => r.OrderItem.SellerId == sellerId);
             }
 
             if (!string.IsNullOrWhiteSpace(search))
             {
-                search = search.Trim().ToLower();
+                var term = search.Trim().ToLower();
 
                 query = query.Where(r =>
-                    r.Order.OrderNumber.ToLower().Contains(search) ||
-                    r.Order.UserAddress.FullName.ToLower().Contains(search) ||
-                    r.Order.UserAddress.MobileNumber.Contains(search) ||
-                    r.OrderItem.ProductName.ToLower().Contains(search));
+                    r.Order.OrderNumber.ToLower().Contains(term) ||
+                    r.Order.UserAddress.FullName.ToLower().Contains(term) ||
+                    r.Order.UserAddress.MobileNumber.Contains(term) ||
+                    r.OrderItem.ProductName.ToLower().Contains(term));
             }
 
             if (!string.IsNullOrWhiteSpace(status) && status != "All")
@@ -1754,7 +1311,7 @@ int orderItemId,
                 query = query.Where(r => r.Status == status);
             }
 
-            var totalRecords = await query.CountAsync();
+            var totalRecords = await query.CountAsync(cancellationToken);
 
             var data = await query
                 .OrderByDescending(r => r.RequestedDate)
@@ -1765,36 +1322,24 @@ int orderItemId,
                     r.ReturnId,
                     r.OrderId,
                     r.OrderItemId,
-
                     OrderNumber = r.Order.OrderNumber,
-
                     CustomerName = r.Order.UserAddress.FullName,
                     MobileNumber = r.Order.UserAddress.MobileNumber,
-
                     ProductName = r.OrderItem.ProductName,
-
                     ProductImage = r.OrderItem.Product.ImageUrl,
-
-                    VariantName = r.OrderItem.ProductVariant != null
-                        ? r.OrderItem.ProductVariant.Model
-                        : "",
-
+                    VariantName = r.OrderItem.ProductVariant != null ? r.OrderItem.ProductVariant.Model : "",
                     Quantity = r.OrderItem.Quantity,
-
                     r.Reason,
                     r.Remarks,
-
                     r.Image1,
                     r.Image2,
                     r.Image3,
-
                     r.Status,
                     r.RequestedDate,
-
                     RefundStatus = r.OrderItem.RefundStatus,
                     RefundAmount = r.OrderItem.RefundAmount
                 })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             return Ok(new
             {
@@ -1806,294 +1351,206 @@ int orderItemId,
             });
         }
 
-
         [Authorize(Roles = "Admin,Seller")]
         [HttpPut("returns/{returnId}")]
         public async Task<IActionResult> UpdateReturnStatus(
-     int returnId,
-     UpdateReturnStatusDto dto)
-        {
-            var userId = _userContext.GetUserId();
-
-            bool isAdmin = User.IsInRole("Admin");
-
-            int? sellerId = null;
-
-            if (!isAdmin)
-            {
-                sellerId = await _context.Sellers
-                    .Where(x => x.UserId == userId)
-                    .Select(x => (int?)x.SellerId)
-                    .FirstOrDefaultAsync();
-            }
-
-            var query = _context.OrderReturns
-                .Include(x => x.OrderItem)
-                    .ThenInclude(x => x.Product)
-                .AsQueryable();
-
-            if (!isAdmin)
-            {
-                query = query.Where(x =>
-                    x.OrderItem.Product.SellerId == sellerId);
-            }
-
-            var item = await query.FirstOrDefaultAsync(x => x.ReturnId == returnId);
-
-            if (item == null)
-            {
-                return NotFound(new
-                {
-                    success = false,
-                    message = "Return request not found."
-                });
-            }
-
-            item.Status = dto.Status;
-            item.Remarks = dto.Remarks;
-
-            item.OrderItem.ReturnStatus = dto.Status;
-
-            if (dto.Status == "RefundCompleted")
-            {
-                item.OrderItem.RefundStatus = "Completed";
-                item.OrderItem.RefundCompletedDate = DateTime.UtcNow;
-
-                if (dto.RefundAmount.HasValue)
-                {
-                    item.OrderItem.RefundAmount = dto.RefundAmount.Value;
-                }
-            }
-
-            item.OrderItem.UpdatedAt = DateTime.UtcNow;
-            item.OrderItem.ItemOrderModifiedDate = DateTime.UtcNow;
-
-            await _context.SaveChangesAsync();
-
-            return Ok(new
-            {
-                success = true,
-                message = "Return status updated successfully."
-            });
-        }
-
-        // ================= HELPERS =================
-
-        private string ComputeHmac(string data, string key)
-        {
-            using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(key));
-            var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(data));
-            return Convert.ToHexString(hash).ToLowerInvariant();
-        }
-
-        [Authorize]
-        [HttpGet("my-orders")]
-        public async Task<IActionResult> GetMyOrders()
+            int returnId,
+            UpdateReturnStatusDto dto,
+            CancellationToken cancellationToken)
         {
             try
             {
                 var userId = _userContext.GetUserId();
+                bool isAdmin = User.IsInRole("Admin");
 
-                if (string.IsNullOrWhiteSpace(userId))
+                int? sellerId = null;
+
+                if (!isAdmin)
                 {
-                    return Unauthorized(new
-                    {
-                        success = false,
-                        message = "Please login to view your orders.",
-                        redirect = "/login"
-                    });
+                    sellerId = await _context.Sellers
+                        .Where(x => x.UserId == userId)
+                        .Select(x => (int?)x.SellerId)
+                        .FirstOrDefaultAsync(cancellationToken);
                 }
 
-                var orders = await _context.Orders
-     .AsNoTracking()
+                var query = _context.OrderReturns
+                    .Include(x => x.OrderItem).ThenInclude(x => x.Product)
+                    .AsQueryable();
 
-     .Include(o => o.UserAddress)
+                if (!isAdmin)
+                {
+                    query = query.Where(x => x.OrderItem.Product.SellerId == sellerId);
+                }
 
-     .Include(o => o.OrderItems)
-         .ThenInclude(i => i.Product)
+                var item = await query.FirstOrDefaultAsync(x => x.ReturnId == returnId, cancellationToken);
 
-     .Include(o => o.OrderItems)
-         .ThenInclude(i => i.ProductVariant)
-             .ThenInclude(v => v.Images)
+                if (item == null)
+                {
+                    return NotFound(new { success = false, message = "Return request not found." });
+                }
 
-     .Where(o => o.UserId == userId)
+                item.Status = dto.Status;
+                item.Remarks = dto.Remarks;
+                item.OrderItem.ReturnStatus = dto.Status;
 
-     .OrderByDescending(o => o.OrderDate)
+                if (dto.Status == ReturnStatuses.RefundCompleted)
+                {
+                    item.OrderItem.RefundStatus = "Completed";
+                    item.OrderItem.RefundCompletedDate = DateTime.UtcNow;
 
-     .ToListAsync();
+                    if (dto.RefundAmount.HasValue)
+                    {
+                        item.OrderItem.RefundAmount = dto.RefundAmount.Value;
+                    }
+                }
+
+                item.OrderItem.UpdatedAt = DateTime.UtcNow;
+                item.OrderItem.ItemOrderModifiedDate = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync(cancellationToken);
+
+                return Ok(new { success = true, message = "Return status updated successfully." });
+            }
+            catch (Exception ex)
+            {
+                return ErrorResponse(ex, "Failed to update return status.", StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        [Authorize]
+        [HttpGet("my-orders")]
+        public async Task<IActionResult> GetMyOrders(
+            int page = 1,
+            int pageSize = 3,
+            CancellationToken cancellationToken = default)
+        {
+            var userId = _userContext.GetUserId();
+
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Unauthorized(new
+                {
+                    success = false,
+                    message = "Please login to view your orders.",
+                    redirect = "/login"
+                });
+            }
+
+            try
+            {
+                page = Math.Max(1, page);
+                pageSize = Math.Clamp(pageSize, 1, 10);
+
+                var query = _context.Orders
+                    .AsNoTracking()
+                    .Where(o => o.UserId == userId)
+                    .OrderByDescending(o => o.OrderDate);
+
+                // Load one extra record to cheaply know whether another
+                // page exists, without a separate COUNT query.
+                var orders = await query
+                    .Include(o => o.UserAddress)
+                    .Include(o => o.OrderItems).ThenInclude(i => i.Product)
+                    .Include(o => o.OrderItems).ThenInclude(i => i.ProductVariant).ThenInclude(v => v.Images)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize + 1)
+                    .ToListAsync(cancellationToken);
+
+                var hasNextPage = orders.Count > pageSize;
+
+                if (hasNextPage)
+                {
+                    orders = orders.Take(pageSize).ToList();
+                }
 
                 var response = orders.Select(order =>
                 {
-                    var itemStatuses = order.OrderItems
-                        .Select(x => x.OrderItemStatus)
-                        .ToList();
-
-                    // Derived Status (Not Stored in DB)
-                    string orderStatus;
-
-                    if (itemStatuses.All(x => x == "Cancelled"))
-                        orderStatus = "Cancelled";
-                    else if (itemStatuses.All(x => x == "Delivered"))
-                        orderStatus = "Delivered";
-                    else if (itemStatuses.Any(x => x == "OutForDelivery"))
-                        orderStatus = "Out For Delivery";
-                    else if (itemStatuses.Any(x => x == "Shipped"))
-                        orderStatus = "Shipped";
-                    else if (itemStatuses.Any(x => x == "Packed"))
-                        orderStatus = "Packed";
-                    else
-                        orderStatus = "Placed";
+                    var orderStatus = DeriveOrderStatus(order.OrderItems.Select(x => x.OrderItemStatus));
 
                     return new
                     {
                         orderId = order.OrderId,
-
                         orderNumber = order.OrderNumber,
-
                         orderDate = order.OrderDate,
-
                         grandTotal = order.GrandTotal,
-
                         paymentStatus = order.PaymentStatus,
 
-                        deliveryAddress = order.UserAddress == null
-    ? null
-    : new
-    {
-        id = order.UserAddress.Id,
-
-        fullName = order.UserAddress.FullName,
-
-        mobileNumber = order.UserAddress.MobileNumber,
-
-        addressLine1 = order.UserAddress.AddressLine1,
-
-        addressLine2 = order.UserAddress.AddressLine2,
-
-        landmark = order.UserAddress.Landmark,
-
-        city = order.UserAddress.City,
-
-        state = order.UserAddress.State,
-
-        pincode = order.UserAddress.Pincode,
-
-        addressType = order.UserAddress.AddressType
-    },
+                        deliveryAddress = order.UserAddress == null ? null : new
+                        {
+                            id = order.UserAddress.Id,
+                            fullName = order.UserAddress.FullName,
+                            mobileNumber = order.UserAddress.MobileNumber,
+                            addressLine1 = order.UserAddress.AddressLine1,
+                            addressLine2 = order.UserAddress.AddressLine2,
+                            landmark = order.UserAddress.Landmark,
+                            city = order.UserAddress.City,
+                            state = order.UserAddress.State,
+                            pincode = order.UserAddress.Pincode,
+                            addressType = order.UserAddress.AddressType
+                        },
 
                         orderStatus,
-
                         itemCount = order.OrderItems.Count,
 
                         items = order.OrderItems.Select(item => new
                         {
                             orderItemId = item.OrderItemId,
-
                             orderDate = order.OrderDate,
-
                             sellerId = item.SellerId,
-
                             productId = item.ProductId,
-
                             variantId = item.ProductVariantId,
-
                             productName = item.ProductName,
+                            variantName = item.ProductVariant?.Model ?? "",
 
-                            variantName =
-                                item.ProductVariant?.Model ?? "",
-
-                            productImage =
-                                item.ProductVariant != null &&
-                                item.ProductVariant.Images.Any()
+                            productImage = item.ProductVariant != null && item.ProductVariant.Images.Any()
                                 ? item.ProductVariant.Images
                                     .OrderBy(x => x.DisplayOrder)
                                     .Select(x => x.ImageUrl)
                                     .FirstOrDefault()
-                                : !string.IsNullOrWhiteSpace(item.Product.ImageUrl)
+                                : !string.IsNullOrWhiteSpace(item.Product?.ImageUrl)
                                     ? item.Product.ImageUrl
                                     : "/images/no-image.png",
 
-                            productImages =
-                                item.ProductVariant != null
-                                ? item.ProductVariant.Images
-                                    .OrderBy(x => x.DisplayOrder)
-                                    .Select(x => x.ImageUrl)
-                                    .ToList()
+                            productImages = item.ProductVariant != null
+                                ? item.ProductVariant.Images.OrderBy(x => x.DisplayOrder).Select(x => x.ImageUrl).ToList()
                                 : new List<string>(),
 
                             quantity = item.Quantity,
-
                             price = item.Price,
-
+                            discountAmount = item.DiscountAmount,
+                            couponDiscountAmount = item.CouponDiscountAmount,
+                            gstPercentage = item.GSTPercentage,
+                            taxableAmount = item.TaxableAmount,
+                            gstAmount = item.GSTAmount,
+                            netAmount = item.NetAmount,
                             finalPaidAmount = item.FinalPaidAmount,
-
                             itemTotal = item.LineTotal,
 
                             itemStatus = item.OrderItemStatus,
+                            isReturnEligible = item.IsReturnEligible,
+                            returnStatus = item.ReturnStatus,
 
-                            isReturnEligible =
-                                item.IsReturnEligible,
-
-                            returnStatus =
-                                item.ReturnStatus,
-
-                            remainingReturnDays =
-                                item.ReturnEligibleTill.HasValue
-                                ? Math.Max(
-                                    0,
-                                    (item.ReturnEligibleTill.Value - DateTime.UtcNow).Days)
+                            remainingReturnDays = item.ReturnEligibleTill.HasValue
+                                ? Math.Max(0, (item.ReturnEligibleTill.Value - DateTime.UtcNow).Days)
                                 : 0,
 
-                            packedDate =
-                                item.PackedDate,
-
-                            shippedDate =
-                                item.ShippedDate,
-
-                            outForDeliveryDate =
-                                item.OutForDeliveryDate,
-
-                            deliveredDate =
-                                item.DeliveredDate,
-
-                            cancelledAt =
-                        item.CancelledAt,
-
-                            cancelledReason =
-                        item.CancelledReason,
-
-                            trackingNumber =
-                        item.TrackingNumber,
-
-                            courierPartner =
-                        item.CourierPartner,
-
-                            refundAmount =
-                        item.RefundAmount,
-
-                            refundStatus =
-                        item.RefundStatus,
-
-                            returnReason =
-                        item.ReturnReason,
-
-                            returnRemarks =
-                        item.ReturnRemarks,
-
-                            returnRequestedDate =
-                        item.ReturnRequestedDate,
-
-                            returnApprovedDate =
-                        item.ReturnApprovedDate,
-
-                            pickupDate =
-                        item.PickupDate,
-
-                            refundCompletedDate =
-                        item.RefundCompletedDate,
-
-                            returnImages =
-                        item.ReturnImages
+                            packedDate = item.PackedDate,
+                            shippedDate = item.ShippedDate,
+                            outForDeliveryDate = item.OutForDeliveryDate,
+                            deliveredDate = item.DeliveredDate,
+                            cancelledAt = item.CancelledAt,
+                            cancelledReason = item.CancelledReason,
+                            trackingNumber = item.TrackingNumber,
+                            courierPartner = item.CourierPartner,
+                            refundAmount = item.RefundAmount,
+                            refundStatus = item.RefundStatus,
+                            returnReason = item.ReturnReason,
+                            returnRemarks = item.ReturnRemarks,
+                            returnRequestedDate = item.ReturnRequestedDate,
+                            returnApprovedDate = item.ReturnApprovedDate,
+                            pickupDate = item.PickupDate,
+                            refundCompletedDate = item.RefundCompletedDate,
+                            returnImages = item.ReturnImages
                         }).ToList()
                     };
                 }).ToList();
@@ -2101,486 +1558,287 @@ int orderItemId,
                 return Ok(new
                 {
                     success = true,
-                    orders = response
+                    orders = response,
+                    pagination = new
+                    {
+                        page,
+                        pageSize,
+                        hasNextPage,
+                        returnedCount = response.Count
+                    }
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
-                {
-                    success = false,
-                    message = "Failed to load orders.",
-                    error = ex.InnerException?.Message ?? ex.Message
-                });
+                return ErrorResponse(ex, "Failed to load orders for user.", StatusCodes.Status500InternalServerError, userId);
             }
         }
-
 
         [Authorize]
         [HttpGet("invoice/{id}")]
-        public async Task<IActionResult> Invoice(int id)
+        public async Task<IActionResult> Invoice(int id, CancellationToken cancellationToken)
         {
+            var userId = _userContext.GetUserId();
+
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Unauthorized(new { success = false, message = "Please login first." });
+            }
+
             try
             {
-                var userId = _userContext.GetUserId();
-
-                if (string.IsNullOrWhiteSpace(userId))
-                {
-                    return Unauthorized(new
-                    {
-                        success = false,
-                        message = "Please login first."
-                    });
-                }
-
                 var order = await _context.Orders
+                    .AsNoTracking()
                     .Include(o => o.UserAddress)
-                    .Include(o => o.OrderItems)
-                        .ThenInclude(i => i.Product)
-                    .Include(o => o.OrderItems)
-                        .ThenInclude(i => i.ProductVariant)
-                    .FirstOrDefaultAsync(o =>
-                        o.OrderId == id &&
-                        o.UserId == userId);
+                    .Include(o => o.OrderItems).ThenInclude(i => i.Product)
+                    .Include(o => o.OrderItems).ThenInclude(i => i.ProductVariant)
+                    .FirstOrDefaultAsync(o => o.OrderId == id && o.UserId == userId, cancellationToken);
 
                 if (order == null)
                 {
-                    return NotFound(new
-                    {
-                        success = false,
-                        message = "Order not found."
-                    });
+                    return NotFound(new { success = false, message = "Order not found." });
                 }
 
-                //------------------------------------------------
-                // Payment Validation
-                //------------------------------------------------
-
-                if (!order.IsPaymentVerified ||
-                    order.PaymentStatus != "Completed")
+                if (!string.Equals(order.PaymentStatus, PaymentStatuses.Completed, StringComparison.OrdinalIgnoreCase))
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Invoice is available only after successful payment."
-                    });
+                    return BadRequest(new { success = false, message = "Payment is not completed yet." });
                 }
 
-                //------------------------------------------------
-                // Optional Safety Check
-                //------------------------------------------------
-
-                if (!order.OrderItems.Any())
+                if (order.OrderItems == null || !order.OrderItems.Any())
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "No items found for this order."
-                    });
+                    return BadRequest(new { success = false, message = "Order items not found." });
                 }
-
-                //------------------------------------------------
-                // Build Invoice
-                //------------------------------------------------
 
                 var model = BuildInvoiceModel(order);
+                var pdfBytes = await GenerateInvoicePdf(model);
 
-                return Ok(new
+                if (pdfBytes == null || pdfBytes.Length == 0)
                 {
-                    success = true,
+                    return StatusCode(500, new { success = false, message = "Invoice PDF generation failed." });
+                }
 
-                    invoice = model
-                });
+                return File(pdfBytes, "application/pdf", $"Invoice-{order.OrderNumber}.pdf");
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
-                {
-                    success = false,
-                    message = ex.Message,
-                    inner = ex.InnerException?.Message,
-                    stack = ex.StackTrace
-                });
+                return ErrorResponse(ex, "Invoice generation failed.", StatusCodes.Status500InternalServerError, userId);
             }
         }
 
-        private async Task<byte[]> GenerateInvoicePdf(
-    OrderInvoiceViewModel model)
+        private async Task<byte[]> GenerateInvoicePdf(OrderInvoiceViewModel model)
         {
             model.IsPdf = true;
 
-            var pdf =
-                new ViewAsPdf(
-                    "Invoice",
-                    model
-                );
+            var pdf = new ViewAsPdf("Invoice", model)
+            {
+                FileName = $"Invoice-{model.InvoiceNumber}.pdf",
+                PageSize = Rotativa.AspNetCore.Options.Size.A4,
+                PageOrientation = Rotativa.AspNetCore.Options.Orientation.Portrait,
+                PageMargins = new Rotativa.AspNetCore.Options.Margins(8, 8, 8, 8),
+                CustomSwitches = "--enable-local-file-access --print-media-type --disable-smart-shrinking"
+            };
 
-            return await pdf.BuildFile(
-                ControllerContext
-            );
+            return await pdf.BuildFile(ControllerContext);
         }
 
-        public async Task SendInvoiceEmailAsync(
-    int orderId)
+        public async Task SendInvoiceEmailAsync(int orderId)
         {
-            var order =
-    await _context.Orders
-        .Include(o => o.OrderItems)
-            .ThenInclude(i => i.ProductVariant)
-        .Include(o => o.OrderItems)
-            .ThenInclude(i => i.Product)
-        .Include(o => o.User)
-        .Include(o => o.UserAddress)
-        .FirstOrDefaultAsync(o =>
-            o.OrderId == orderId);
+            var order = await _context.Orders
+                .Include(o => o.OrderItems).ThenInclude(i => i.ProductVariant)
+                .Include(o => o.OrderItems).ThenInclude(i => i.Product)
+                .Include(o => o.User)
+                .Include(o => o.UserAddress)
+                .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
             if (order == null)
+            {
+                _logger.LogWarning("SendInvoiceEmailAsync: OrderId={OrderId} not found.", orderId);
                 return;
+            }
 
-            var email =
-                order.User?.Email;
+            var email = order.User?.Email;
 
-            if (
-                string.IsNullOrWhiteSpace(
-                    email
-                )
-            )
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                _logger.LogWarning("SendInvoiceEmailAsync: OrderId={OrderId} has no customer email on file.", orderId);
                 return;
+            }
 
-            var model =
-                BuildInvoiceModel(order);
+            var model = BuildInvoiceModel(order);
+            var pdfBytes = await GenerateInvoicePdf(model);
 
-            var pdfBytes =
-                await GenerateInvoicePdf(
-                    model
-                );
-
-            await _emailService
-                .SendEmailWithAttachmentAsync(
-                    email,
-                    "Your Invoice",
-                    $"Thanks for your order #{order.OrderNumber}. Please find your invoice attached.",
-                    pdfBytes,
-                    $"Invoice-{order.OrderNumber}.pdf"
-                );
+            await _emailService.SendEmailWithAttachmentAsync(
+                email,
+                "Your Invoice",
+                $"Thanks for your order #{order.OrderNumber}. Please find your invoice attached.",
+                pdfBytes,
+                $"Invoice-{order.OrderNumber}.pdf");
         }
-
-
 
         private OrderInvoiceViewModel BuildInvoiceModel(OrderModel order)
         {
             var address = order.UserAddress;
 
-            decimal subtotal = order.OrderItems.Sum(x =>
-                x.Price * x.Quantity);
+            decimal subtotal = order.OrderItems.Sum(x => x.Price * x.Quantity);
+            decimal productDiscount = order.OrderItems.Sum(x => x.DiscountAmount * x.Quantity);
+            decimal taxableAmount = order.OrderItems.Sum(x => x.TaxableAmount);
+            decimal couponDiscount = order.OrderItems.Sum(x => x.CouponDiscountAmount);
+            decimal gstTotal = order.OrderItems.Sum(x => x.GSTAmount);
+            decimal finalPaid = order.OrderItems.Sum(x => x.FinalPaidAmount);
 
-            decimal productDiscount = order.OrderItems.Sum(x =>
-                x.DiscountAmount * x.Quantity);
-
-            decimal taxableAmount = order.OrderItems.Sum(x =>
-                x.TaxableAmount);
-
-            decimal couponDiscount = order.OrderItems.Sum(x =>
-                x.CouponDiscountAmount);
-
-            decimal gstTotal = order.OrderItems.Sum(x =>
-                x.GSTAmount);
-
-            decimal finalPaid = order.OrderItems.Sum(x =>
-                x.FinalPaidAmount);
-
-            // Derived Order Status (not stored in DB)
-            var statuses = order.OrderItems
-                .Select(x => x.OrderItemStatus)
-                .ToList();
-
-            string orderStatus;
-
-            if (statuses.All(x => x == "Cancelled"))
-                orderStatus = "Cancelled";
-            else if (statuses.All(x => x == "Delivered"))
-                orderStatus = "Delivered";
-            else if (statuses.Any(x => x == "OutForDelivery"))
-                orderStatus = "Out For Delivery";
-            else if (statuses.Any(x => x == "Shipped"))
-                orderStatus = "Shipped";
-            else if (statuses.Any(x => x == "Packed"))
-                orderStatus = "Packed";
-            else
-                orderStatus = "Placed";
+            var orderStatus = DeriveOrderStatus(order.OrderItems.Select(x => x.OrderItemStatus));
 
             return new OrderInvoiceViewModel
             {
                 OrderId = order.OrderId,
-
-                InvoiceNumber =
-                    $"INV-{order.OrderNumber}",
-
+                InvoiceNumber = $"INV-{order.OrderNumber}",
                 Date = order.OrderDate,
 
-                CompanyName =
-                    "Sunil Medical Products Pvt Ltd",
+                CompanyName = _config["Company:Name"] ?? "Sunil Medical Products Pvt Ltd",
+                CompanyGST = _config["Company:GST"] ?? "37ABCDE1234F1Z5",
+                CompanyAddress = _config["Company:Address"] ?? "Visakhapatnam, Andhra Pradesh, India",
+                CompanyPhone = _config["Company:Phone"] ?? "9014060858",
 
-                CompanyGST =
-                    "37ABCDE1234F1Z5",
+                CustomerName = address?.FullName ?? "",
+                Address = $"{address?.AddressLine1}, {address?.AddressLine2}",
+                City = address?.City ?? "",
+                Pincode = address?.Pincode ?? "",
+                Phone = address?.MobileNumber ?? "",
 
-                CompanyAddress =
-                    "Visakhapatnam, Andhra Pradesh, India",
+                PaymentId = order.RazorpayPaymentId ?? "",
+                PaymentStatus = order.PaymentStatus,
+                OrderStatus = orderStatus,
+                Currency = order.Currency,
 
-                CompanyPhone =
-                    "9014060858",
+                SubTotal = subtotal,
+                DiscountTotal = productDiscount,
+                TaxableAmount = taxableAmount,
+                CouponDiscount = couponDiscount,
+                GSTTotal = gstTotal,
+                FinalPaidAmount = finalPaid,
+                GrandTotal = order.GrandTotal,
 
-                CustomerName =
-                    address?.FullName ?? "",
-
-                Address =
-                    $"{address?.AddressLine1}, {address?.AddressLine2}",
-
-                City =
-                    address?.City ?? "",
-
-                Pincode =
-                    address?.Pincode ?? "",
-
-                Phone =
-                    address?.MobileNumber ?? "",
-
-                PaymentId =
-                    order.RazorpayPaymentId ?? "",
-
-                PaymentStatus =
-                    order.PaymentStatus,
-
-                OrderStatus =
-                    orderStatus,
-
-                Currency =
-                    order.Currency,
-
-                SubTotal =
-                    subtotal,
-
-                DiscountTotal =
-                    productDiscount,
-                TaxableAmount =
-            taxableAmount,
-
-                CouponDiscount =
-            couponDiscount,
-
-                GSTTotal =
-            gstTotal,
-
-                FinalPaidAmount =
-            finalPaid,
-
-                GrandTotal =
-            order.GrandTotal,
-
-                Items = order.OrderItems
-            .Select(item => new InvoiceItemViewModel
-            {
-                ProductName =
-                    item.ProductName,
-
-                VariantName =
-                    item.ProductVariant?.Model ?? "",
-
-                Quantity =
-                    item.Quantity,
-
-                Price =
-                    item.Price,
-
-                DiscountAmount =
-                    item.DiscountAmount,
-
-                TaxableAmount =
-                    item.TaxableAmount,
-
-                GSTPercentage =
-                    item.GSTPercentage,
-
-                GSTAmount =
-                    item.GSTAmount,
-
-                CouponDiscountAmount =
-                    item.CouponDiscountAmount,
-
-                FinalPaidAmount =
-                    item.FinalPaidAmount,
-
-                Total =
-                    item.LineTotal,
-
-                // Optional Item Details
-                ItemStatus =
-                    item.OrderItemStatus,
-
-                SellerId =
-                    item.SellerId,
-
-                ReturnStatus =
-                    item.ReturnStatus
-            })
-            .ToList()
+                Items = order.OrderItems.Select(item => new InvoiceItemViewModel
+                {
+                    ProductName = item.ProductName,
+                    VariantName = item.ProductVariant?.Model ?? "",
+                    Quantity = item.Quantity,
+                    Price = item.Price,
+                    DiscountAmount = item.DiscountAmount,
+                    TaxableAmount = item.TaxableAmount,
+                    GSTPercentage = item.GSTPercentage,
+                    GSTAmount = item.GSTAmount,
+                    CouponDiscountAmount = item.CouponDiscountAmount,
+                    FinalPaidAmount = item.FinalPaidAmount,
+                    Total = item.LineTotal,
+                    ItemStatus = item.OrderItemStatus,
+                    SellerId = item.SellerId,
+                    ReturnStatus = item.ReturnStatus
+                }).ToList()
             };
         }
-
-
-
-
 
         public static string GetDisplayName(ApplicationUser user)
         {
             if (user == null) return "Unknown";
-
-            return !string.IsNullOrEmpty(user.CustomerName)
-                ? user.CustomerName
-                : user.UserName;
+            return !string.IsNullOrEmpty(user.CustomerName) ? user.CustomerName : user.UserName;
         }
-
 
         // =========================
         // ORDER DETAILS (MODAL)
         // =========================
-
         [Authorize]
         [HttpGet("details/{id}")]
-        public async Task<IActionResult> GetOrderDetails(
-    int id)
+        public async Task<IActionResult> GetOrderDetails(int id, CancellationToken cancellationToken)
         {
             try
             {
-                var isAdmin =
-                    User.IsInRole("Admin");
-
-                var userId =
-                    _userContext.GetUserId();
-
+                var isAdmin = User.IsInRole("Admin");
                 int sellerId = 0;
 
                 if (!isAdmin)
                 {
+                    var seller = await GetCurrentSellerAsync();
 
-                    if (!isAdmin)
+                    if (seller == null)
                     {
-                        var seller = await GetCurrentSellerAsync();
+                        return Unauthorized(new { success = false, message = "Seller not found." });
+                    }
 
-                        if (seller == null)
+                    if (!HasActiveSubscription(seller))
+                    {
+                        return StatusCode(StatusCodes.Status403Forbidden, new
                         {
-                            return Unauthorized(new
-                            {
-                                success = false,
-                                message = "Seller not found."
-                            });
-                        }
+                            success = false,
+                            message = "Your subscription has expired."
+                        });
+                    }
 
-                        if (!HasActiveSubscription(seller))
+                    sellerId = seller.SellerId;
+
+                    var hasAccess = await _context.OrderItems
+                        .AnyAsync(x => x.OrderId == id && x.SellerId == sellerId, cancellationToken);
+
+                    if (!hasAccess)
+                    {
+                        return StatusCode(StatusCodes.Status403Forbidden, new
                         {
-                            return StatusCode(StatusCodes.Status403Forbidden, new
-                            {
-                                success = false,
-                                message = "Your subscription has expired."
-                            });
-                        }
-
-                        sellerId = seller.SellerId;
-
-                        var hasAccess = await _context.OrderItems
-                            .AnyAsync(x =>
-                                x.OrderId == id &&
-                                x.SellerId == sellerId);
-
-                        if (!hasAccess)
-                        {
-                            return StatusCode(StatusCodes.Status403Forbidden, new
-                            {
-                                success = false,
-                                message = "You are not authorized to view this order."
-                            });
-                        }
+                            success = false,
+                            message = "You are not authorized to view this order."
+                        });
                     }
                 }
 
-                var order =
-     await _context.Orders
-         .AsNoTracking()
-         .Include(x => x.UserAddress)
-         .Include(x => x.OrderItems)
-             .ThenInclude(x => x.Product)
-         .Include(x => x.OrderItems)
-             .ThenInclude(x => x.ProductVariant)
-         .FirstOrDefaultAsync(x =>
-             x.OrderId == id);
+                var order = await _context.Orders
+                    .AsNoTracking()
+                    .Include(x => x.UserAddress)
+                    .Include(x => x.OrderItems).ThenInclude(x => x.Product)
+                    .Include(x => x.OrderItems).ThenInclude(x => x.ProductVariant)
+                    .FirstOrDefaultAsync(x => x.OrderId == id, cancellationToken);
 
                 if (order == null)
                 {
-                    return NotFound(new
-                    {
-                        success = false,
-                        message = "Order not found"
-                    });
+                    return NotFound(new { success = false, message = "Order not found" });
                 }
 
                 return Ok(new
                 {
                     success = true,
-
                     data = new
                     {
                         order.OrderId,
                         order.OrderNumber,
                         order.OrderDate,
                         order.PaymentStatus,
-                        //order.PaymentMethod,
                         order.GrandTotal,
 
-                        CustomerName =
-                            order.UserAddress?.FullName,
-
-                        Phone =
-                            order.UserAddress?.MobileNumber,
-
-                        Address =
-                            $"{order.UserAddress?.AddressLine1}, " +
-                            $"{order.UserAddress?.AddressLine2}",
-
-                        City =
-                            order.UserAddress?.City,
-
-                        Pincode =
-                            order.UserAddress?.Pincode,
+                        CustomerName = order.UserAddress?.FullName,
+                        Phone = order.UserAddress?.MobileNumber,
+                        Address = $"{order.UserAddress?.AddressLine1}, {order.UserAddress?.AddressLine2}",
+                        City = order.UserAddress?.City,
+                        Pincode = order.UserAddress?.Pincode,
 
                         Items = (isAdmin
-        ? order.OrderItems
-        : order.OrderItems.Where(x => x.SellerId == sellerId))
-    .Select(x => new
-    {
-        x.OrderItemId,
-        x.ProductId,
-        x.ProductName,
-
-        Variant = x.ProductVariant != null
-            ? x.ProductVariant.Model
-            : "",
-
-        x.Quantity,
-        x.Price,
-        x.LineTotal,
-        x.OrderItemStatus
-    })
-    .ToList()
+                                ? order.OrderItems
+                                : order.OrderItems.Where(x => x.SellerId == sellerId))
+                            .Select(x => new
+                            {
+                                x.OrderItemId,
+                                x.ProductId,
+                                x.ProductName,
+                                Variant = x.ProductVariant != null ? x.ProductVariant.Model : "",
+                                x.Quantity,
+                                x.Price,
+                                x.LineTotal,
+                                x.OrderItemStatus
+                            })
+                            .ToList()
                     }
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
-                {
-                    success = false,
-                    message = ex.Message
-                });
+                return ErrorResponse(ex, "Failed to load order details.", StatusCodes.Status500InternalServerError);
             }
         }
 
@@ -2591,8 +1849,7 @@ int orderItemId,
             if (string.IsNullOrEmpty(userId))
                 return null;
 
-            return await _context.Sellers
-                .FirstOrDefaultAsync(x => x.UserId == userId);
+            return await _context.Sellers.FirstOrDefaultAsync(x => x.UserId == userId);
         }
 
         private bool HasActiveSubscription(SellerModel seller)
@@ -2604,14 +1861,7 @@ int orderItemId,
         [HttpGet("test")]
         public IActionResult Test()
         {
-            return Ok(new
-            {
-                success = true,
-                message = "Backend Updated"
-            });
+            return Ok(new { success = true, message = "Backend Updated" });
         }
-
     }
-
-
 }

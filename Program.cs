@@ -32,6 +32,8 @@ builder.Services
 // APPLICATION SERVICES
 // =====================================================
 
+builder.Services.AddMemoryCache();
+
 builder.Services.AddScoped<ProductService>();
 
 builder.Services.AddScoped<ISmsService, TwilioSmsService>();

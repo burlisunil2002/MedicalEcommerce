@@ -32,104 +32,325 @@ namespace VivekMedicalProducts.Services
             string? guestId,
             string? couponCode)
         {
-            var carts =
-               await _context.Carts
-    .AsNoTracking()
-    .Include(c => c.Product)
-    .Include(c => c.ProductVariant)
-                    .Where(c =>
-                        (!string.IsNullOrEmpty(userId) &&
-                         c.UserId == userId)
-                        ||
-                        (string.IsNullOrEmpty(userId) &&
-                         c.GuestId == guestId))
-                    .ToListAsync();
+            var carts = await _context.Carts
+                .AsNoTracking()
+                .Include(c => c.Product)
+                .Include(c => c.ProductVariant)
+                .Where(c =>
+                    (
+                        !string.IsNullOrWhiteSpace(userId) &&
+                        c.UserId == userId
+                    )
+                    ||
+                    (
+                        string.IsNullOrWhiteSpace(userId) &&
+                        !string.IsNullOrWhiteSpace(guestId) &&
+                        c.GuestId == guestId
+                    )
+                )
+                .ToListAsync();
 
-            decimal subtotal = 0;
-            decimal gst = 0;
-            decimal saved = 0;
+            decimal subtotal = 0m;
+            decimal productDiscount = 0m;
 
-            foreach (var c in carts)
+            // -------------------------------------------------
+            // PRODUCT TOTALS
+            // Product prices are GST-INCLUSIVE
+            // -------------------------------------------------
+
+            foreach (var cartItem in carts)
             {
                 if (
-                    c.Product == null ||
-                    c.ProductVariant == null
+                    cartItem.Product == null ||
+                    cartItem.ProductVariant == null
                 )
+                {
                     continue;
+                }
 
-                decimal originalPrice =
-                    c.ProductVariant.Price;
+                var quantity =
+                    Math.Max(
+                        1,
+                        cartItem.Quantity
+                    );
 
-                decimal discountPercent =
-                    c.Product?.DiscountPercentage ?? 0;
+                var originalPrice =
+                    Math.Max(
+                        0m,
+                        cartItem.ProductVariant.Price
+                    );
 
-                decimal finalPrice =
-                    c.Product?.IsHotDeal == true &&
-                    discountPercent > 0
+                var discountPercentage =
+                    Math.Max(
+                        0m,
+                        cartItem.Product.DiscountPercentage ?? 0m
+                    );
+
+                var finalUnitPrice =
+                    cartItem.Product.IsHotDeal &&
+                    discountPercentage > 0m
                         ? originalPrice -
                           (
                               originalPrice *
-                              discountPercent / 100m
+                              discountPercentage /
+                              100m
                           )
                         : originalPrice;
 
-                decimal itemSaved =
-                    originalPrice - finalPrice;
+                finalUnitPrice =
+                    Math.Max(
+                        0m,
+                        finalUnitPrice
+                    );
 
-                decimal lineTotal =
-                    finalPrice * c.Quantity;
+                var originalLineTotal =
+                    originalPrice *
+                    quantity;
 
-                decimal gstPercent =
-                    c.Product?.GSTPercentage ?? 0;
+                var finalLineTotal =
+                    finalUnitPrice *
+                    quantity;
 
-                decimal gstAmount =
-                    lineTotal *
-                    gstPercent / 100m;
+                var itemDiscount =
+                    originalLineTotal -
+                    finalLineTotal;
 
-                subtotal += lineTotal;
-                gst += gstAmount;
-                saved += itemSaved * c.Quantity;
+                subtotal += finalLineTotal;
+
+                productDiscount +=
+                    Math.Max(
+                        0m,
+                        itemDiscount
+                    );
             }
 
-            decimal couponDiscount =
+            subtotal =
+                Math.Round(
+                    subtotal,
+                    2,
+                    MidpointRounding.AwayFromZero
+                );
+
+            productDiscount =
+                Math.Round(
+                    productDiscount,
+                    2,
+                    MidpointRounding.AwayFromZero
+                );
+
+            // -------------------------------------------------
+            // COUPON
+            // Coupon is applied to the GST-INCLUSIVE
+            // product selling amount.
+            // -------------------------------------------------
+
+            var couponDiscount =
                 _couponService.CalculateDiscount(
                     couponCode,
                     subtotal
                 );
 
-            decimal delivery =
-                subtotal >= 500
-                    ? 0
-                    : 80;
+            couponDiscount =
+                Math.Clamp(
+                    Math.Round(
+                        couponDiscount,
+                        2,
+                        MidpointRounding.AwayFromZero
+                    ),
+                    0m,
+                    subtotal
+                );
 
-            decimal total =
+            // -------------------------------------------------
+            // DELIVERY
+            // -------------------------------------------------
+
+            decimal delivery =
+                subtotal >= 500m
+                    ? 0m
+                    : 80m;
+
+            // -------------------------------------------------
+            // FINAL PAYABLE
+            // -------------------------------------------------
+
+            var total =
                 subtotal +
-                gst +
                 delivery -
                 couponDiscount;
 
-            if (total < 0)
-                total = 0;
+            total =
+                Math.Max(
+                    0m,
+                    total
+                );
+
+            total =
+                Math.Round(
+                    total,
+                    2,
+                    MidpointRounding.AwayFromZero
+                );
+
+            // -------------------------------------------------
+            // GST-INCLUSIVE EXTRACTION
+            //
+            // IMPORTANT:
+            // GST is NOT added to subtotal.
+            // It is extracted from the GST-inclusive amount.
+            //
+            // Coupon is a reduction of the customer-facing
+            // product amount, so GST shown here is based on
+            // the amount after coupon.
+            // -------------------------------------------------
+
+            decimal amountAfterCoupon =
+                Math.Max(
+                    0m,
+                    subtotal - couponDiscount
+                );
+
+            decimal gst = 0m;
+
+            decimal taxableAmount =
+                0m;
+
+            if (carts.Count > 0)
+            {
+                foreach (var cartItem in carts)
+                {
+                    if (
+                        cartItem.Product == null ||
+                        cartItem.ProductVariant == null
+                    )
+                    {
+                        continue;
+                    }
+
+                    var quantity =
+                        Math.Max(
+                            1,
+                            cartItem.Quantity
+                        );
+
+                    var originalPrice =
+                        Math.Max(
+                            0m,
+                            cartItem.ProductVariant.Price
+                        );
+
+                    var discountPercentage =
+                        Math.Max(
+                            0m,
+                            cartItem.Product.DiscountPercentage ?? 0m
+                        );
+
+                    var finalUnitPrice =
+                        cartItem.Product.IsHotDeal &&
+                        discountPercentage > 0m
+                            ? originalPrice -
+                              (
+                                  originalPrice *
+                                  discountPercentage /
+                                  100m
+                              )
+                            : originalPrice;
+
+                    finalUnitPrice =
+                        Math.Max(
+                            0m,
+                            finalUnitPrice
+                        );
+
+                    var lineAmount =
+                        finalUnitPrice *
+                        quantity;
+
+                    // Allocate coupon proportionally
+                    // across product lines.
+                    decimal allocatedCoupon = 0m;
+
+                    if (
+                        subtotal > 0m &&
+                        couponDiscount > 0m
+                    )
+                    {
+                        allocatedCoupon =
+                            couponDiscount *
+                            lineAmount /
+                            subtotal;
+                    }
+
+                    var lineAfterCoupon =
+                        Math.Max(
+                            0m,
+                            lineAmount -
+                            allocatedCoupon
+                        );
+
+                    var gstPercentage =
+                        Math.Max(
+                            0m,
+                            cartItem.Product.GSTPercentage
+                        );
+
+                    // GST-inclusive extraction
+                    var lineGst =
+                        gstPercentage > 0m
+                            ? lineAfterCoupon *
+                              gstPercentage /
+                              (100m + gstPercentage)
+                            : 0m;
+
+                    var lineTaxable =
+                        lineAfterCoupon -
+                        lineGst;
+
+                    gst += lineGst;
+
+                    taxableAmount +=
+                        lineTaxable;
+                }
+            }
+
+            gst =
+                Math.Round(
+                    gst,
+                    2,
+                    MidpointRounding.AwayFromZero
+                );
+
+            taxableAmount =
+                Math.Round(
+                    taxableAmount,
+                    2,
+                    MidpointRounding.AwayFromZero
+                );
+
+            // -------------------------------------------------
+            // RETURN
+            // -------------------------------------------------
 
             return new CartTotalsDto
             {
                 Subtotal =
-                    Math.Round(subtotal, 2),
+                    subtotal,
 
                 GST =
-                    Math.Round(gst, 2),
+                    gst,
 
                 CouponDiscount =
-                    Math.Round(couponDiscount, 2),
+                    couponDiscount,
 
                 Delivery =
-                    Math.Round(delivery, 2),
+                    delivery,
 
                 Saved =
-                    Math.Round(saved, 2),
+                    productDiscount +
+                    couponDiscount,
 
                 Total =
-                    Math.Round(total, 2)
+                    total
             };
         }
     }

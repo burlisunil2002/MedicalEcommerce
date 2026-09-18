@@ -4,11 +4,12 @@
   "homepage": "/react",
   "private": true,
   "dependencies": {
+    "@react-pdf/renderer": "^4.9.0",
     "axios": "0.27.2",
     "framer-motion": "^12.42.2",
-    "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.14.0",
     "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "lucide-react": "0.446.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",

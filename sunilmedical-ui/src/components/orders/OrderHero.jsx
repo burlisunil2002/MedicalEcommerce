@@ -62,44 +62,6 @@ export default function OrderHero({
 
                     </p>
 
-                    {/* Stats */}
-
-                    <div className="mt-8 flex flex-wrap gap-4">
-
-                        <div className="rounded-2xl bg-white/15 px-6 py-4 backdrop-blur">
-
-                            <p className="text-sm text-blue-100">
-
-                                Total Orders
-
-                            </p>
-
-                            <h2 className="text-3xl font-bold">
-
-                                {totalOrders}
-
-                            </h2>
-
-                        </div>
-
-                        <div className="rounded-2xl bg-white/15 px-6 py-4 backdrop-blur">
-
-                            <p className="text-sm text-blue-100">
-
-                                Secure Shopping
-
-                            </p>
-
-                            <h2 className="text-xl font-semibold">
-
-                                100%
-
-                            </h2>
-
-                        </div>
-
-                    </div>
-
                 </div>
 
                 {/* RIGHT */}
