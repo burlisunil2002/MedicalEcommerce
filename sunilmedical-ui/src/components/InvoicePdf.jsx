@@ -1,1031 +1,807 @@
-﻿import React, { forwardRef, useMemo } from "react";
+﻿import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
-const toNumber = (value, fallback = 0) => {
+/*
+ * InvoicePdf.jsx
+ * ----------------
+ * Single responsibility: generate the customer invoice PDF.
+ *
+ * OrderCard.jsx should call:
+ *     import generateInvoicePdf from "../InvoicePdf";
+ *     await generateInvoicePdf(order);
+ *
+ * The order model used by the current application contains:
+ * order.items
+ * order.grandTotal
+ * order.couponDiscount
+ * order.deliveryAddress
+ * order.orderNumber
+ * order.orderDate
+ * order.paymentStatus
+ *
+ * Item fields used:
+ * item.productName / item.name
+ * item.variantName / item.modelName
+ * item.quantity
+ * item.price
+ * item.discountAmount / item.discountPercentage
+ * item.gstPercentage
+ * item.finalUnitPrice / item.productFinalPrice / item.sellingPrice
+ * item.itemTotal
+ */
+
+const toNumber = (value) => {
+    if (value === null || value === undefined || value === "") return 0;
     const n = Number(value);
-    return Number.isFinite(n) ? n : fallback;
+    return Number.isFinite(n) ? n : 0;
 };
-
-const money = (value) =>
-    `₹${toNumber(value).toLocaleString("en-IN", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    })}`;
 
 const roundMoney = (value) =>
     Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
 
-const getGstRate = (item) => {
-    const rate = Number(
-        item?.gstPercentage ??
-        item?.gstRate ??
-        item?.taxPercentage ??
-        item?.taxRate
-    );
-
-    return Number.isFinite(rate) && rate >= 0
-        ? rate
-        : 0;
-};
-
-const getItems = (invoice) =>
-    Array.isArray(invoice?.items)
-        ? invoice.items.filter(Boolean)
-        : [];
-
-/*
- * GST-INCLUSIVE ORDER PRICING
- *
- * The customer-facing product price already includes GST.
- *
- * Final unit price:
- *   productFinalPrice / finalPrice / sellingPrice / unitPrice / price
- *
- * Original unit price:
- *   productPrice / originalPrice / mrp
- *
- * We deliberately do NOT trust itemTotal/taxableAmount/gstAmount for the
- * final line total unless they reconcile with the GST-inclusive price.
- * This prevents a taxable amount from accidentally being displayed as
- * the product total.
- */
-const getFinalUnitPrice = (item) => {
-    const value =
-        item?.productFinalPrice ??
-        item?.finalPrice ??
-        item?.sellingPrice ??
-        item?.unitPrice ??
-        item?.price ??
-        0;
-
-    return Math.max(0, roundMoney(value));
-};
-
-const getOriginalUnitPrice = (item, finalUnitPrice) => {
-    const original = toNumber(
-        item?.productPrice ??
-        item?.originalPrice ??
-        item?.mrp ??
-        item?.price ??
-        finalUnitPrice
-    );
-
-    return Math.max(0, roundMoney(original));
-};
+const formatMoney = (value) =>
+    `Rs. ${roundMoney(value).toFixed(2)}`;
 
 const getQuantity = (item) =>
+    Math.max(1, Math.floor(toNumber(item?.quantity) || 1));
+
+const getGstRate = (item) =>
     Math.max(
-        1,
-        Math.floor(toNumber(item?.quantity, 1))
+        0,
+        toNumber(
+            item?.gstPercentage ??
+            item?.gstRate ??
+            item?.taxPercentage ??
+            item?.taxRate
+        )
     );
 
-const getProductDiscountPerUnit = (
-    item,
-    originalUnitPrice,
-    finalUnitPrice
-) => {
-    const explicit = toNumber(
+const getOriginalUnitPrice = (item) =>
+    Math.max(
+        0,
+        toNumber(
+            item?.price ??
+            item?.productPrice ??
+            item?.originalPrice ??
+            item?.unitPrice
+        )
+    );
+
+const getExplicitFinalUnitPrice = (item) => {
+    const value = toNumber(
+        item?.finalUnitPrice ??
+        item?.productFinalPrice ??
+        item?.sellingPrice ??
+        item?.discountedPrice
+    );
+
+    return value > 0 ? value : 0;
+};
+
+const getProductDiscountPerUnit = (item, originalUnitPrice) => {
+    const quantity = getQuantity(item);
+
+    const discountAmount = toNumber(
         item?.discountAmount ??
-        item?.productDiscountAmount ??
-        item?.discountPerUnit ??
-        0
+        item?.productDiscountAmount
     );
 
-    if (
-        explicit > 0 &&
-        explicit <= originalUnitPrice
-    ) {
-        return roundMoney(explicit);
+    if (discountAmount > 0) {
+        return Math.max(0, discountAmount / quantity);
     }
 
+    const discountPercentage = toNumber(
+        item?.discountPercentage ??
+        item?.productDiscountPercentage
+    );
+
+    if (discountPercentage > 0) {
+        return Math.max(
+            0,
+            originalUnitPrice * discountPercentage / 100
+        );
+    }
+
+    return 0;
+};
+
+const getFinalUnitPrice = (item) => {
+    const original = getOriginalUnitPrice(item);
+    const explicitFinal = getExplicitFinalUnitPrice(item);
+
+    if (
+        explicitFinal > 0 &&
+        explicitFinal <= original
+    ) {
+        return roundMoney(explicitFinal);
+    }
+
+    const discount = getProductDiscountPerUnit(
+        item,
+        original
+    );
+
     return roundMoney(
+        Math.max(0, original - discount)
+    );
+};
+
+const getProductDisplayName = (item) => {
+    const productName =
+        item?.productName ??
+        item?.name ??
+        item?.product?.name ??
+        "-";
+
+    const modelName =
+        item?.variantName ??
+        item?.modelName ??
+        item?.model ??
+        item?.productVariantName ??
+        item?.productVariant?.name ??
+        "";
+
+    return modelName
+        ? `${productName} - ${modelName}`
+        : String(productName);
+};
+
+const buildInvoiceLine = (item) => {
+    const quantity = getQuantity(item);
+    const gstRate = getGstRate(item);
+
+    // Product price in the application is GST-inclusive.
+    const originalUnitPrice = roundMoney(
+        getOriginalUnitPrice(item)
+    );
+
+    // Product discount is applied before GST extraction.
+    const finalUnitPrice = roundMoney(
+        getFinalUnitPrice(item)
+    );
+
+    const discountPerUnit = roundMoney(
         Math.max(
             0,
             originalUnitPrice - finalUnitPrice
         )
-    );
-};
-
-/*
- * Calculates a GST-inclusive line in cents-safe 2-decimal values:
- *
- * Total = final GST-inclusive price × quantity
- * Taxable = Total / (1 + GST%)
- * GST = Total - Taxable
- *
- * We force the final GST value from Total - Taxable so:
- *
- *   Total with GST = Total
- *
- * exactly to 2 decimal places.
- */
-const buildTaxBreakup = (item) => {
-    const quantity = getQuantity(item);
-
-    // finalUnitPrice is the customer's discounted product price INCLUDING GST.
-    const finalUnitPrice = getFinalUnitPrice(item);
-
-    const originalUnitPrice = getOriginalUnitPrice(
-        item,
-        finalUnitPrice
-    );
-
-    const productDiscountPerUnit =
-        getProductDiscountPerUnit(
-            item,
-            originalUnitPrice,
-            finalUnitPrice
-        );
-
-    const rate = getGstRate(item);
-
-    // Exclusive GST price for ONE unit.
-    const taxableUnitPrice = roundMoney(
-        rate > 0
-            ? finalUnitPrice / (1 + rate / 100)
-            : finalUnitPrice
-    );
-
-    // GST for ONE unit.
-    const gstPerUnit = roundMoney(
-        Math.max(
-            0,
-            finalUnitPrice - taxableUnitPrice
-        )
-    );
-
-    // Line totals are always unit value × quantity.
-    const finalLineTotal = roundMoney(
-        finalUnitPrice * quantity
     );
 
     const originalLineTotal = roundMoney(
         originalUnitPrice * quantity
     );
 
-    const productDiscountTotal = roundMoney(
-        Math.max(
-            0,
-            originalLineTotal - finalLineTotal
-        )
+    const productDiscount = roundMoney(
+        discountPerUnit * quantity
     );
 
-    const taxableTotal = roundMoney(
-        taxableUnitPrice * quantity
+    const totalWithGst = roundMoney(
+        finalUnitPrice * quantity
     );
 
-    /*
-     * Force the GST line to reconcile:
-     *
-     * Total with GST = Total including GST
-     */
-    const gstTotal = roundMoney(
-        Math.max(
-            0,
-            finalLineTotal - taxableTotal
-        )
+    // Reverse-calculate GST from the discounted GST-inclusive amount.
+    const taxableLine = roundMoney(
+        gstRate > 0
+            ? totalWithGst / (1 + gstRate / 100)
+            : totalWithGst
+    );
+
+    const gstLine = roundMoney(
+        Math.max(0, totalWithGst - taxableLine)
     );
 
     return {
-        ...item,
+        name: getProductDisplayName(item),
         quantity,
-        gstPercentage: rate,
-
+        gstRate,
         originalUnitPrice,
-        unitPriceInclusive: finalUnitPrice,
-
-        // Product discount is calculated against the original product price.
-        productDiscountPerUnit,
-        productDiscountTotal,
-
+        finalUnitPrice,
+        discountPerUnit,
         originalLineTotal,
-        netLineAmount: finalLineTotal,
-
-        // Unit values for the invoice "Price Excl. GST" column.
-        taxableUnitPrice,
-        gstPerUnit,
-
-        // Line values used for totals.
-        taxableTotal,
-        gstTotal,
-
-        // Always GST-inclusive line total.
-        lineTotal: finalLineTotal
+        productDiscount,
+        taxableLine,
+        gstLine,
+        totalWithGst,
     };
 };
 
-const getExplicitCoupon = (invoice) => {
-    const candidates = [
-        invoice?.couponDiscount,
-        invoice?.couponDiscountAmount,
-        invoice?.couponDiscountTotal,
-        invoice?.couponAmount,
-        invoice?.discountCouponAmount,
-        invoice?.discountAmount,
-        invoice?.summary?.couponDiscount,
-        invoice?.summary?.couponDiscountAmount,
-        invoice?.summary?.couponAmount,
-        invoice?.order?.couponDiscount,
-        invoice?.order?.couponDiscountAmount,
-        invoice?.order?.couponAmount,
-        invoice?.order?.discountCouponAmount,
-        invoice?.paymentSummary?.couponDiscount,
-        invoice?.paymentSummary?.couponDiscountAmount,
-        invoice?.paymentSummary?.couponAmount
-    ];
-
-    for (const value of candidates) {
-        if (
-            value !== undefined &&
-            value !== null &&
-            value !== ""
-        ) {
-            const amount = Number(value);
-
-            if (
-                Number.isFinite(amount) &&
-                amount > 0
-            ) {
-                return roundMoney(amount);
-            }
-        }
-    }
-
-    // 0/null is treated as "not supplied" so the actual coupon can be
-    // derived from the backend final paid amount below.
-    return null;
-};
-
-const getShipping = (invoice) =>
+const getShipping = (order) =>
     Math.max(
         0,
-        roundMoney(
-            invoice?.shippingCharge ??
-            invoice?.shippingAmount ??
-            invoice?.deliveryCharge ??
-            invoice?.summary?.delivery ??
-            invoice?.summary?.shipping ??
+        toNumber(
+            order?.shippingAmount ??
+            order?.shippingCharge ??
+            order?.shippingCost ??
+            order?.deliveryCharge ??
+            order?.shipping
+        )
+    );
+
+const getExplicitCoupon = (order) =>
+    Math.max(
+        0,
+        toNumber(
+            order?.couponDiscount ??
+            order?.couponAmount ??
+            order?.coupon?.discountAmount
+        )
+    );
+
+const getFinalPaidAmount = (order) => {
+    // grandTotal is the authoritative paid/order total in the current UI.
+    const candidates = [
+        order?.grandTotal,
+        order?.finalPaidAmount,
+        order?.paidAmount,
+        order?.amountPaid,
+        order?.totalAmount,
+    ];
+
+    for (const candidate of candidates) {
+        const value = toNumber(candidate);
+        if (value > 0) return roundMoney(value);
+    }
+
+    return 0;
+};
+
+const buildTotals = (order, lines) => {
+    const productValueBeforeDiscount = roundMoney(
+        lines.reduce(
+            (sum, line) => sum + line.originalLineTotal,
             0
         )
     );
 
-const InvoicePdf = forwardRef(({ invoice }, ref) => {
-    if (!invoice) return null;
+    const productDiscount = roundMoney(
+        lines.reduce(
+            (sum, line) => sum + line.productDiscount,
+            0
+        )
+    );
+
+    const subtotalExclGst = roundMoney(
+        lines.reduce(
+            (sum, line) => sum + line.taxableLine,
+            0
+        )
+    );
+
+    const gstAmount = roundMoney(
+        lines.reduce(
+            (sum, line) => sum + line.gstLine,
+            0
+        )
+    );
+
+    const totalWithGst = roundMoney(
+        lines.reduce(
+            (sum, line) => sum + line.totalWithGst,
+            0
+        )
+    );
+
+    const shipping = roundMoney(
+        getShipping(order)
+    );
+
+    const backendFinalPaidAmount =
+        getFinalPaidAmount(order);
 
     /*
-     * PRODUCTION GST-INCLUSIVE INVOICE
-     *
-     * The displayed product price is the customer price INCLUDING GST.
-     *
-     * Example at 18% GST:
-     *
-     * Customer price = ₹5,000.00
-     * Taxable value  = 5000 / 1.18 = ₹4,237.29
-     * GST            = 5000 - 4237.29 = ₹762.71
-     * Customer pays  = ₹5,000.00
-     *
-     * Therefore GST is NEVER added on top of the displayed price.
+     * If the backend has the actual paid total, derive the coupon from it.
+     * This prevents the invoice from displaying a coupon that doesn't
+     * reconcile with the amount actually paid.
      */
-
-    const items = useMemo(() => {
-        return getItems(invoice).map(buildTaxBreakup);
-    }, [invoice]);
-
-    const totals = useMemo(() => {
-        const productOriginalTotal = roundMoney(
-            items.reduce(
-                (sum, item) =>
-                    sum + item.originalLineTotal,
-                0
-            )
-        );
-
-        const productDiscount = roundMoney(
-            items.reduce(
-                (sum, item) =>
-                    sum + item.productDiscountTotal,
-                0
-            )
-        );
-
-        /*
-         * This is the actual product amount the customer pays BEFORE
-         * the order-level coupon.
-         */
-        const productTotalInclGst = roundMoney(
-            items.reduce(
-                (sum, item) =>
-                    sum + item.lineTotal,
-                0
-            )
-        );
-
-        const taxableAmount = roundMoney(
-            items.reduce(
-                (sum, item) =>
-                    sum + item.taxableTotal,
-                0
-            )
-        );
-
-        const gstTotal = roundMoney(
-            items.reduce(
-                (sum, item) =>
-                    sum + item.gstTotal,
-                0
-            )
-        );
-
-        /*
-         * Production reconciliation:
-         *
-         * Product Total (Incl. GST)
-         * + Shipping
-         * - Final Paid Amount
-         * = Coupon / Order Discount
-         *
-         * If the backend provides a positive coupon, we still compare it
-         * with the actual final amount. The displayed invoice must tally
-         * with the amount actually paid.
-         */
-        const explicitCoupon =
-            getExplicitCoupon(invoice);
-
-        const itemCouponDiscount = roundMoney(
-            items.reduce(
-                (sum, item) =>
-                    sum +
-                    Math.max(
-                        0,
-                        toNumber(
-                            item?.couponDiscountAmount ??
-                            item?.couponDiscount ??
-                            item?.couponDiscountValue ??
-                            0
-                        )
-                    ),
-                0
-            )
-        );
-
-        const backendFinalRaw =
-            invoice?.finalPaidAmount ??
-            invoice?.grandTotal ??
-            invoice?.totalAmount ??
-            invoice?.order?.finalPaidAmount ??
-            invoice?.order?.grandTotal ??
-            invoice?.order?.totalAmount;
-
-        const backendFinal =
-            backendFinalRaw !== undefined &&
-                backendFinalRaw !== null &&
-                backendFinalRaw !== ""
-                ? Number(backendFinalRaw)
-                : NaN;
-
-        /*
-         * Derive the actual order-level discount from the final amount.
-         * This is what fixes invoices where the API exposes coupon as 0
-         * or does not expose the coupon field at all.
-         */
-        const derivedCoupon = Number.isFinite(backendFinal)
-            ? roundMoney(
-                Math.max(
-                    0,
-                    productTotalInclGst +
-                    shipping -
-                    backendFinal
-                )
-            )
-            : 0;
-
-        /*
-         * Prefer an explicit/item coupon only when it is positive.
-         * If a backend final total exists, use the derived amount when it
-         * differs, because the invoice must reconcile to the actual total.
-         */
-        let couponDiscount = 0;
-
-        if (explicitCoupon !== null) {
-            // Use the explicit coupon value supplied by the order/invoice.
-            couponDiscount = explicitCoupon;
-        } else if (itemCouponDiscount > 0) {
-            // Fallback for APIs that store the coupon against an order item.
-            couponDiscount = itemCouponDiscount;
-        } else if (Number.isFinite(backendFinal)) {
-            // Last-resort fallback when the coupon field is absent.
-            couponDiscount = derivedCoupon;
-        }
-
-        couponDiscount = roundMoney(
+    const derivedCoupon = backendFinalPaidAmount > 0
+        ? roundMoney(
             Math.max(
                 0,
-                Math.min(
-                    couponDiscount,
-                    productTotalInclGst + shipping
-                )
-            )
-        );
-
-        /*
-         * Final payable:
-         *
-         * Total Incl. GST + Shipping - Coupon = Final Paid
-         */
-        const calculatedFinalPaid = roundMoney(
-            Math.max(
-                0,
-                productTotalInclGst +
+                totalWithGst +
                 shipping -
-                couponDiscount
+                backendFinalPaidAmount
             )
-        );
+        )
+        : 0;
 
-        /*
-         * Backend final amount is used when present because it is the
-         * authoritative transaction value. Coupon was derived from it,
-         * therefore the visible invoice always reconciles.
-         */
-        const finalPaidAmount =
-            Number.isFinite(backendFinal)
-                ? roundMoney(backendFinal)
-                : calculatedFinalPaid;
-
-        /*
-         * Total with GST must equal the product total including GST.
-         */
-        const taxablePlusGst = roundMoney(
-            taxableAmount + gstTotal
-        );
-
-        return {
-            productOriginalTotal,
-            productDiscount,
-            productTotalInclGst,
-            taxableAmount,
-            gstTotal,
-            taxablePlusGst,
-            couponDiscount,
-            shipping,
-            calculatedFinalPaid,
-            finalPaidAmount
-        };
-    }, [items, invoice]);
-
-    return (
-        <div
-            ref={ref}
-            style={{
-                width: "190mm",
-                minHeight: "270mm",
-                margin: "0 auto",
-                padding: "10mm",
-                boxSizing: "border-box",
-                background: "#fff",
-                color: "#111827",
-                fontFamily:
-                    "Arial, Helvetica, sans-serif",
-                fontSize: "11px",
-                lineHeight: 1.4
-            }}
-        >
-            {/* HEADER */}
-            <div
-                style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    gap: "20px",
-                    borderBottom:
-                        "2px solid #e5e7eb",
-                    paddingBottom: "14px"
-                }}
-            >
-                <div style={{ flex: 1 }}>
-                    <img
-                        src={`${window.location.origin}/images/sunillogo.png`}
-                        alt="Sunil Medical Products"
-                        style={{
-                            width: "175px",
-                            height: "auto",
-                            display: "block",
-                            marginBottom: "7px"
-                        }}
-                        onError={(event) => {
-                            event.currentTarget.style.display =
-                                "none";
-                        }}
-                    />
-
-                    <h2
-                        style={{
-                            margin: 0,
-                            fontSize: "19px"
-                        }}
-                    >
-                        SUNIL MEDICAL PRODUCTS
-                        PVT LTD
-                    </h2>
-
-                    <div style={muted}>
-                        GSTIN :{" "}
-                        {invoice.companyGST ||
-                            "37ABCDE1234F1Z5"}
-                    </div>
-
-                    <div style={muted}>
-                        {invoice.companyAddress ||
-                            "Visakhapatnam, Andhra Pradesh, India"}
-                    </div>
-
-                    <div style={muted}>
-                        Phone :{" "}
-                        {invoice.companyPhone ||
-                            "9014060858"}
-                    </div>
-                </div>
-
-                <div
-                    style={{
-                        minWidth: "175px",
-                        textAlign: "right"
-                    }}
-                >
-                    <h1
-                        style={{
-                            margin: 0,
-                            fontSize: "27px",
-                            letterSpacing: "0.5px"
-                        }}
-                    >
-                        TAX INVOICE
-                    </h1>
-
-                    <div style={{ marginTop: "9px" }}>
-                        <strong>Invoice No:</strong>{" "}
-                        {invoice.invoiceNumber || "-"}
-                    </div>
-
-                    <div>
-                        <strong>Order ID:</strong>{" "}
-                        #{invoice.orderId || "-"}
-                    </div>
-
-                    <div>
-                        <strong>Date:</strong>{" "}
-                        {invoice.date
-                            ? new Date(
-                                invoice.date
-                            ).toLocaleDateString(
-                                "en-IN"
-                            )
-                            : "-"}
-                    </div>
-                </div>
-            </div>
-
-            {/* CUSTOMER */}
-            <div
-                style={{
-                    marginTop: "18px",
-                    border:
-                        "1px solid #dbe1e8",
-                    padding: "12px 14px",
-                    borderRadius: "6px"
-                }}
-            >
-                <div
-                    style={{
-                        fontWeight: "700",
-                        fontSize: "13px",
-                        marginBottom: "6px"
-                    }}
-                >
-                    Bill To
-                </div>
-
-                <strong>
-                    {invoice.customerName || "-"}
-                </strong>
-
-                {invoice.address && (
-                    <div>{invoice.address}</div>
-                )}
-
-                <div>
-                    {[
-                        invoice.city,
-                        invoice.state
-                    ]
-                        .filter(Boolean)
-                        .join(", ")}
-                    {invoice.pincode
-                        ? ` - ${invoice.pincode}`
-                        : ""}
-                </div>
-
-                {invoice.phone && (
-                    <div>{invoice.phone}</div>
-                )}
-            </div>
-
-            {/* ITEMS */}
-            <table
-                style={{
-                    width: "100%",
-                    marginTop: "22px",
-                    borderCollapse: "collapse",
-                    tableLayout: "fixed"
-                }}
-            >
-                <thead>
-                    <tr
-                        style={{
-                            background: "#111827",
-                            color: "#fff"
-                        }}
-                    >
-                        <th style={thProduct}>
-                            Product
-                        </th>
-                        <th style={th}>
-                            Qty
-                        </th>
-                        <th style={th}>
-                            Price Excl. GST
-                        </th>
-                        <th style={th}>
-                            GST %
-                        </th>
-                        <th style={th}>
-                            GST Amount
-                        </th>
-                        <th style={th}>
-                            Total Incl. GST
-                        </th>
-                    </tr>
-                </thead>
-
-                <tbody>
-                    {items.map((item, index) => (
-                        <tr
-                            key={
-                                item.orderItemId ||
-                                item.productVariantId ||
-                                index
-                            }
-                        >
-                            <td style={tdProduct}>
-                                <strong>
-                                    {item.productName ||
-                                        "-"}
-                                </strong>
-
-                                {item.variantName && (
-                                    <>
-                                        <br />
-                                        <span
-                                            style={{
-                                                color:
-                                                    "#6b7280",
-                                                fontSize:
-                                                    "9px"
-                                            }}
-                                        >
-                                            {item.variantName}
-                                        </span>
-                                    </>
-                                )}
-                            </td>
-
-                            <td style={tdCenter}>
-                                {item.quantity}
-                            </td>
-
-                            <td style={tdRight}>
-                                {money(
-                                    item.taxableUnitPrice
-                                )}
-                            </td>
-
-                            <td style={tdRight}>
-                                {item.gstPercentage.toFixed(2)}%
-                            </td>
-
-                            <td style={tdRight}>
-                                {money(
-                                    item.gstTotal
-                                )}
-                            </td>
-
-                            <td style={tdRight}>
-                                {money(
-                                    item.lineTotal
-                                )}
-                            </td>
-                        </tr>
-                    ))}
-
-                    {items.length === 0 && (
-                        <tr>
-                            <td
-                                colSpan="6"
-                                style={{
-                                    padding: "18px",
-                                    textAlign:
-                                        "center",
-                                    color:
-                                        "#6b7280"
-                                }}
-                            >
-                                No invoice items
-                                available.
-                            </td>
-                        </tr>
-                    )}
-                </tbody>
-            </table>
-
-            {/* GST NOTE */}
-            <div
-                style={{
-                    marginTop: "10px",
-                    padding: "8px 10px",
-                    border:
-                        "1px solid #dbeafe",
-                    borderRadius: "5px",
-                    background: "#eff6ff",
-                    color: "#1d4ed8",
-                    fontSize: "9.5px"
-                }}
-            >
-                Product prices shown in this invoice are after product discount and are GST-inclusive. Price Excl. GST is calculated by removing the applicable GST from the GST-inclusive selling price. Taxable Amount + GST Amount = Total Incl. GST. Coupon Discount is applied separately at order level.
-            </div>
-
-            {/* TOTALS */}
-            <div
-                style={{
-                    display: "flex",
-                    justifyContent: "flex-end",
-                    marginTop: "18px"
-                }}
-            >
-                <table
-                    style={{
-                        width: "390px",
-                        borderCollapse:
-                            "collapse"
-                    }}
-                >
-                    <tbody>
-                        <tr>
-                            <td style={summaryTd}>
-                                Product Total (Incl. GST)
-                            </td>
-                            <td style={summaryValue}>
-                                {money(
-                                    totals.productTotalInclGst
-                                )}
-                            </td>
-                        </tr>
-
-                        {totals.productDiscount > 0 && (
-                            <tr>
-                                <td
-                                    style={{
-                                        ...summaryTd,
-                                        color: "#047857"
-                                    }}
-                                >
-                                    Product Discount
-                                </td>
-
-                                <td
-                                    style={{
-                                        ...summaryValue,
-                                        color: "#047857"
-                                    }}
-                                >
-                                    -{" "}
-                                    {money(
-                                        totals.productDiscount
-                                    )}
-                                </td>
-                            </tr>
-                        )}
-
-                        <tr>
-                            <td style={summaryTd}>
-                                Taxable Amount (Excl. GST)
-                            </td>
-                            <td style={summaryValue}>
-                                {money(
-                                    totals.taxableAmount
-                                )}
-                            </td>
-                        </tr>
-
-                        <tr>
-                            <td style={summaryTd}>
-                                GST Amount
-                            </td>
-                            <td style={summaryValue}>
-                                {money(
-                                    totals.gstTotal
-                                )}
-                            </td>
-                        </tr>
-
-                        <tr>
-                            <td
-                                style={{
-                                    ...summaryTd,
-                                    fontWeight: "700"
-                                }}
-                            >
-                                Total with GST
-                            </td>
-                            <td
-                                style={{
-                                    ...summaryValue,
-                                    fontWeight: "700"
-                                }}
-                            >
-                                {money(
-                                    totals.taxablePlusGst
-                                )}
-                            </td>
-                        </tr>
-
-                        {totals.shipping > 0 && (
-                            <tr>
-                                <td style={summaryTd}>
-                                    Delivery / Shipping
-                                </td>
-                                <td style={summaryValue}>
-                                    {money(
-                                        totals.shipping
-                                    )}
-                                </td>
-                            </tr>
-                        )}
-
-                        <tr>
-                            <td
-                                style={{
-                                    ...summaryTd,
-                                    color: "#047857",
-                                    fontWeight: "700"
-                                }}
-                            >
-                                Coupon Discount
-                            </td>
-
-                            <td
-                                style={{
-                                    ...summaryValue,
-                                    color: "#047857",
-                                    fontWeight: "700"
-                                }}
-                            >
-                                {totals.couponDiscount > 0
-                                    ? `- ${money(
-                                        totals.couponDiscount
-                                    )}`
-                                    : money(0)}
-                            </td>
-                        </tr>
-
-                        <tr>
-                            <td
-                                style={{
-                                    padding: "10px",
-                                    fontWeight: "700",
-                                    borderTop:
-                                        "2px solid #111827"
-                                }}
-                            >
-                                Final Paid Amount
-                            </td>
-
-                            <td
-                                style={{
-                                    padding: "10px",
-                                    textAlign: "right",
-                                    fontWeight: "800",
-                                    fontSize: "15px",
-                                    borderTop:
-                                        "2px solid #111827"
-                                }}
-                            >
-                                {money(
-                                    totals.finalPaidAmount
-                                )}
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            {/* PAYMENT */}
-            <div
-                style={{
-                    marginTop: "16px",
-                    padding: "9px 11px",
-                    border:
-                        "1px solid #e5e7eb",
-                    borderRadius: "5px",
-                    fontSize: "9.5px"
-                }}
-            >
-                <strong>
-                    Payment Status:
-                </strong>{" "}
-                {invoice.paymentStatus ||
-                    "Completed"}
-
-                {invoice.paymentId && (
-                    <>
-                        {" | "}
-                        <strong>
-                            Payment ID:
-                        </strong>{" "}
-                        {invoice.paymentId}
-                    </>
-                )}
-            </div>
-
-            {/* FOOTER */}
-            <div
-                style={{
-                    marginTop: "28px",
-                    borderTop:
-                        "1px solid #d1d5db",
-                    paddingTop: "9px",
-                    textAlign: "center",
-                    color: "#6b7280",
-                    fontSize: "9.5px"
-                }}
-            >
-                This is a computer-generated
-                invoice and does not require a
-                signature.
-            </div>
-        </div>
+    const explicitCoupon = roundMoney(
+        getExplicitCoupon(order)
     );
-});
 
-const muted = {
-    color: "#4b5563",
-    marginTop: "3px"
+    const couponDiscount = roundMoney(
+        Math.min(
+            totalWithGst + shipping,
+            backendFinalPaidAmount > 0
+                ? derivedCoupon
+                : explicitCoupon
+        )
+    );
+
+    const calculatedFinalPaid = roundMoney(
+        Math.max(
+            0,
+            totalWithGst +
+            shipping -
+            couponDiscount
+        )
+    );
+
+    const finalPaidAmount =
+        backendFinalPaidAmount > 0
+            ? backendFinalPaidAmount
+            : calculatedFinalPaid;
+
+    return {
+        productValueBeforeDiscount,
+        productDiscount,
+        subtotalExclGst,
+        gstAmount,
+        totalWithGst,
+        shipping,
+        couponDiscount,
+        calculatedFinalPaid,
+        finalPaidAmount,
+    };
 };
 
-const th = {
-    border: "1px solid #d1d5db",
-    padding: "7px 5px",
-    textAlign: "right",
-    fontSize: "8px",
-    verticalAlign: "middle",
-    whiteSpace: "nowrap"
+const addHeader = (doc, order) => {
+    const pageWidth =
+        doc.internal.pageSize.getWidth();
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(17);
+    doc.text(
+        "SUNIL MEDICAL PRODUCTS PVT LTD",
+        14,
+        18
+    );
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+
+    doc.text(
+        "GSTIN: 37ABCDE1234F1Z5",
+        14,
+        24
+    );
+
+    doc.text(
+        "Visakhapatnam, Andhra Pradesh, India",
+        14,
+        29
+    );
+
+    doc.text(
+        "Phone: 9014060858",
+        14,
+        34
+    );
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(21);
+
+    doc.text(
+        "TAX INVOICE",
+        pageWidth - 14,
+        18,
+        { align: "right" }
+    );
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+
+    doc.text(
+        `Invoice No: INV-${order?.orderNumber || order?.orderId || "-"}`,
+        pageWidth - 14,
+        25,
+        { align: "right" }
+    );
+
+    doc.text(
+        `Order ID: #${order?.orderId || "-"}`,
+        pageWidth - 14,
+        30,
+        { align: "right" }
+    );
+
+    const dateText = order?.orderDate
+        ? new Date(order.orderDate).toLocaleDateString("en-IN")
+        : new Date().toLocaleDateString("en-IN");
+
+    doc.text(
+        `Date: ${dateText}`,
+        pageWidth - 14,
+        35,
+        { align: "right" }
+    );
+
+    doc.setDrawColor(210);
+    doc.line(
+        14,
+        40,
+        pageWidth - 14,
+        40
+    );
 };
 
-const thProduct = {
-    ...th,
-    width: "34%",
-    textAlign: "left"
+const addAddress = (doc, order) => {
+    const address =
+        order?.deliveryAddress;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+
+    doc.text(
+        "BILLING / DELIVERY ADDRESS",
+        14,
+        50
+    );
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+
+    const addressLines = [
+        address?.fullName,
+        [
+            address?.addressLine1,
+            address?.addressLine2,
+            address?.landmark,
+        ]
+            .filter(Boolean)
+            .join(", "),
+        [
+            address?.city,
+            address?.state,
+        ]
+            .filter(Boolean)
+            .join(", "),
+        address?.pincode
+            ? `Pincode: ${address.pincode}`
+            : "",
+        address?.mobileNumber
+            ? `Phone: ${address.mobileNumber}`
+            : "",
+    ].filter(Boolean);
+
+    let y = 57;
+
+    addressLines.forEach((line) => {
+        const wrapped =
+            doc.splitTextToSize(
+                String(line),
+                180
+            );
+
+        doc.text(
+            wrapped,
+            14,
+            y
+        );
+
+        y +=
+            wrapped.length * 4.5;
+    });
+
+    return y;
 };
 
-const td = {
-    border: "1px solid #d1d5db",
-    padding: "6px 4px",
-    fontSize: "8.5px",
-    verticalAlign: "top"
+const addSummary = (
+    doc,
+    startY,
+    totals
+) => {
+    const pageWidth =
+        doc.internal.pageSize.getWidth();
+
+    const pageHeight =
+        doc.internal.pageSize.getHeight();
+
+    let y = startY + 10;
+
+    if (y > 240) {
+        doc.addPage();
+        y = 20;
+    }
+
+    const labelX =
+        pageWidth - 90;
+
+    const amountX =
+        pageWidth - 14;
+
+    doc.setFont(
+        "helvetica",
+        "normal"
+    );
+
+    doc.setFontSize(8.5);
+
+    const summaryRows = [
+        [
+            "Product Value Before Discount",
+            totals.productValueBeforeDiscount,
+        ],
+        [
+            "Product Discount",
+            -totals.productDiscount,
+        ],
+        [
+            "Subtotal Excl. GST",
+            totals.subtotalExclGst,
+        ],
+        [
+            "GST Amount",
+            totals.gstAmount,
+        ],
+        [
+            "Total With GST",
+            totals.totalWithGst,
+        ],
+        [
+            "Shipping",
+            totals.shipping,
+        ],
+        [
+            "Coupon Discount",
+            -totals.couponDiscount,
+        ],
+    ];
+
+    summaryRows.forEach(
+        ([label, amount]) => {
+            doc.text(
+                label,
+                labelX,
+                y
+            );
+
+            doc.text(
+                formatMoney(amount),
+                amountX,
+                y,
+                { align: "right" }
+            );
+
+            y += 5.5;
+        }
+    );
+
+    doc.setDrawColor(180);
+
+    doc.line(
+        labelX,
+        y - 2,
+        amountX,
+        y - 2
+    );
+
+    doc.setFont(
+        "helvetica",
+        "bold"
+    );
+
+    doc.setFontSize(10);
+
+    doc.text(
+        "Final Paid Amount",
+        labelX,
+        y + 5
+    );
+
+    doc.text(
+        formatMoney(
+            totals.finalPaidAmount
+        ),
+        amountX,
+        y + 5,
+        { align: "right" }
+    );
+
+    const difference =
+        roundMoney(
+            totals.finalPaidAmount -
+            totals.calculatedFinalPaid
+        );
+
+    doc.setFont(
+        "helvetica",
+        "normal"
+    );
+
+    doc.setFontSize(7.5);
+
+    doc.text(
+        Math.abs(difference) <= 0.01
+            ? "Payment calculation reconciled."
+            : "Final paid amount is taken from the order total.",
+        14,
+        y + 15
+    );
+
+    doc.text(
+        "All product prices are GST-inclusive; GST is shown separately above.",
+        14,
+        y + 20
+    );
+
+    doc.text(
+        "This is a computer-generated invoice and does not require a signature.",
+        14,
+        Math.min(
+            y + 32,
+            pageHeight - 12
+        )
+    );
 };
 
-const tdProduct = {
-    ...td,
-    width: "34%",
-    wordBreak: "break-word"
+export const generateInvoicePdf = async (
+    order
+) => {
+    if (!order?.orderId) {
+        throw new Error(
+            "Order ID is missing."
+        );
+    }
+
+    const items =
+        Array.isArray(order?.items)
+            ? order.items
+            : [];
+
+    if (!items.length) {
+        throw new Error(
+            "No items found for this invoice."
+        );
+    }
+
+    const lines =
+        items.map(buildInvoiceLine);
+
+    const totals =
+        buildTotals(
+            order,
+            lines
+        );
+
+    const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+        compress: true,
+    });
+
+    const pageWidth =
+        doc.internal.pageSize.getWidth();
+
+    const pageHeight =
+        doc.internal.pageSize.getHeight();
+
+    addHeader(
+        doc,
+        order
+    );
+
+    const addressEndY =
+        addAddress(
+            doc,
+            order
+        );
+
+    const tableRows =
+        lines.map((line) => [
+            line.name,
+            String(line.quantity),
+            formatMoney(
+                line.quantity > 0
+                    ? line.taxableLine /
+                    line.quantity
+                    : 0
+            ),
+            `${line.gstRate.toFixed(2)}%`,
+            formatMoney(
+                line.gstLine
+            ),
+            formatMoney(
+                line.totalWithGst
+            ),
+        ]);
+
+    autoTable(doc, {
+        startY: Math.max(
+            addressEndY + 5,
+            78
+        ),
+
+        margin: {
+            left: 14,
+            right: 14,
+            bottom: 15,
+        },
+
+        head: [[
+            "Product / Model",
+            "Qty",
+            "Price Excl. GST",
+            "GST %",
+            "GST Amount",
+            "Total With GST",
+        ]],
+
+        body: tableRows,
+
+        theme: "grid",
+
+        styles: {
+            font: "helvetica",
+            fontSize: 7.5,
+            cellPadding: 2.4,
+            overflow: "linebreak",
+            valign: "middle",
+        },
+
+        headStyles: {
+            fontStyle: "bold",
+            fontSize: 7.5,
+        },
+
+        columnStyles: {
+            0: {
+                cellWidth: 60,
+            },
+            1: {
+                cellWidth: 13,
+                halign: "center",
+            },
+            2: {
+                cellWidth: 31,
+                halign: "right",
+            },
+            3: {
+                cellWidth: 18,
+                halign: "right",
+            },
+            4: {
+                cellWidth: 28,
+                halign: "right",
+            },
+            5: {
+                cellWidth: 32,
+                halign: "right",
+            },
+        },
+
+        didDrawPage: () => {
+            doc.setFont(
+                "helvetica",
+                "normal"
+            );
+
+            doc.setFontSize(7);
+
+            doc.text(
+                `Invoice: INV-${order?.orderNumber || order?.orderId || "-"}`,
+                14,
+                pageHeight - 8
+            );
+
+            doc.text(
+                `Page ${doc.getNumberOfPages()}`,
+                pageWidth - 14,
+                pageHeight - 8,
+                { align: "right" }
+            );
+        },
+    });
+
+    addSummary(
+        doc,
+        doc.lastAutoTable?.finalY || 80,
+        totals
+    );
+
+    doc.save(
+        `Invoice-${order?.orderNumber || order?.orderId}.pdf`
+    );
 };
 
-const tdCenter = {
-    ...td,
-    textAlign: "center"
-};
-
-const tdRight = {
-    ...td,
-    textAlign: "right"
-};
-
-const summaryTd = {
-    padding: "7px 9px",
-    borderBottom:
-        "1px solid #e5e7eb"
-};
-
-const summaryValue = {
-    ...summaryTd,
-    textAlign: "right"
-};
-
-export default InvoicePdf;
+export default generateInvoicePdf;

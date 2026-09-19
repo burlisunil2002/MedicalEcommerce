@@ -1,1008 +1,585 @@
-﻿import { useEffect, useState, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+﻿import {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
+
+import {
+    useLocation,
+    useNavigate,
+    useParams,
+} from "react-router-dom";
 
 import API from "../services/api";
 import { useCart } from "../context/CartContext";
-import { useWishlist } from "../context/WishlistContext";
-//import { toast } from "react-toastify";
 
-// Components
-//import ProductBreadcrumb from "../components/productDetails/ProductBreadcrumb";
 import ProductGallery from "../components/productDetails/ProductGallery";
 import ImageZoomModal from "../components/productDetails/ImageZoomModal";
-import ProductHeader from "../components/productDetails/ProductHeader";
-//import ProductPrice from "../components/productDetails/ProductPrice";
 import ProductVariantSelector from "../components/productDetails/ProductVariantSelector";
-//import ProductQuantitySelector from "../components/productDetails/ProductQuantitySelector";
-//import ProductActionButtons from "../components/productDetails/ProductActionButtons";
-//import ProductHighlights from "../components/productDetails/ProductHighlights";
 import ProductTabs from "../components/productDetails/ProductTabs";
-import StickyPurchaseCard from "../components/productDetails/StickyPurchaseCard";
-//import FrequentlyBoughtTogether from "../components/productDetails/FrequentlyBoughtTogether";
-//import ProductCompareSection from "../components/productDetails/ProductCompareSection";
-//import RelatedProducts from "../components/productDetails/RelatedProducts";
-//import RecentlyViewed from "../components/productDetails/RecentlyViewed";
 import MobileBottomBar from "../components/productDetails/MobileBottomBar";
 import LoadingSkeleton from "../components/productDetails/LoadingSkeleton";
+import ProductPurchaseSection from "../components/productDetails/ProductPurchaseSection";
 import RecommendedProducts from "../components/RecommendedProducts";
-import { useLocation } from "react-router-dom";
-import { useMemo } from "react";
 
 export default function ProductDetails() {
-
-    //--------------------------------------------------------
-    // Routing
-    //--------------------------------------------------------
-
     const { id } = useParams();
-
     const navigate = useNavigate();
-
     const location = useLocation();
 
-    //--------------------------------------------------------
-    // Product States
-    //--------------------------------------------------------
+    const { addToCart, loadCart } = useCart();
 
-    const [product, setProduct] =
-        useState(null);
-
-    //--------------------------------------------------------
-    // Variant States
-    //--------------------------------------------------------
-
-    const [selectedVariant, setSelectedVariant] =
-        useState(null);
-
-    const [selectedImage, setSelectedImage] =
-        useState(null);
-
-    const [loading, setLoading] =
-        useState(true);
-
-    const [zoomOpen, setZoomOpen] =
-        useState(false);
-
+    const [product, setProduct] = useState(null);
+    const [selectedVariant, setSelectedVariant] = useState(null);
+    const [selectedImage, setSelectedImage] = useState("");
+    const [loading, setLoading] = useState(true);
+    const [zoomOpen, setZoomOpen] = useState(false);
     const [message, setMessage] = useState("");
+    const [error, setError] = useState("");
+    const messageTimerRef = useRef(null);
 
-    //--------------------------------------------------------
-    // Errors
-    //--------------------------------------------------------
+    // Centralized short-lived notification.
+    // Every message shown from this page disappears automatically after 2 seconds.
+    const showMessage = useCallback((text) => {
+        setMessage(text || "");
 
-    const [error, setError] =
-        useState("");
-    
-    const {
+        if (messageTimerRef.current) {
+            clearTimeout(messageTimerRef.current);
+        }
 
-        addToCart,
+        if (text) {
+            messageTimerRef.current = setTimeout(() => {
+                showMessage("");
+                messageTimerRef.current = null;
+            }, 2000);
+        }
+    }, []);
 
-        loadCart
+    useEffect(() => {
+        return () => {
+            if (messageTimerRef.current) {
+                clearTimeout(messageTimerRef.current);
+            }
+        };
+    }, []);
 
-    } = useCart();
-
-    const {
-
-        toggleWishlist,
-
-        isWishlisted
-
-    } = useWishlist();
-    
- 
-    //--------------------------------------------------------
-    // Load Product
-    //--------------------------------------------------------
-
+    // Load the product only when the product id changes.
+    // Variant changes are handled locally so the whole page does not reload.
     const loadProduct = useCallback(async () => {
+        if (!id) {
+            setError("Product ID is missing.");
+            setLoading(false);
+            return;
+        }
 
         try {
-
             setLoading(true);
-
             setError("");
 
-            const response = await API.get(
+            const response = await API.get(`/api/products/${id}`);
+            const loadedProduct = response?.data?.product ?? response?.data;
 
-                `/api/products/${id}`
-
-            );
-
-            console.log("API Response:", response.data);
-
-            const data = response.data;
-
-            // Product
-            const loadedProduct =
-                data.product ?? data;
+            if (!loadedProduct) {
+                throw new Error("Product not found.");
+            }
 
             setProduct(loadedProduct);
+        } catch (err) {
+            console.error("Product details error:", err);
 
-            console.log("Product State:", data.product);
+            setProduct(null);
+            setSelectedVariant(null);
 
-            // Variants
-            const variants =
-                loadedProduct.variants || [];
-
-            const params = new URLSearchParams(location.search);
-
-            const variantId = Number(params.get("variant"));
-
-            const defaultVariant =
-                variants.find(
-                    x => x.productVariantId === variantId
-                ) ?? variants[0];
-
-            setSelectedVariant(defaultVariant);
-
-            // Default Image
-            if (
-
-                defaultVariant?.images?.length > 0
-
-            ) {
-
-                setSelectedImage(
-
-                    defaultVariant.images[0].imageUrl
-
+            if (err?.response?.status === 404) {
+                setError("Product not found.");
+            } else {
+                setError(
+                    err?.response?.data?.message ||
+                    err?.message ||
+                    "Unable to load product."
                 );
-
             }
-
-            else if (
-
-                loadedProduct.imageUrl
-
-            ) {
-
-                setSelectedImage(
-
-                    loadedProduct.imageUrl
-
-                );
-
-            }
-
-        }
-
-        catch (err) {
-
-            console.log(err);
-
-            setError(
-
-                err.response?.data?.message ||
-
-                "Unable to load product."
-
-            );
-
-        }
-
-        finally {
-
+        } finally {
             setLoading(false);
-
         }
+    }, [id]);
 
-    }, [
+    useEffect(() => {
+        loadProduct();
+    }, [loadProduct]);
 
-        id,
+    // Resolve the variant from the URL without making another API request.
+    useEffect(() => {
+        if (!product) return;
 
-        location.search
-    ]);
+        const variants = Array.isArray(product.variants)
+            ? product.variants
+            : [];
 
-
-    const handleBuyNow = async () => {
-
-        if (!product || !selectedVariant)
+        if (!variants.length) {
+            setSelectedVariant(null);
             return;
-
-        const success = await addToCart(
-
-            product.id,
-
-            selectedVariant.id,
-
-            selectedVariant.minQuantity ?? 1
-
-        );
-
-        console.log(selectedVariant);
-
-        if (success) {
-
-            await loadCart();
-
-            navigate("/cart");
-
         }
 
-    };
-    
-    //--------------------------------------------------------
-    // Change Variant
-    //--------------------------------------------------------
+        const params = new URLSearchParams(location.search);
+        const requestedId = Number(params.get("variant"));
 
-    const changeVariant = (variant) => {
+        const variant =
+            variants.find(
+                (item) =>
+                    Number(item?.productVariantId ?? item?.id) === requestedId
+            ) ?? variants[0];
 
         setSelectedVariant(variant);
+    }, [product, location.search]);
 
-        if (variant.images?.length) {
+    // Gallery images for the currently selected variant.
+    const galleryImages = useMemo(() => {
+        const images = [];
 
-            setSelectedImage(
-
-                variant.images[0].imageUrl
-
-            );
-
-        }
-        else {
-
-            setSelectedImage(
-
-                product.imageUrl
-
-            );
-
+        if (Array.isArray(selectedVariant?.images)) {
+            selectedVariant.images.forEach((image) => {
+                if (image?.imageUrl) images.push(image.imageUrl);
+            });
         }
 
-        navigate(
+        [
+            product?.imageUrl,
+            product?.imageUrl2,
+            product?.imageUrl3,
+            product?.imageUrl4,
+        ].forEach((image) => {
+            if (image) images.push(image);
+        });
 
-            `/product/${product.id}?variant=${variant.productVariantId}`,
+        return [...new Set(images.filter(Boolean))];
+    }, [product, selectedVariant]);
 
-            {
+    useEffect(() => {
+        if (!product) return;
 
-                replace: true,
+        const variantImage =
+            selectedVariant?.images?.find((item) => item?.imageUrl)?.imageUrl;
 
-                preventScrollReset: true
+        const productImage =
+            product?.imageUrl ||
+            product?.imageUrl2 ||
+            product?.imageUrl3 ||
+            product?.imageUrl4 ||
+            "";
 
-            }
-
-        );
-
-    };
-
-
-    //--------------------------------------------------------
-    // Change Image
-    //--------------------------------------------------------
+        setSelectedImage(variantImage || productImage);
+    }, [product, selectedVariant]);
 
     const changeImage = useCallback((image) => {
-
-        setSelectedImage(image);
-
+        if (image) setSelectedImage(image);
     }, []);
-    //--------------------------------------------------------
-    // Open Zoom
-    //--------------------------------------------------------
 
-    const openZoom = () => {
+    const currentImageIndex = useMemo(() => {
+        const index = galleryImages.indexOf(selectedImage);
+        return index >= 0 ? index : 0;
+    }, [galleryImages, selectedImage]);
 
-        setZoomOpen(true);
+    const nextImage = useCallback(() => {
+        if (galleryImages.length <= 1) return;
 
-    };
-    //--------------------------------------------------------
-    // Close Zoom
-    //--------------------------------------------------------
+        setSelectedImage(
+            galleryImages[(currentImageIndex + 1) % galleryImages.length]
+        );
+    }, [galleryImages, currentImageIndex]);
 
-    const closeZoom = () => {
+    const previousImage = useCallback(() => {
+        if (galleryImages.length <= 1) return;
 
+        setSelectedImage(
+            galleryImages[
+            (currentImageIndex - 1 + galleryImages.length) %
+            galleryImages.length
+            ]
+        );
+    }, [galleryImages, currentImageIndex]);
+
+    const openZoom = useCallback(() => {
+        if (galleryImages.length) setZoomOpen(true);
+    }, [galleryImages.length]);
+
+    const closeZoom = useCallback(() => {
         setZoomOpen(false);
+    }, []);
 
-    };
+    // Variant selection updates only the URL/state.
+    const changeVariant = useCallback(
+        (variant) => {
+            if (!variant || !product) return;
 
-    //--------------------------------------------------------
-    // Gallery Images
-    //--------------------------------------------------------
+            setSelectedVariant(variant);
 
-    const galleryImages = useMemo(() => {
-
-        if (
-            selectedVariant?.images?.length
-        ) {
-
-            return selectedVariant.images.map(
-                x => x.imageUrl
-            );
-
-        }
-
-        if (product?.imageUrl)
-            return [product.imageUrl];
-
-        return [];
-
-    }, [
-
-        product,
-
-        selectedVariant
-
-    ]);
-
-    //--------------------------------------------------------
-    // Current Price
-    //--------------------------------------------------------
-
-    const currentPrice = useMemo(() => {
-
-        return Number(
-
-            selectedVariant?.price ??
-
-            0
-
-        );
-
-    }, [
-
-        selectedVariant
-
-    ]);
-
-    //--------------------------------------------------------
-    // Stock Status
-    //--------------------------------------------------------
-
-    const inStock = useMemo(() => {
-
-        return (
-
-            Number(
-
-                selectedVariant?.stockQuantity ?? 0
-
-            ) > 0
-
-        );
-
-    }, [
-
-        selectedVariant
-
-    ]);
-    //--------------------------------------------------------
-    // Next Image
-    //--------------------------------------------------------
-
-    const nextImage = () => {
-
-        if (!galleryImages.length)
-            return;
-
-        const index =
-            galleryImages.indexOf(selectedImage);
-
-        if (
-            index <
-            galleryImages.length - 1
-        ) {
+            const variantImage =
+                variant?.images?.find((item) => item?.imageUrl)?.imageUrl;
 
             setSelectedImage(
-
-                galleryImages[index + 1]
-
+                variantImage ||
+                product?.imageUrl ||
+                product?.imageUrl2 ||
+                ""
             );
 
-        }
+            const variantId = variant?.productVariantId ?? variant?.id;
 
-    };
-    //--------------------------------------------------------
-    // Previous Image
-    //--------------------------------------------------------
+            if (!variantId) return;
 
-    const previousImage = () => {
+            navigate(
+                `/product/${product.id}?variant=${variantId}`,
+                {
+                    replace: true,
+                    preventScrollReset: true,
+                }
+            );
+        },
+        [product, navigate]
+    );
 
-        if (!galleryImages.length)
+    // Buy Now uses the same cart service as the rest of the application.
+    const handleBuyNow = useCallback(async () => {
+        if (!product) {
+            showMessage("Product information is unavailable.");
             return;
-
-        const index =
-            galleryImages.indexOf(selectedImage);
-
-        if (index > 0) {
-
-            setSelectedImage(
-
-                galleryImages[index - 1]
-
-            );
-
         }
 
-    };
+        const variants = Array.isArray(product.variants)
+            ? product.variants
+            : [];
 
+        const hasVariants = variants.length > 0;
 
+        if (hasVariants && !selectedVariant) {
+            showMessage("Please select a variant.");
+            return;
+        }
 
-    //--------------------------------------------------------
-    // Share
-    //--------------------------------------------------------
+        const variantId =
+            selectedVariant?.productVariantId ??
+            selectedVariant?.id ??
+            null;
 
-    const handleShare = async () => {
+        if (hasVariants && !variantId) {
+            showMessage("Please select a valid variant.");
+            return;
+        }
+
+        const stockValue =
+            selectedVariant?.stockQuantity ??
+            product?.stockQuantity;
+
+        if (
+            stockValue !== null &&
+            stockValue !== undefined &&
+            stockValue !== ""
+        ) {
+            const stock = Number(stockValue);
+
+            if (!Number.isNaN(stock) && stock <= 0) {
+                showMessage("This product is currently out of stock.");
+                return;
+            }
+        }
+
+        const quantity =
+            Number(selectedVariant?.minQuantity) > 0
+                ? Number(selectedVariant.minQuantity)
+                : 1;
 
         try {
+            showMessage("");
 
-            const url =
-
-                `${window.location.origin}/product/${product.id}?variant=${selectedVariant.id}`;
-
-            if (navigator.share) {
-
-                await navigator.share({
-
-                    title: product.name,
-
-                    text: `${product.brand} - ${selectedVariant.model}`,
-
-                    url
-
-                });
-
-            }
-
-            else {
-
-                await navigator.clipboard.writeText(url);
-
-                console.log("Copied");
-
-                // toast.success("Link Copied");
-
-            }
-
-        }
-
-        catch (err) {
-
-            console.log(err);
-
-        }
-
-    };
-
-
-    const productSchema = {
-
-        "@context": "https://schema.org",
-
-        "@type": "Product",
-
-        name: product?.name,
-
-        image: galleryImages,
-
-        description: product?.description,
-
-        brand: {
-
-            "@type": "Brand",
-
-            name: product?.brand
-
-        }
-
-    };
-
-    useEffect(() => {
-
-        loadProduct();
-
-    }, [
-
-        loadProduct,
-
-    ]);
-
-
-
-    useEffect(() => {
-
-        if (!product)
-            return;
-
-        let items =
-
-            JSON.parse(
-
-                localStorage.getItem(
-
-                    "recentProducts"
-
-                ) || "[]"
-
+            const result = await addToCart(
+                product.id,
+                variantId,
+                quantity
             );
 
-        items = items.filter(
-
-            x => x.id !== product.id
-
-        );
-
-        items.unshift({
-
-            id: product.id,
-
-            name: product.name,
-
-            imageUrl: product.imageUrl
-
-        });
-
-        if (items.length > 10)
-
-            items = items.slice(0, 10);
-
-        localStorage.setItem(
-
-            "recentProducts",
-
-            JSON.stringify(items)
-
-        );
-
-    }, [
-
-        product
-
-    ]);
-
-    //--------------------------------------------------------
-    // Scroll Top
-    //--------------------------------------------------------
-
-    useEffect(() => {
-
-        window.scrollTo({
-
-            top: 0,
-
-            behavior: "smooth"
-
-        });
-
-    }, [
-
-        id
-
-    ]);
-
-    //--------------------------------------------------------
-    // Keep Gallery Synced
-    //--------------------------------------------------------
-
-    useEffect(() => {
-
-        if (!selectedVariant)
-            return;
-
-        if (
-
-            selectedVariant.images?.length
-
-        ) {
-
-            setSelectedImage(
-
-                selectedVariant.images[0].imageUrl
-
-            );
-
-        }
-
-    }, [
-
-        selectedVariant
-
-    ]);
-
-    //--------------------------------------------------------
-    // Keyboard Navigation
-    //--------------------------------------------------------
-
-    useEffect(() => {
-
-        const handleKeyDown = (e) => {
-
-            if (!zoomOpen)
+            if (result === false) {
+                showMessage("Unable to add product to cart.");
                 return;
-
-            switch (e.key) {
-
-                case "ArrowRight":
-
-                    nextImage();
-
-                    break;
-
-                case "ArrowLeft":
-
-                    previousImage();
-
-                    break;
-
-                case "Escape":
-
-                    closeZoom();
-
-                    break;
-
-                default:
-
-                    break;
-
             }
 
+            await loadCart();
+            navigate("/cart");
+        } catch (err) {
+            console.error("Buy Now error:", err);
+
+            showMessage(
+                err?.response?.data?.message ||
+                "Unable to proceed. Please try again."
+            );
+        }
+    }, [
+        product,
+        selectedVariant,
+        addToCart,
+        loadCart,
+        navigate,
+        showMessage,
+    ]);
+
+    const handleShare = useCallback(async () => {
+        if (!product) return;
+
+        const variantId =
+            selectedVariant?.productVariantId ??
+            selectedVariant?.id;
+
+        const url = variantId
+            ? `${window.location.origin}/product/${product.id}?variant=${variantId}`
+            : `${window.location.origin}/product/${product.id}`;
+
+        try {
+            if (navigator.share) {
+                await navigator.share({
+                    title: product?.name || "Product",
+                    text:
+                        selectedVariant?.model
+                            ? `${product?.brand || ""} - ${selectedVariant.model}`
+                            : product?.name || "Medical Product",
+                    url,
+                });
+                return;
+            }
+
+            if (navigator.clipboard) {
+                await navigator.clipboard.writeText(url);
+                showMessage("Product link copied.");
+            }
+        } catch (err) {
+            if (err?.name !== "AbortError") {
+                console.error("Share error:", err);
+            }
+        }
+    }, [product, selectedVariant, showMessage]);
+
+    // Recently viewed products.
+    useEffect(() => {
+        if (!product?.id) return;
+
+        try {
+            const stored = localStorage.getItem("recentProducts");
+            let items = [];
+
+            try {
+                items = stored ? JSON.parse(stored) : [];
+            } catch {
+                items = [];
+            }
+
+            if (!Array.isArray(items)) items = [];
+
+            items = items.filter(
+                (item) => Number(item?.id) !== Number(product.id)
+            );
+
+            items.unshift({
+                id: product.id,
+                name: product.name,
+                imageUrl:
+                    selectedVariant?.images?.[0]?.imageUrl ||
+                    product?.imageUrl ||
+                    "",
+            });
+
+            localStorage.setItem(
+                "recentProducts",
+                JSON.stringify(items.slice(0, 10))
+            );
+        } catch (err) {
+            console.warn("Recently viewed error:", err);
+        }
+    }, [product, selectedVariant]);
+
+    useEffect(() => {
+        window.scrollTo({ top: 0, behavior: "auto" });
+    }, [id]);
+
+    useEffect(() => {
+        if (!zoomOpen) return;
+
+        const handleKeyDown = (event) => {
+            if (event.key === "ArrowRight") nextImage();
+            if (event.key === "ArrowLeft") previousImage();
+            if (event.key === "Escape") closeZoom();
         };
 
-        window.addEventListener(
+        window.addEventListener("keydown", handleKeyDown);
 
-            "keydown",
+        return () => {
+            window.removeEventListener("keydown", handleKeyDown);
+        };
+    }, [zoomOpen, nextImage, previousImage, closeZoom]);
 
-            handleKeyDown
+    const productSchema = useMemo(() => {
+        if (!product) return null;
 
+        const price = Number(
+            selectedVariant?.price ??
+            product?.price ??
+            0
         );
 
-        return () =>
+        const schema = {
+            "@context": "https://schema.org",
+            "@type": "Product",
+            name: product?.name || "",
+            description: product?.description || "",
+            image: galleryImages,
+            brand: {
+                "@type": "Brand",
+                name: product?.brand || "",
+            },
+        };
 
-            window.removeEventListener(
+        if (price > 0) {
+            schema.offers = {
+                "@type": "Offer",
+                price: price.toFixed(2),
+                priceCurrency: "INR",
+                url: window.location.href,
+            };
+        }
 
-                "keydown",
+        return schema;
+    }, [product, selectedVariant, galleryImages]);
 
-                handleKeyDown
-
-            );
-
-    }, [
-
-        zoomOpen,
-
-        selectedImage,
-
-        galleryImages
-
-    ]);
-
-    if (!loading && !product) {
-
+    if (loading) {
         return (
-
-            <div
-                className="
-                min-h-[70vh]
-                flex
-                items-center
-                justify-center
-                flex-col
-                text-center
-            "
-            >
-
-                <h1
-                    className="
-                    text-4xl
-                    font-bold
-                    text-gray-800
-                "
-                >
-
-                    Product Not Found
-
-                </h1>
-
-                <p
-                    className="
-                    text-gray-500
-                    mt-3
-                "
-                >
-
-                    The requested product is unavailable or has been removed.
-
-                </p>
-
-                <button
-
-                    onClick={() => navigate("/products")}
-
-                    className="
-                    mt-8
-                    px-8
-                    py-3
-                    rounded-xl
-                    bg-blue-600
-                    text-white
-                "
-
-                >
-
-                    Browse Products
-
-                </button>
-
-            </div>
-
+            <main className="min-h-screen bg-slate-50">
+                <div className="mx-auto max-w-7xl px-3 py-5 sm:px-5 lg:px-6">
+                    <LoadingSkeleton />
+                </div>
+            </main>
         );
-
     }
 
-    if (error) {
-
+    if (error || !product) {
         return (
+            <main className="flex min-h-[70vh] items-center justify-center bg-slate-50 px-4">
+                <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+                    <div className="mb-4 text-3xl">📦</div>
 
-            <div
-                className="
-                    max-w-6xl
-                    mx-auto
-                    py-32
-                    text-center
-                "
-            >
+                    <h1 className="text-xl font-semibold text-slate-900">
+                        Product unavailable
+                    </h1>
 
-                <h2
-                    className="
-                        text-3xl
-                        font-bold
-                        text-red-600
-                    "
-                >
+                    <p className="mt-2 text-sm leading-6 text-slate-500">
+                        {error || "The requested product could not be loaded."}
+                    </p>
 
-                    {error}
-
-                </h2>
-
-            </div>
-
+                    <button
+                        type="button"
+                        onClick={() => navigate("/products")}
+                        className="mt-6 min-h-10 rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                    >
+                        Browse Products
+                    </button>
+                </div>
+            </main>
         );
-
-    }
-    //--------------------------------------------------------
-    // Loading
-    //--------------------------------------------------------
-
-    if (
-
-        loading ||
-
-        !product ||
-
-        !selectedVariant
-
-    ) {
-
-        return <LoadingSkeleton />;
-
     }
 
     return (
-
         <>
+            {productSchema && (
+                <script
+                    type="application/ld+json"
+                    dangerouslySetInnerHTML={{
+                        __html: JSON.stringify(productSchema),
+                    }}
+                />
+            )}
 
             {message && (
-                <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[9999]">
-                    <div className="bg-green-600 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-2 font-medium animate-fade-in">
-                        {message}
+                <div className="fixed left-1/2 top-4 z-[9999] w-[calc(100%-2rem)] max-w-md -translate-x-1/2">
+                    <div className="flex items-center justify-between gap-4 rounded-xl bg-slate-900 px-4 py-3 text-sm text-white shadow-xl">
+                        <span>{message}</span>
+
+                        <button
+                            type="button"
+                            onClick={() => showMessage("")}
+                            className="text-lg leading-none text-slate-300 hover:text-white"
+                            aria-label="Close message"
+                        >
+                            ×
+                        </button>
                     </div>
                 </div>
             )}
 
-            <script
-                type="application/ld+json"
-                dangerouslySetInnerHTML={{
-                    __html: JSON.stringify(productSchema)
-                }}
-            />
-
-            {/* Image Zoom */}
-
             <ImageZoomModal
-
                 open={zoomOpen}
-
                 images={galleryImages}
-
                 currentImage={selectedImage}
-
                 setCurrentImage={changeImage}
-
                 onClose={closeZoom}
-
             />
 
-            {/* Main Container  */}
-
-            <div className="min-h-screen bg-slate-50">
-
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-
-                    <div
-                        className="
-                mt-6
-                grid
-                grid-cols-1
-                xl:grid-cols-12
-                gap-8
-                items-start
-            "
-                    >
-
-                        {/* LEFT : Gallery */}
-
-                        <div
-                            className="
-                    xl:col-span-4
-                "
-                        >
-
-                            <ProductGallery
-                                product={product}
-                                selectedVariant={selectedVariant}
-                                selectedImage={selectedImage}
-                                setSelectedImage={changeImage}
-                                openZoom={openZoom}
-                            />
-
-                        </div>
-
-                        {/* CENTER : Product Details */}
-
-                        <div
-                            className="
-                    xl:col-span-5
-                    space-y-8
-                "
-                        >
-
-                            <ProductHeader
-
-                                product={product}
-
-                                selectedVariant={selectedVariant}
-
-                                wishlisted={
-
-                                    isWishlisted(
-
-                                        product.id,
-
-                                        selectedVariant.id
-
-                                    )
-
-                                }
-
-                                toggleWishlist={() =>
-
-                                    toggleWishlist({
-
-                                        id: product.id,
-
-                                        variantId: selectedVariant.id,
-
-                                        name: product.name,
-
-                                        brand: product.brand,
-
-                                        imageUrl:
-                                            selectedVariant.images?.[0]?.imageUrl ??
-                                            product.imageUrl,
-
-                                        price: selectedVariant.price,
-
-                                        discountPercentage: product.discountPercentage,
-
-                                        category: product.category,
-                                        gstPercentage: product.gstPercentage,
-
-                                        selectedVariant
-
-                                    })
-
-                                }
-
-                                shareProduct={handleShare}
-
-                            />
-
-                        </div>
-
-                        {/* RIGHT : Sticky Purchase Card */}
-
-                        <div
-                            className="
-                    xl:col-span-3
-                    hidden
-                    lg:block
-                "
-                        >
-
-                            <StickyPurchaseCard
-
-                                product={product}
-
-                                selectedVariant={selectedVariant}
-
-                                onBuyNow={handleBuyNow}
-
-                                setMessage={setMessage}
-
-                            />
-
-                        </div>
-
-                    </div>
-
-                    <div>
-
-                    <section className="mt-12">
-
-                        <ProductTabs
-
-                            product={product}
-
-                            selectedVariant={selectedVariant}
-
-                        />
-
+            <main className="min-h-screen bg-slate-50 pb-24 lg:pb-8">
+                <div className="mx-auto w-full max-w-[1240px] px-3 py-4 sm:px-5 sm:py-6 lg:px-6">
+                    {/* Compact desktop hero: fixed gallery width + flexible purchase area */}
+                    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[380px_minmax(0,1fr)] lg:gap-4 xl:grid-cols-[390px_minmax(0,1fr)]">
+                        <section className="min-w-0 w-full">
+                            <div className="mx-auto w-full max-w-[390px] lg:mx-0">
+                                <ProductGallery
+                                    product={product}
+                                    selectedVariant={selectedVariant}
+                                    selectedImage={selectedImage}
+                                    setSelectedImage={changeImage}
+                                    openZoom={openZoom}
+                                />
+                            </div>
                         </section>
 
-                    </div>
-
-                    <div className="mt-12">
-
-                    {
-
-                        product?.variants?.length > 1 && (
-
-                            <ProductVariantSelector
-
+                        <section className="min-w-0 w-full">
+                            <ProductPurchaseSection
                                 product={product}
-
-                                variants={product.variants}
-
                                 selectedVariant={selectedVariant}
-
-                                onVariantChange={changeVariant}
-
+                                onBuyNow={handleBuyNow}
+                                setMessage={showMessage}
+                                shareProduct={handleShare}
                             />
-
-                        )
-
-                     }
+                        </section>
                     </div>
 
-                    {product && (
-                        <RecommendedProducts
-                            currentProduct={product}
+                    {Array.isArray(product?.variants) &&
+                        product.variants.length > 1 && (
+                            <section className="mt-4 sm:mt-5">
+                                <ProductVariantSelector
+                                    product={product}
+                                    variants={product.variants}
+                                    selectedVariant={selectedVariant}
+                                    onVariantChange={changeVariant}
+                                />
+                            </section>
+                        )}
+
+                    <section className="mt-7 sm:mt-8 lg:mt-10">
+                        <ProductTabs
+                            product={product}
+                            selectedVariant={selectedVariant}
                         />
-                    )}
+                    </section>
 
+                    <section className="mt-7 sm:mt-8 lg:mt-10">
+                        <RecommendedProducts currentProduct={product} />
+                    </section>
                 </div>
+            </main>
 
-                <MobileBottomBar
-
-                    product={product}
-
-                    selectedVariant={selectedVariant}
-
-
-                    onBuyNow={handleBuyNow}
-
-                />
-
-            </div>
-
-            <div
-                className="
-min-h-screen
-bg-slate-50
-pb-28
-lg:pb-0
-"
-            >
-            </div>
-
+            <MobileBottomBar
+                product={product}
+                selectedVariant={selectedVariant}
+                onBuyNow={handleBuyNow}
+                setMessage={showMessage}
+            />
         </>
     );
 }
-
-
