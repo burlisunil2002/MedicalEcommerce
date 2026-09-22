@@ -19,43 +19,66 @@ import ProductGallery from "../components/productDetails/ProductGallery";
 import ImageZoomModal from "../components/productDetails/ImageZoomModal";
 import ProductVariantSelector from "../components/productDetails/ProductVariantSelector";
 import ProductTabs from "../components/productDetails/ProductTabs";
+import MobileBottomBar from "../components/productDetails/MobileBottomBar";
+import LoadingSkeleton from "../components/productDetails/LoadingSkeleton";
 import ProductPurchaseSection from "../components/productDetails/ProductPurchaseSection";
 import CompareSimilarProducts from "../components/productDetails/CompareSimilarProducts";
 import RecommendedProducts from "../components/RecommendedProducts";
-import LoadingSkeleton from "../components/productDetails/LoadingSkeleton";
 
 export default function ProductDetails() {
-
     const { id } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
 
     const {
         addToCart,
-        loadCart
+        loadCart,
     } = useCart();
 
+    // ============================================================
+    // PRODUCT STATE
+    // ============================================================
+
     const [product, setProduct] = useState(null);
-    const [allProducts, setAllProducts] = useState([]);
 
-    const [selectedVariant, setSelectedVariant] = useState(null);
-    const [selectedImage, setSelectedImage] = useState("");
+    /*
+     * IMPORTANT:
+     * This contains ALL products.
+     * CompareSimilarProducts uses this list to find
+     * other products having the same product name.
+     */
+    const [products, setProducts] = useState([]);
 
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const [selectedVariant, setSelectedVariant] =
+        useState(null);
 
-    const [zoomOpen, setZoomOpen] = useState(false);
-    const [message, setMessage] = useState("");
+    const [selectedImage, setSelectedImage] =
+        useState("");
 
-    const messageTimerRef = useRef(null);
+    // ============================================================
+    // UI STATE
+    // ============================================================
 
+    const [loading, setLoading] =
+        useState(true);
 
-    /* =========================================================
-       FAST TOAST
-    ========================================================= */
+    const [zoomOpen, setZoomOpen] =
+        useState(false);
+
+    const [message, setMessage] =
+        useState("");
+
+    const [error, setError] =
+        useState("");
+
+    const messageTimerRef =
+        useRef(null);
+
+    // ============================================================
+    // SHORT MESSAGE / TOAST
+    // ============================================================
 
     const showMessage = useCallback((text) => {
-
         setMessage(text || "");
 
         if (messageTimerRef.current) {
@@ -63,328 +86,305 @@ export default function ProductDetails() {
         }
 
         if (text) {
-
             messageTimerRef.current = setTimeout(() => {
-
                 setMessage("");
-
                 messageTimerRef.current = null;
-
-            }, 1800);
-
+            }, 2000);
         }
-
     }, []);
 
-
-    useEffect(() => {
-
-        return () => {
-
-            if (messageTimerRef.current) {
-                clearTimeout(messageTimerRef.current);
-            }
-
-        };
-
-    }, []);
-
-
-    /* =========================================================
-       LOAD PRODUCT + CATALOGUE
-    ========================================================= */
+    // ============================================================
+    // LOAD CURRENT PRODUCT
+    // ============================================================
 
     const loadProduct = useCallback(async () => {
-
         if (!id) {
-
             setError("Product ID is missing.");
             setLoading(false);
-
             return;
         }
 
         try {
-
             setLoading(true);
             setError("");
 
-            const [
-                productResponse,
-                catalogueResponse
-            ] = await Promise.allSettled([
-
-                API.get(`/api/products/${id}`),
-
-                API.get("/api/products")
-
-            ]);
-
-
-            if (
-                productResponse.status !==
-                "fulfilled"
-            ) {
-
-                throw productResponse.reason;
-
-            }
-
+            const response =
+                await API.get(`/api/products/${id}`);
 
             const loadedProduct =
-                productResponse.value?.data?.product ??
-                productResponse.value?.data;
-
+                response?.data?.product ??
+                response?.data;
 
             if (!loadedProduct) {
-
                 throw new Error(
                     "Product not found."
                 );
-
             }
-
 
             setProduct(loadedProduct);
-
-
-            if (
-                catalogueResponse.status ===
-                "fulfilled"
-            ) {
-
-                const data =
-                    catalogueResponse.value?.data;
-
-
-                const list =
-                    Array.isArray(data)
-                        ? data
-                        : Array.isArray(data?.products)
-                            ? data.products
-                            : [];
-
-
-                setAllProducts(list);
-
-            } else {
-
-                setAllProducts([]);
-
-            }
-
         } catch (err) {
-
             console.error(
-                "Product Details Error:",
+                "Product details error:",
                 err
             );
 
             setProduct(null);
-
             setSelectedVariant(null);
 
-            setError(
+            if (
                 err?.response?.status === 404
-                    ? "Product not found."
-                    : err?.response?.data?.message ||
+            ) {
+                setError(
+                    "Product not found."
+                );
+            } else {
+                setError(
+                    err?.response?.data?.message ||
                     err?.message ||
                     "Unable to load product."
-            );
-
+                );
+            }
         } finally {
-
             setLoading(false);
-
         }
-
     }, [id]);
 
-
     useEffect(() => {
-
         loadProduct();
-
     }, [loadProduct]);
 
+    // ============================================================
+    // LOAD ALL PRODUCTS
+    //
+    // Used specifically for:
+    // CompareSimilarProducts
+    //
+    // Example:
+    //
+    // Product 1: Infusion Pump - Vendor A
+    // Product 2: Infusion Pump - Vendor B
+    //
+    // Both product pages will now find each other.
+    // ============================================================
 
-    /* =========================================================
-       VARIANTS
-    ========================================================= */
+    const loadProducts = useCallback(async () => {
+        try {
+            const response =
+                await API.get("/api/products");
 
-    const variants = useMemo(() => {
+            const data =
+                response?.data?.products ??
+                response?.data?.items ??
+                response?.data ??
+                [];
 
-        return Array.isArray(product?.variants)
-            ? product.variants
-            : [];
+            if (Array.isArray(data)) {
+                setProducts(data);
+            } else {
+                setProducts([]);
+            }
+        } catch (err) {
+            console.error(
+                "Comparison products error:",
+                err
+            );
 
-    }, [product]);
-
+            /*
+             * Comparison is optional.
+             * If this request fails, the product page
+             * should still work normally.
+             */
+            setProducts([]);
+        }
+    }, []);
 
     useEffect(() => {
+        loadProducts();
+    }, [loadProducts]);
 
-        if (!product) return;
+    // ============================================================
+    // RESOLVE SELECTED VARIANT
+    // ============================================================
 
-
-        if (!variants.length) {
-
-            setSelectedVariant(null);
-
+    useEffect(() => {
+        if (!product) {
             return;
         }
 
+        const variants =
+            Array.isArray(product?.variants)
+                ? product.variants
+                : [];
 
-        const requestedVariantId =
-            Number(
-                new URLSearchParams(
-                    location.search
-                ).get("variant")
+        if (!variants.length) {
+            setSelectedVariant(null);
+            return;
+        }
+
+        const params =
+            new URLSearchParams(
+                location.search
             );
 
+        const requestedId =
+            Number(
+                params.get("variant")
+            );
 
         const variant =
             variants.find(
-                item =>
+                (item) =>
                     Number(
                         item?.productVariantId ??
                         item?.id
-                    ) ===
-                    requestedVariantId
-            ) ??
-            variants[0];
-
+                    ) === requestedId
+            ) ?? variants[0];
 
         setSelectedVariant(variant);
-
     }, [
         product,
-        variants,
-        location.search
+        location.search,
     ]);
 
-
-    /* =========================================================
-       GALLERY
-    ========================================================= */
+    // ============================================================
+    // GALLERY IMAGES
+    // ============================================================
 
     const galleryImages = useMemo(() => {
-
         const images = [];
-
 
         if (
             Array.isArray(
                 selectedVariant?.images
             )
         ) {
-
             selectedVariant.images.forEach(
-                image => {
-
+                (image) => {
                     if (image?.imageUrl) {
-
                         images.push(
                             image.imageUrl
                         );
-
                     }
-
                 }
             );
-
         }
-
 
         [
             product?.imageUrl,
             product?.imageUrl2,
             product?.imageUrl3,
-            product?.imageUrl4
-        ].forEach(image => {
-
+            product?.imageUrl4,
+        ].forEach((image) => {
             if (image) {
                 images.push(image);
             }
-
         });
-
 
         return [
             ...new Set(
                 images.filter(Boolean)
-            )
+            ),
         ];
-
     }, [
         product,
-        selectedVariant
+        selectedVariant,
     ]);
 
+    // ============================================================
+    // DEFAULT SELECTED IMAGE
+    // ============================================================
 
     useEffect(() => {
-
-        if (!galleryImages.length) {
-
-            setSelectedImage("");
-
+        if (!product) {
             return;
         }
 
+        const variantImage =
+            selectedVariant?.images?.find(
+                (item) =>
+                    item?.imageUrl
+            )?.imageUrl;
 
-        setSelectedImage(current => {
-
-            if (
-                current &&
-                galleryImages.includes(current)
-            ) {
-
-                return current;
-
-            }
-
-            return galleryImages[0];
-
-        });
-
-    }, [galleryImages]);
-
-
-    const currentImageIndex =
-        Math.max(
-            0,
-            galleryImages.indexOf(
-                selectedImage
-            )
-        );
-
-
-    const nextImage = useCallback(() => {
-
-        if (galleryImages.length <= 1)
-            return;
-
+        const productImage =
+            product?.imageUrl ||
+            product?.imageUrl2 ||
+            product?.imageUrl3 ||
+            product?.imageUrl4 ||
+            "";
 
         setSelectedImage(
-            galleryImages[
-            (
-                currentImageIndex + 1
-            ) %
-            galleryImages.length
-            ]
+            variantImage ||
+            productImage
         );
-
     }, [
-        galleryImages,
-        currentImageIndex
+        product,
+        selectedVariant,
     ]);
 
+    // ============================================================
+    // CHANGE IMAGE
+    // ============================================================
+
+    const changeImage =
+        useCallback((image) => {
+            if (image) {
+                setSelectedImage(image);
+            }
+        }, []);
+
+    // ============================================================
+    // IMAGE INDEX
+    // ============================================================
+
+    const currentImageIndex =
+        useMemo(() => {
+            const index =
+                galleryImages.indexOf(
+                    selectedImage
+                );
+
+            return index >= 0
+                ? index
+                : 0;
+        }, [
+            galleryImages,
+            selectedImage,
+        ]);
+
+    // ============================================================
+    // NEXT IMAGE
+    // ============================================================
+
+    const nextImage =
+        useCallback(() => {
+            if (
+                galleryImages.length <= 1
+            ) {
+                return;
+            }
+
+            setSelectedImage(
+                galleryImages[
+                (currentImageIndex + 1) %
+                galleryImages.length
+                ]
+            );
+        }, [
+            galleryImages,
+            currentImageIndex,
+        ]);
+
+    // ============================================================
+    // PREVIOUS IMAGE
+    // ============================================================
 
     const previousImage =
         useCallback(() => {
-
-            if (galleryImages.length <= 1)
+            if (
+                galleryImages.length <= 1
+            ) {
                 return;
-
+            }
 
             setSelectedImage(
                 galleryImages[
@@ -396,351 +396,424 @@ export default function ProductDetails() {
                 galleryImages.length
                 ]
             );
-
         }, [
             galleryImages,
-            currentImageIndex
+            currentImageIndex,
         ]);
 
+    // ============================================================
+    // OPEN ZOOM
+    // ============================================================
 
-    /* =========================================================
-       VARIANT CHANGE
-    ========================================================= */
+    const openZoom =
+        useCallback(() => {
+            if (
+                galleryImages.length
+            ) {
+                setZoomOpen(true);
+            }
+        }, [
+            galleryImages.length,
+        ]);
+
+    // ============================================================
+    // CLOSE ZOOM
+    // ============================================================
+
+    const closeZoom =
+        useCallback(() => {
+            setZoomOpen(false);
+        }, []);
+
+    // ============================================================
+    // CHANGE VARIANT
+    // ============================================================
 
     const changeVariant =
         useCallback(
-            variant => {
-
-                if (!variant || !product)
+            (variant) => {
+                if (
+                    !variant ||
+                    !product
+                ) {
                     return;
-
+                }
 
                 setSelectedVariant(
                     variant
                 );
 
-
-                const image =
+                const variantImage =
                     variant?.images?.find(
-                        item =>
+                        (item) =>
                             item?.imageUrl
                     )?.imageUrl;
 
-
-                if (image) {
-
-                    setSelectedImage(
-                        image
-                    );
-
-                }
-
+                setSelectedImage(
+                    variantImage ||
+                    product?.imageUrl ||
+                    product?.imageUrl2 ||
+                    ""
+                );
 
                 const variantId =
                     variant?.productVariantId ??
                     variant?.id;
 
-
-                if (variantId) {
-
-                    navigate(
-                        `/product/${product.id}?variant=${variantId}`,
-                        {
-                            replace: true,
-                            preventScrollReset: true
-                        }
-                    );
-
+                if (!variantId) {
+                    return;
                 }
 
+                navigate(
+                    `/product/${product.id}?variant=${variantId}`,
+                    {
+                        replace: true,
+                        preventScrollReset:
+                            true,
+                    }
+                );
             },
             [
                 product,
-                navigate
+                navigate,
             ]
         );
 
-
-    /* =========================================================
-       BUY NOW
-    ========================================================= */
-
     // ============================================================
     // BUY NOW
+    //
     // IMPORTANT:
-    // Buy Now ALWAYS starts with exactly 1 unit.
-    // It must NOT use the current cart quantity or minQuantity.
+    // Buy Now always starts with ONE quantity.
+    //
+    // It does NOT use:
+    // - existing cart quantity
+    // - minQuantity
+    //
     // ============================================================
-    const handleBuyNow = useCallback(async () => {
-        if (!product) {
-            showMessage("Product information is unavailable.");
-            return;
-        }
 
-        const variants = Array.isArray(product.variants)
-            ? product.variants
-            : [];
-
-        const hasVariants = variants.length > 0;
-
-        if (hasVariants && !selectedVariant) {
-            showMessage("Please select a variant.");
-            return;
-        }
-
-        const variantId =
-            selectedVariant?.productVariantId ??
-            selectedVariant?.id ??
-            null;
-
-        if (hasVariants && !variantId) {
-            showMessage("Please select a valid variant.");
-            return;
-        }
-
-        const stockValue =
-            selectedVariant?.stockQuantity ??
-            product?.stockQuantity;
-
-        if (
-            stockValue !== null &&
-            stockValue !== undefined &&
-            stockValue !== ""
-        ) {
-            const stock = Number(stockValue);
-
-            if (!Number.isNaN(stock) && stock <= 0) {
-                showMessage("This product is currently out of stock.");
-                return;
-            }
-        }
-
-        // ========================================================
-        // CRITICAL:
-        // Buy Now ALWAYS uses exactly ONE item.
-        // Do NOT use:
-        // - cart quantity
-        // - selectedVariant.minQuantity
-        // - existing cart quantity
-        // ========================================================
-        const buyNowQuantity = 1;
-
-        try {
-            showMessage("");
-
-            const result = await addToCart(
-                product.id,
-                variantId,
-                buyNowQuantity
-            );
-
-            if (result === false) {
-                showMessage("Unable to proceed with Buy Now.");
+    const handleBuyNow =
+        useCallback(async () => {
+            if (!product) {
+                showMessage(
+                    "Product information is unavailable."
+                );
                 return;
             }
 
-            await loadCart();
+            const variants =
+                Array.isArray(
+                    product?.variants
+                )
+                    ? product.variants
+                    : [];
 
-            navigate("/cart");
-        } catch (err) {
-            console.error("Buy Now error:", err);
+            const hasVariants =
+                variants.length > 0;
 
-            showMessage(
-                err?.response?.data?.message ||
-                "Unable to proceed. Please try again."
-            );
-        }
-    }, [
-        product,
-        selectedVariant,
-        addToCart,
-        loadCart,
-        navigate,
-        showMessage,
-    ]);
+            if (
+                hasVariants &&
+                !selectedVariant
+            ) {
+                showMessage(
+                    "Please select a variant."
+                );
+                return;
+            }
 
+            const variantId =
+                selectedVariant?.productVariantId ??
+                selectedVariant?.id ??
+                null;
 
-    /* =========================================================
-       SHARE
-    ========================================================= */
+            if (
+                hasVariants &&
+                !variantId
+            ) {
+                showMessage(
+                    "Please select a valid variant."
+                );
+                return;
+            }
+
+            const stockValue =
+                selectedVariant?.stockQuantity ??
+                product?.stockQuantity;
+
+            if (
+                stockValue !== null &&
+                stockValue !== undefined &&
+                stockValue !== ""
+            ) {
+                const stock =
+                    Number(stockValue);
+
+                if (
+                    !Number.isNaN(stock) &&
+                    stock <= 0
+                ) {
+                    showMessage(
+                        "This product is currently out of stock."
+                    );
+                    return;
+                }
+            }
+
+            // BUY NOW = EXACTLY ONE
+            const quantity = 1;
+
+            try {
+                showMessage("");
+
+                const result =
+                    await addToCart(
+                        product.id,
+                        variantId,
+                        quantity
+                    );
+
+                if (result === false) {
+                    showMessage(
+                        "Unable to add product to cart."
+                    );
+                    return;
+                }
+
+                await loadCart();
+
+                navigate("/cart");
+            } catch (err) {
+                console.error(
+                    "Buy Now error:",
+                    err
+                );
+
+                showMessage(
+                    err?.response?.data
+                        ?.message ||
+                    "Unable to proceed. Please try again."
+                );
+            }
+        }, [
+            product,
+            selectedVariant,
+            addToCart,
+            loadCart,
+            navigate,
+            showMessage,
+        ]);
+
+    // ============================================================
+    // SHARE PRODUCT
+    // ============================================================
 
     const handleShare =
         useCallback(async () => {
-
-            if (!product)
+            if (!product) {
                 return;
-
+            }
 
             const variantId =
                 selectedVariant?.productVariantId ??
                 selectedVariant?.id;
 
-
-            const url =
-                variantId
-                    ? `${window.location.origin}/product/${product.id}?variant=${variantId}`
-                    : `${window.location.origin}/product/${product.id}`;
-
+            const url = variantId
+                ? `${window.location.origin}/product/${product.id}?variant=${variantId}`
+                : `${window.location.origin}/product/${product.id}`;
 
             try {
-
                 if (
                     navigator.share
                 ) {
-
                     await navigator.share({
-
                         title:
-                            product.name ||
-                            "Medical Product",
+                            product?.name ||
+                            "Product",
 
                         text:
                             selectedVariant?.model
-                                ? `${product.brand || ""} - ${selectedVariant.model}`
-                                : product.name,
+                                ? `${product?.brand || ""} - ${selectedVariant.model}`
+                                : product?.name ||
+                                "Medical Product",
 
-                        url
-
+                        url,
                     });
 
                     return;
                 }
 
+                if (
+                    navigator.clipboard
+                ) {
+                    await navigator.clipboard.writeText(
+                        url
+                    );
 
-                await navigator.clipboard?.writeText(
-                    url
-                );
-
-
-                showMessage(
-                    "Product link copied."
-                );
-
+                    showMessage(
+                        "Product link copied."
+                    );
+                }
             } catch (err) {
-
                 if (
                     err?.name !==
                     "AbortError"
                 ) {
-
                     console.error(
                         "Share error:",
                         err
                     );
-
                 }
-
             }
-
         }, [
             product,
             selectedVariant,
-            showMessage
+            showMessage,
         ]);
 
-
-    /* =========================================================
-       RECENTLY VIEWED
-    ========================================================= */
+    // ============================================================
+    // RECENTLY VIEWED
+    // ============================================================
 
     useEffect(() => {
-
-        if (!product?.id)
+        if (!product?.id) {
             return;
-
+        }
 
         try {
-
-            const old =
-                JSON.parse(
-                    localStorage.getItem(
-                        "recentProducts"
-                    ) || "[]"
+            const stored =
+                localStorage.getItem(
+                    "recentProducts"
                 );
 
+            let items = [];
 
-            const items =
-                Array.isArray(old)
-                    ? old
+            try {
+                items = stored
+                    ? JSON.parse(stored)
                     : [];
+            } catch {
+                items = [];
+            }
 
+            if (!Array.isArray(items)) {
+                items = [];
+            }
 
-            const next = [
+            items = items.filter(
+                (item) =>
+                    Number(item?.id) !==
+                    Number(product.id)
+            );
 
-                {
-                    id: product.id,
+            items.unshift({
+                id: product.id,
 
-                    name: product.name,
+                name:
+                    product.name,
 
-                    imageUrl:
-                        selectedVariant
-                            ?.images?.[0]
-                            ?.imageUrl ||
-                        product.imageUrl ||
-                        ""
-                },
-
-                ...items.filter(
-                    item =>
-                        Number(item?.id) !==
-                        Number(product.id)
-                )
-
-            ].slice(0, 10);
-
+                imageUrl:
+                    selectedVariant
+                        ?.images?.[0]
+                        ?.imageUrl ||
+                    product?.imageUrl ||
+                    "",
+            });
 
             localStorage.setItem(
                 "recentProducts",
-                JSON.stringify(next)
+                JSON.stringify(
+                    items.slice(0, 10)
+                )
             );
-
-        } catch {
-
-            // non-critical
-
+        } catch (err) {
+            console.warn(
+                "Recently viewed error:",
+                err
+            );
         }
-
     }, [
         product,
-        selectedVariant
+        selectedVariant,
     ]);
 
-
-    /* =========================================================
-       SCROLL
-    ========================================================= */
+    // ============================================================
+    // SCROLL TOP ON PRODUCT CHANGE
+    // ============================================================
 
     useEffect(() => {
-
         window.scrollTo({
             top: 0,
-            behavior: "auto"
+            behavior: "auto",
         });
-
     }, [id]);
 
+    // ============================================================
+    // ZOOM KEYBOARD CONTROLS
+    // ============================================================
 
-    /* =========================================================
-       PRODUCT SEO
-    ========================================================= */
+    useEffect(() => {
+        if (!zoomOpen) {
+            return;
+        }
+
+        const handleKeyDown =
+            (event) => {
+                if (
+                    event.key ===
+                    "ArrowRight"
+                ) {
+                    nextImage();
+                }
+
+                if (
+                    event.key ===
+                    "ArrowLeft"
+                ) {
+                    previousImage();
+                }
+
+                if (
+                    event.key ===
+                    "Escape"
+                ) {
+                    closeZoom();
+                }
+            };
+
+        window.addEventListener(
+            "keydown",
+            handleKeyDown
+        );
+
+        return () => {
+            window.removeEventListener(
+                "keydown",
+                handleKeyDown
+            );
+        };
+    }, [
+        zoomOpen,
+        nextImage,
+        previousImage,
+        closeZoom,
+    ]);
+
+    // ============================================================
+    // PRODUCT STRUCTURED DATA
+    // ============================================================
 
     const productSchema =
         useMemo(() => {
-
-            if (!product)
+            if (!product) {
                 return null;
+            }
 
-
-            const price =
-                Number(
-                    selectedVariant?.price ??
-                    product?.price ??
-                    0
-                );
-
+            const price = Number(
+                selectedVariant?.price ??
+                product?.price ??
+                0
+            );
 
             const schema = {
-
                 "@context":
                     "https://schema.org",
 
@@ -748,97 +821,79 @@ export default function ProductDetails() {
                     "Product",
 
                 name:
-                    product.name || "",
+                    product?.name ||
+                    "",
 
                 description:
-                    product.description || "",
+                    product?.description ||
+                    "",
 
                 image:
                     galleryImages,
 
                 brand: {
-
                     "@type":
                         "Brand",
 
                     name:
-                        product.brand || ""
-
-                }
-
+                        product?.brand ||
+                        "",
+                },
             };
 
-
             if (price > 0) {
-
                 schema.offers = {
-
                     "@type":
                         "Offer",
 
                     price:
-                        price.toFixed(2),
+                        price.toFixed(
+                            2
+                        ),
 
                     priceCurrency:
                         "INR",
 
                     url:
-                        window.location.href
-
+                        window.location.href,
                 };
-
             }
 
-
             return schema;
-
         }, [
             product,
             selectedVariant,
-            galleryImages
+            galleryImages,
         ]);
 
-
-    /* =========================================================
-       LOADING
-    ========================================================= */
+    // ============================================================
+    // LOADING
+    // ============================================================
 
     if (loading) {
-
         return (
-
-            <main className="min-h-screen bg-[#f6f8fb]">
-
-                <div className="mx-auto max-w-[1280px] px-3 py-5 sm:px-5 lg:px-6">
-
+            <main className="min-h-screen bg-slate-50">
+                <div className="mx-auto max-w-7xl px-3 py-5 sm:px-5 lg:px-6">
                     <LoadingSkeleton />
-
                 </div>
-
             </main>
-
         );
-
     }
 
-
-    /* =========================================================
-       ERROR
-    ========================================================= */
+    // ============================================================
+    // ERROR
+    // ============================================================
 
     if (error || !product) {
-
         return (
+            <main className="flex min-h-[70vh] items-center justify-center bg-slate-50 px-4">
+                <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
 
-            <main className="flex min-h-[70vh] items-center justify-center bg-[#f6f8fb] px-4">
-
-                <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-2xl">
+                    <div className="mb-4 text-3xl">
                         📦
                     </div>
 
-                    <h1 className="mt-5 text-xl font-extrabold text-slate-950">
+                    <h1 className="text-xl font-semibold text-slate-900">
                         Product unavailable
                     </h1>
 
@@ -850,141 +905,140 @@ export default function ProductDetails() {
                     <button
                         type="button"
                         onClick={() =>
-                            navigate("/products")
+                            navigate(
+                                "/products"
+                            )
                         }
-                        className="mt-6 h-11 rounded-xl bg-slate-950 px-6 text-sm font-bold text-white transition hover:bg-indigo-700"
+                        className="mt-6 min-h-10 rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
                     >
                         Browse Products
                     </button>
-
                 </div>
-
             </main>
-
         );
-
     }
 
+    // ============================================================
+    // PAGE
+    // ============================================================
 
     return (
-
         <>
+            {/* ====================================================
+                PRODUCT SEO SCHEMA
+            ===================================================== */}
 
             {productSchema && (
-
                 <script
                     type="application/ld+json"
                     dangerouslySetInnerHTML={{
                         __html:
                             JSON.stringify(
                                 productSchema
-                            )
+                            ),
                     }}
                 />
-
             )}
 
-
-            {/* =====================================================
-                FAST TOAST
-            ====================================================== */}
+            {/* ====================================================
+                SHORT MESSAGE
+            ===================================================== */}
 
             {message && (
+                <div className="fixed left-1/2 top-4 z-[9999] w-[calc(100%-2rem)] max-w-md -translate-x-1/2">
+                    <div className="flex items-center justify-between gap-4 rounded-xl bg-slate-900 px-4 py-3 text-sm text-white shadow-xl">
 
-                <div className="fixed inset-x-3 top-4 z-[9999] flex justify-center">
-
-                    <div className="flex items-center gap-3 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-bold text-white shadow-2xl">
-
-                        <span className="h-2 w-2 rounded-full bg-emerald-400" />
-
-                        {message}
+                        <span className="min-w-0">
+                            {message}
+                        </span>
 
                         <button
                             type="button"
                             onClick={() =>
-                                setMessage("")
+                                showMessage(
+                                    ""
+                                )
                             }
-                            className="ml-2 text-slate-400 hover:text-white"
+                            className="shrink-0 text-lg leading-none text-slate-300 transition hover:text-white"
+                            aria-label="Close message"
                         >
                             ×
                         </button>
 
                     </div>
-
                 </div>
-
             )}
 
+            {/* ====================================================
+                IMAGE ZOOM
+            ===================================================== */}
 
             <ImageZoomModal
-
                 open={zoomOpen}
-
                 images={galleryImages}
-
                 currentImage={selectedImage}
-
                 setCurrentImage={
-                    setSelectedImage
+                    changeImage
                 }
-
-                onClose={() =>
-                    setZoomOpen(false)
-                }
-
+                onClose={closeZoom}
             />
 
+            {/* ====================================================
+                MAIN PRODUCT PAGE
+            ===================================================== */}
 
-            <main className="min-h-screen bg-[#f6f8fb]">
+            <main className="min-h-screen bg-slate-50 pb-24 lg:pb-8">
 
-                <div className="mx-auto w-full max-w-[1280px] px-3 py-4 sm:px-5 sm:py-6 lg:px-6">
+                <div className="mx-auto w-full max-w-[1240px] px-3 py-4 sm:px-5 sm:py-6 lg:px-6">
 
                     {/* =================================================
-                        HERO
+                        PRODUCT HERO
                     ================================================== */}
 
-                    <div className="grid items-stretch gap-4 lg:grid-cols-[380px_minmax(0,1fr)] xl:grid-cols-[400px_minmax(0,1fr)]">
+                    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[380px_minmax(0,1fr)] lg:gap-4 xl:grid-cols-[390px_minmax(0,1fr)]">
 
-                        <div className="min-w-0">
+                        {/* ===============================
+                            GALLERY
+                        ================================ */}
 
-                            <ProductGallery
+                        <section className="min-w-0 w-full">
+                            <div className="mx-auto w-full max-w-[390px] lg:mx-0">
 
-                                product={product}
+                                <ProductGallery
+                                    product={
+                                        product
+                                    }
 
-                                selectedVariant={
-                                    selectedVariant
-                                }
+                                    selectedVariant={
+                                        selectedVariant
+                                    }
 
-                                selectedImage={
-                                    selectedImage
-                                }
+                                    selectedImage={
+                                        selectedImage
+                                    }
 
-                                setSelectedImage={
-                                    setSelectedImage
-                                }
+                                    setSelectedImage={
+                                        changeImage
+                                    }
 
-                                openZoom={() =>
-                                    setZoomOpen(true)
-                                }
+                                    openZoom={
+                                        openZoom
+                                    }
+                                />
 
-                                onNext={
-                                    nextImage
-                                }
+                            </div>
+                        </section>
 
-                                onPrevious={
-                                    previousImage
-                                }
+                        {/* ===============================
+                            PURCHASE
+                        ================================ */}
 
-                            />
-
-                        </div>
-
-
-                        <div className="min-w-0">
+                        <section className="min-w-0 w-full">
 
                             <ProductPurchaseSection
-
-                                product={product}
+                                product={
+                                    product
+                                }
 
                                 selectedVariant={
                                     selectedVariant
@@ -1001,109 +1055,128 @@ export default function ProductDetails() {
                                 shareProduct={
                                     handleShare
                                 }
-
                             />
 
-                        </div>
+                        </section>
 
                     </div>
 
-
                     {/* =================================================
-                        MODELS
+                        AVAILABLE MODELS / VARIANTS
+                        Only displayed when there are multiple variants.
                     ================================================== */}
 
-                    {variants.length > 1 && (
+                    {Array.isArray(
+                        product?.variants
+                    ) &&
+                        product.variants
+                            .length > 1 && (
+                            <section className="mt-4 sm:mt-5">
 
-                        <div className="mt-5">
+                                <ProductVariantSelector
+                                    product={
+                                        product
+                                    }
 
-                            <ProductVariantSelector
+                                    variants={
+                                        product.variants
+                                    }
 
-                                product={product}
+                                    selectedVariant={
+                                        selectedVariant
+                                    }
 
-                                variants={variants}
+                                    onVariantChange={
+                                        changeVariant
+                                    }
+                                />
 
-                                selectedVariant={
-                                    selectedVariant
-                                }
-
-                                onVariantChange={
-                                    changeVariant
-                                }
-
-                            />
-
-                        </div>
-
-                    )}
-
+                            </section>
+                        )}
 
                     {/* =================================================
-                        TABS
+                        PRODUCT DESCRIPTION / SPECIFICATION / DOWNLOADS
                     ================================================== */}
 
-                    <div className="mt-7">
+                    <section className="mt-7 sm:mt-8 lg:mt-10">
 
                         <ProductTabs
-
-                            product={product}
+                            product={
+                                product
+                            }
 
                             selectedVariant={
                                 selectedVariant
                             }
-
                         />
 
-                    </div>
-
-
-                    {/* =================================================
-                        COMPARISON
-                    ================================================== */}
-
-                    <div className="mt-7">
-
-                        <CompareSimilarProducts
-
-                            currentProduct={
-                                product
-                            }
-
-                            products={
-                                allProducts
-                            }
-
-                        />
-
-                    </div>
-
+                    </section>
 
                     {/* =================================================
-                        RECOMMENDATIONS
+                        SAME PRODUCT / DIFFERENT VENDOR COMPARISON
+
+                        IMPORTANT:
+
+                        products = complete product list
+
+                        Therefore:
+
+                        Product A -> finds Product B
+                        Product B -> finds Product A
+
+                        If no same-name product exists,
+                        CompareSimilarProducts returns null.
                     ================================================== */}
 
-                    <div className="mt-7">
+                    <CompareSimilarProducts
+                        currentProduct={
+                            product
+                        }
+
+                        products={
+                            products
+                        }
+                    />
+
+                    {/* =================================================
+                        RELATED / RECOMMENDED PRODUCTS
+                    ================================================== */}
+
+                    <section className="mt-7 sm:mt-8 lg:mt-10">
 
                         <RecommendedProducts
-
                             currentProduct={
                                 product
                             }
-
-                            products={
-                                allProducts
-                            }
-
                         />
 
-                    </div>
+                    </section>
 
                 </div>
 
             </main>
 
+            {/* ====================================================
+                MOBILE PURCHASE BAR
+            ===================================================== */}
+
+            <MobileBottomBar
+                product={
+                    product
+                }
+
+                selectedVariant={
+                    selectedVariant
+                }
+
+                onBuyNow={
+                    handleBuyNow
+                }
+
+                setMessage={
+                    showMessage
+                }
+            />
         </>
-
     );
-
 }
