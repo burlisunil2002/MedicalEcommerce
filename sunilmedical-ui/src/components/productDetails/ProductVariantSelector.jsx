@@ -1,9 +1,19 @@
 ﻿import {
     CheckCircle2,
-    BadgeIndianRupee,
-    Package,
-    Boxes
+    BadgeIndianRupee
 } from "lucide-react";
+
+
+const money = value =>
+    Number(value || 0).toLocaleString(
+        "en-IN",
+        {
+            style: "currency",
+            currency: "INR",
+            minimumFractionDigits: 2
+        }
+    );
+
 
 export default function ProductVariantSelector({
 
@@ -17,376 +27,242 @@ export default function ProductVariantSelector({
 
 }) {
 
-    //--------------------------------------------------------
-    // Hide if only one variant
-    //--------------------------------------------------------
 
-    if (!variants || variants.length <= 1)
+    if (
+        !Array.isArray(variants) ||
+        variants.length <= 1
+    ) {
+
         return null;
 
-    //--------------------------------------------------------
-    // Discount
-    //--------------------------------------------------------
+    }
+
 
     const discount =
-        Number(product?.discountPercentage ?? 0);
+        Math.max(
+            0,
+            Math.min(
+                100,
+                Number(
+                    product?.discountPercentage ??
+                    0
+                )
+            )
+        );
 
-    //--------------------------------------------------------
-    // Render
-    //--------------------------------------------------------
 
     return (
 
-        <section className="mt-12">
+        <section>
 
-            {/* Header */}
 
-            <div className="flex items-center justify-between mb-6">
+            <div className="mb-3 flex items-end justify-between">
+
 
                 <div>
 
-                    <h2 className="text-xl lg:text-2xl font-bold text-gray-900">
+                    <p className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-indigo-600">
+
+                        Choose your option
+
+                    </p>
+
+
+                    <h2 className="mt-1 text-lg font-extrabold text-slate-950">
 
                         Available Models
 
+                        <span className="ml-2 text-xs text-slate-400">
+
+                            {variants.length}
+
+                        </span>
+
                     </h2>
 
-                    <p className="text-gray-500 mt-1">
 
-                        Select your preferred model.
+                    <p className="mt-1 text-xs text-slate-500">
+
+                        Choose the model that matches your requirement.
 
                     </p>
 
                 </div>
 
-                <span
-                    className="
-                        hidden
-                        sm:block
-                        text-sm
-                        text-gray-400
-                    "
-                >
 
-                    {variants.length} Models
+                <span className="hidden text-[10px] text-slate-400 sm:block">
+
+                    Swipe to explore
 
                 </span>
 
             </div>
 
-            {/* Grid */}
+
+            <div className="flex gap-3 overflow-x-auto pb-2">
 
 
-               <div
-                className="
-        grid
-        grid-cols-2
-        md:grid-cols-2
-        lg:grid-cols-3
-        xl:grid-cols-3
-        gap-6
-        w-full
-    "
-            >
+                {variants.map(
+                    variant => {
 
-                {
+                        const variantId =
+                            variant?.productVariantId ??
+                            variant?.id;
 
-                    variants.map((variant) => {
-
-                        //--------------------------------------------------------
-
-                        // Selected
-
-                        //--------------------------------------------------------
 
                         const selected =
-
                             Number(
-
-                                selectedVariant?.productVariantId
-
-                            )
-
-                            ===
-
+                                selectedVariant
+                                    ?.productVariantId ??
+                                selectedVariant?.id
+                            ) ===
                             Number(
-
-                                variant.productVariantId
-
+                                variantId
                             );
 
-                        //--------------------------------------------------------
 
-                        // Price
-
-                        //--------------------------------------------------------
-
-                        const actualPrice =
-
+                        const original =
                             Number(
-
-                                variant.price ?? 0
-
+                                variant?.price ??
+                                0
                             );
+
 
                         const finalPrice =
-
                             discount > 0
-
-                                ?
-
-                                actualPrice -
-
+                                ? original -
                                 (
+                                    original *
+                                    discount
+                                ) /
+                                100
+                                : original;
 
-                                    actualPrice *
-
-                                    discount /
-
-                                    100
-
-                                )
-
-                                :
-
-                                actualPrice;
-
-                        //--------------------------------------------------------
-
-                        // Image
-
-                        //--------------------------------------------------------
 
                         const image =
-
-                            variant.images?.[0]?.imageUrl
-
-                            ??
-
-                            product.imageUrl
-
-                            ??
-
+                            variant
+                                ?.images?.[0]
+                                ?.imageUrl ||
+                            product?.imageUrl ||
                             "/images/no-image.png";
 
-                        //--------------------------------------------------------
-
-                        // Stock
-
-                        //--------------------------------------------------------
-
-                        const inStock =
-
-                            Number(
-
-                                variant.stockQuantity ?? 0
-
-                            ) > 0;
-
-                        //--------------------------------------------------------
-
-                        // Card
-
-                        //--------------------------------------------------------
 
                         return (
 
                             <button
-                                key={variant.productVariantId}
+
+                                key={
+                                    variantId
+                                }
+
                                 type="button"
-                                onClick={() => {
-                                    onVariantChange(variant);
 
-                                    window.scrollTo({
-                                        top: 0,
-                                        behavior: "smooth"
-                                    });
-                                }}
-                                className={`
-        relative
-        flex
-        flex-col
-        rounded-2xl
-        overflow-hidden
-        border
-        bg-white
-        transition-all
-        duration-300
-        cursor-pointer
-        hover:shadow-xl
-        hover:-translate-y-1
-        w-full
-        min-h-[360px]
+                                onClick={() =>
+                                    onVariantChange(
+                                        variant
+                                    )
+                                }
 
-        ${selected
-                                        ? "border-blue-600 ring-4 ring-blue-100 shadow-xl scale-[1.02]"
-                                        : "border-gray-200 hover:border-blue-400"
-                                    }
-    `}
+                                className={`relative w-[220px] shrink-0 overflow-hidden rounded-2xl border bg-white text-left transition sm:w-[250px] ${selected
+
+                                        ? "border-indigo-500 ring-2 ring-indigo-100 shadow-lg"
+
+                                        : "border-slate-200 hover:border-indigo-300 hover:shadow-md"
+                                    }`}
+
                             >
-                                {/* Selected Badge */}
+
 
                                 {selected && (
-                                    <div className="absolute top-3 right-3 z-20">
+
+                                    <span className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-full bg-indigo-600 px-2 py-1 text-[9px] font-bold text-white">
 
                                         <CheckCircle2
-                                            size={26}
-                                            className="text-blue-600"
+                                            size={11}
                                         />
 
-                                    </div>
+                                        Selected
+
+                                    </span>
+
                                 )}
 
-                                {/* Product Image */}
 
-                                <div
-                                    className="
-            h-48
-            bg-gray-50
-            flex
-            items-center
-            justify-center
-            border-b
-            p-4
-        "
-                                >
+                                <div className="flex h-[125px] items-center justify-center bg-slate-50 p-3">
 
                                     <img
-                                        src={image}
-                                        alt={variant.model}
+
+                                        src={
+                                            image
+                                        }
+
+                                        alt={
+                                            variant?.model ||
+                                            "Product model"
+                                        }
+
+                                        className="h-full w-full object-contain"
+
                                         loading="lazy"
-                                        onError={(e) => {
-                                            e.currentTarget.src = product.imageUrl;
-                                        }}
-                                        className="
-                w-full
-                h-full
-                object-contain
-                transition
-                duration-300
-                hover:scale-105
-            "
+
                                     />
 
                                 </div>
 
-                                {/* Card Body */}
 
-                                <div
-                                    className="
-            flex
-            flex-col
-            flex-1
-            p-5
-        "
-                                >
+                                <div className="border-t border-slate-100 p-3">
 
-                                    {/* Variant */}
 
-                                    <h3
-                                        className="
-                text-center
-                font-bold
-                text-lg
-                leading-6
-                line-clamp-2
-                min-h-[56px]
-                text-gray-900
-            "
-                                    >
+                                    <p className="line-clamp-2 min-h-[34px] text-xs font-bold leading-5 text-slate-900">
 
-                                        {variant.model}
+                                        {variant?.model ||
+                                            "Standard Model"}
 
-                                    </h3>
+                                    </p>
 
-                                    {/* Price */}
 
-                                    <div className="mt-4 text-center">
+                                    <div className="mt-2 flex items-center justify-between">
 
-                                        <div
-                                            className="
-                    flex
-                    justify-center
-                    items-center
-                    gap-2
-                "
-                                        >
+
+                                        <span className="flex items-center gap-1 text-sm font-black text-slate-950">
 
                                             <BadgeIndianRupee
-                                                size={20}
-                                                className="text-green-600"
+                                                size={13}
+                                                className="text-emerald-600"
                                             />
 
-                                            <span
-                                                className="
-                        text-2xl
-                        font-bold
-                        text-green-700
-                    "
-                                            >
+                                            {money(
+                                                finalPrice
+                                            )}
 
-                                                ₹{finalPrice.toFixed(0)}
+                                        </span>
 
-                                            </span>
 
-                                        </div>
+                                        {discount >
+                                            0 &&
+                                            original >
+                                            0 && (
 
-                                        {discount > 0 && (
+                                                <span className="text-[9px] text-slate-400 line-through">
 
-                                            <div
-                                                className="
-                        mt-2
-                        flex
-                        justify-center
-                        items-center
-                        gap-2
-                        flex-wrap
-                    "
-                                            >
-
-                                                <span
-                                                    className="
-                            text-gray-400
-                            line-through
-                            text-sm
-                        "
-                                                >
-
-                                                    ₹{actualPrice.toFixed(0)}
+                                                    {money(
+                                                        original
+                                                    )}
 
                                                 </span>
 
-                                                <span
-                                                    className="
-                            px-2
-                            py-1
-                            rounded-full
-                            bg-red-100
-                            text-red-600
-                            text-xs
-                            font-semibold
-                        "
-                                                >
-
-                                                    {discount}% OFF
-
-                                                </span>
-
-                                            </div>
-
-                                        )}
+                                            )}
 
                                     </div>
 
                                 </div>
 
                             </button>
-                            
+
                         );
 
-                    })
-
-                }
+                    }
+                )}
 
             </div>
 

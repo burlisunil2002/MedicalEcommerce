@@ -1,145 +1,103 @@
-﻿import {
-    BadgeCheck
-} from "lucide-react";
+﻿import { BadgeCheck } from "lucide-react";
 
 export default function ProductSpecification({
-
     selectedVariant
-
 }) {
-
     const specifications =
-        selectedVariant?.specifications ?? [];
+        selectedVariant?.specifications ??
+        [];
+
+    if (!specifications.length) {
+        return null;
+    }
 
     return (
+        <article className="
+            overflow-hidden
+            rounded-2xl
+            border
+            border-slate-200
+            bg-white
+            shadow-sm
+        ">
+            <div className="
+                border-b
+                border-slate-100
+                bg-gradient-to-r
+                from-indigo-50
+                to-white
+                px-5
+                sm:px-6
+                py-4
+            ">
+                <p className="
+                    text-[10px]
+                    font-bold
+                    uppercase
+                    tracking-widest
+                    text-indigo-500
+                ">
+                    Technical details
+                </p>
 
-        <div
-            className="
-                bg-white
-                rounded-3xl
-                border
-                shadow-sm
-                overflow-hidden
-            "
-        >
-
-            <div
-                className="
-                    p-8
-                    border-b
-                "
-            >
-
-                <h2
-                    className="
-                        text-2xl
-                        font-bold
-                    "
-                >
-
+                <h2 className="
+                    mt-1
+                    text-base
+                    sm:text-lg
+                    font-bold
+                    text-slate-900
+                ">
                     Technical Specifications
-
                 </h2>
-
             </div>
 
-            {
-
-                specifications.length === 0 &&
-
-                <div
-                    className="
-                        p-8
-                        text-center
-                        text-gray-500
-                    "
-                >
-
-                    No Specifications Available
-
-                </div>
-
-            }
-
-            {
-
-                specifications.map(
-
+            <div className="divide-y divide-slate-100">
+                {specifications.map(
                     (spec, index) => (
-
                         <div
-
-                            key={index}
-
-                            className={`
-
+                            key={`${spec.key}-${index}`}
+                            className="
                                 grid
-
-                                md:grid-cols-3
-
-                                gap-4
-
-                                px-8
-
-                                py-5
-
-                                border-b
-
-                                ${index % 2 === 0
-
-                                    ?
-
-                                    "bg-gray-50"
-
-                                    :
-
-                                    "bg-white"
-
-                                }
-
-                            `}
-
+                                grid-cols-1
+                                sm:grid-cols-[minmax(180px,0.8fr)_2fr]
+                                gap-2
+                                sm:gap-6
+                                px-5
+                                sm:px-6
+                                py-3.5
+                                hover:bg-slate-50
+                                transition
+                            "
                         >
-
-                            <div
-                                className="
-                                    flex
-                                    items-center
-                                    gap-2
-                                    font-semibold
-                                "
-                            >
-
+                            <div className="
+                                flex
+                                items-center
+                                gap-2
+                                text-xs
+                                sm:text-sm
+                                font-semibold
+                                text-slate-800
+                            ">
                                 <BadgeCheck
-                                    size={18}
-                                    className="text-blue-600"
+                                    size={15}
+                                    className="text-indigo-500 shrink-0"
                                 />
 
                                 {spec.key}
-
                             </div>
 
-                            <div
-                                className="
-                                    md:col-span-2
-                                    text-gray-600
-                                "
-                            >
-
+                            <div className="
+                                text-xs
+                                sm:text-sm
+                                leading-6
+                                text-slate-600
+                            ">
                                 {spec.value}
-
                             </div>
-
                         </div>
-
                     )
-
-                )
-
-            }
-
-        </div>
-
+                )}
+            </div>
+        </article>
     );
-
 }

@@ -1,9 +1,14 @@
-﻿import { useEffect, useMemo } from "react";
+﻿import {
+    useEffect,
+    useMemo
+} from "react";
+
 import {
     ChevronLeft,
     ChevronRight,
     Expand
 } from "lucide-react";
+
 
 export default function ProductGallery({
 
@@ -15,317 +20,388 @@ export default function ProductGallery({
 
     setSelectedImage,
 
-    openZoom
+    openZoom,
+
+    onNext,
+
+    onPrevious
 
 }) {
 
-    const images = useMemo(() => {
 
-        if (
-            selectedVariant?.images &&
-            selectedVariant.images.length > 0
-        ) {
+    const images =
+        useMemo(() => {
 
-            return selectedVariant.images.map(
-                x => x.imageUrl
+            const result = [];
+
+
+            selectedVariant?.images?.forEach?.(
+                image => {
+
+                    if (
+                        image?.imageUrl
+                    ) {
+
+                        result.push(
+                            image.imageUrl
+                        );
+
+                    }
+
+                }
             );
 
-        }
 
-        if (product?.imageUrl)
-            return [product.imageUrl];
+            [
+                product?.imageUrl,
+                product?.imageUrl2,
+                product?.imageUrl3,
+                product?.imageUrl4
+            ].forEach(image => {
 
-        return ["/images/no-image.png"];
+                if (image) {
 
-    }, [
+                    result.push(
+                        image
+                    );
 
-        product,
+                }
 
-        selectedVariant
+            });
 
-    ]);
+
+            const unique =
+                [
+                    ...new Set(
+                        result.filter(
+                            Boolean
+                        )
+                    )
+                ];
+
+
+            return unique.length
+                ? unique
+                : [
+                    "/images/no-image.png"
+                ];
+
+        }, [
+            product,
+            selectedVariant
+        ]);
 
 
     const currentIndex =
-        images.indexOf(
-            selectedImage
+        Math.max(
+            0,
+            images.indexOf(
+                selectedImage
+            )
         );
 
-
-    const nextImage = () => {
-
-        if (
-            currentIndex <
-            images.length - 1
-        ) {
-
-            setSelectedImage(
-                images[currentIndex + 1]
-            );
-
-        }
-
-    };
-
-
-    const previousImage = () => {
-
-        if (
-            currentIndex > 0
-        ) {
-
-            setSelectedImage(
-                images[currentIndex - 1]
-            );
-
-        }
-
-    };
 
     useEffect(() => {
 
         if (
-            images.length > 0 &&
-            !selectedImage
+            !selectedImage ||
+            !images.includes(
+                selectedImage
+            )
         ) {
-            setSelectedImage(images[0]);
+
+            setSelectedImage(
+                images[0]
+            );
+
         }
 
-    }, [images, selectedImage, setSelectedImage]);
+    }, [
+        images,
+        selectedImage,
+        setSelectedImage
+    ]);
 
 
     return (
 
-        <div className="lg:sticky lg:top-24">
+        <article className="h-full min-h-[360px] overflow-hidden rounded-[22px] border border-slate-200 bg-white p-3 shadow-[0_10px_35px_rgba(15,23,42,0.06)] sm:p-4">
 
-            <div className="flex gap-4 items-start">
 
-                {/* Thumbnail Images */}
+            <div className="flex h-full min-h-[328px] gap-3">
 
-                {
 
-                    images.length > 1 && (
+                {/* =================================================
+                    DESKTOP THUMBNAILS
+                ================================================== */}
 
-                        <div
-                            className="
-                            hidden
-                            lg:flex
-                            flex-col
-                            gap-3
-                            w-24
-                            shrink-0
-                        "
-                        >
+                {images.length > 1 && (
 
-                            {
+                    <div className="hidden w-[60px] shrink-0 flex-col gap-2 sm:flex">
 
-                                images.map((image, index) => (
+                        {images
+                            .slice(0, 6)
+                            .map(
+                                (
+                                    image,
+                                    index
+                                ) => {
 
-                                    <button
+                                    const active =
+                                        selectedImage ===
+                                        image;
 
-                                        key={index}
 
-                                        onClick={() => setSelectedImage(image)}
+                                    return (
 
-                                        className={`
-                                        w-20
-                                        h-20
-                                        rounded-xl
-                                        overflow-hidden
-                                        border-2
-                                        transition
+                                        <button
 
-                                        ${selectedImage === image
-                                                ? "border-blue-600"
-                                                : "border-gray-200"
+                                            key={`${image}-${index}`}
+
+                                            type="button"
+
+                                            onClick={() =>
+                                                setSelectedImage(
+                                                    image
+                                                )
                                             }
-                                    `}
-                                    >
 
-                                        <img
+                                            className={`h-[56px] w-[56px] shrink-0 overflow-hidden rounded-xl border bg-white p-1 transition ${active
 
-                                            src={image}
+                                                    ? "border-indigo-500 ring-2 ring-indigo-100"
 
-                                            alt="Thumbnail"
+                                                    : "border-slate-200 hover:border-indigo-300"
+                                                }`}
 
-                                            className="
-                                            w-full
-                                            h-full
-                                            object-contain
-                                        "
+                                        >
 
-                                        />
+                                            <img
 
-                                    </button>
+                                                src={
+                                                    image
+                                                }
 
-                                ))
+                                                alt={`${product?.name || "Product"} ${index + 1}`}
 
-                            }
+                                                className="h-full w-full object-contain"
 
-                        </div>
+                                                loading={
+                                                    index ===
+                                                        0
+                                                        ? "eager"
+                                                        : "lazy"
+                                                }
 
-                    )
+                                            />
 
-                }
+                                        </button>
 
-                {/* Main Image */}
+                                    );
 
-                <div
-                    className="
-                    relative
-                    flex-1
-                    bg-white
-                    rounded-3xl
-                    border
-                    shadow-sm
-                    p-8
-                "
-                >
+                                }
+                            )}
 
-                    <img
+                    </div>
 
-                        src={selectedImage}
+                )}
 
-                        alt={selectedVariant?.model}
 
-                        onClick={openZoom}
+                {/* =================================================
+                    MAIN IMAGE
+                ================================================== */}
 
-                        className="
-                        w-full
-                        h-[500px]
-                        object-contain
-                        cursor-zoom-in
-                        transition
-                        duration-300
-                        hover:scale-105
-                    "
+                <div className="relative min-w-0 flex-1 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-50 via-white to-indigo-50/40">
 
-                    />
-
-                    {/* Expand */}
 
                     <button
 
-                        onClick={openZoom}
+                        type="button"
 
-                        className="
-                        absolute
-                        top-5
-                        right-5
-                        bg-white
-                        shadow-lg
-                        rounded-full
-                        p-3
-                        hover:bg-gray-100
-                    "
+                        onClick={
+                            openZoom
+                        }
+
+                        className="flex h-full min-h-[328px] w-full items-center justify-center p-5 sm:p-6"
 
                     >
 
-                        <Expand size={18} />
+                        <img
+
+                            src={
+                                selectedImage ||
+                                "/images/no-image.png"
+                            }
+
+                            alt={
+                                selectedVariant?.model ||
+                                product?.name ||
+                                "Product"
+                            }
+
+                            className="max-h-[300px] max-w-full object-contain transition-transform duration-300 hover:scale-[1.03]"
+
+                            loading="eager"
+
+                        />
 
                     </button>
 
-                    {/* Slider Controls */}
 
-                    {
+                    {/* Zoom */}
 
-                        images.length > 1 && (
+                    <button
 
-                            <>
+                        type="button"
 
-                                {/* Counter */}
+                        onClick={
+                            openZoom
+                        }
 
-                                <div
-                                    className="
-                                    absolute
-                                    bottom-5
-                                    left-5
-                                    bg-black/70
-                                    text-white
-                                    text-xs
-                                    px-3
-                                    py-1
-                                    rounded-full
-                                "
-                                >
+                        className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-indigo-300 hover:text-indigo-600"
 
-                                    {currentIndex + 1}/{images.length}
+                        aria-label="Zoom"
 
-                                </div>
+                    >
 
-                                {/* Previous */}
+                        <Expand
+                            size={16}
+                        />
 
-                                {
+                    </button>
 
-                                    currentIndex > 0 && (
 
-                                        <button
+                    {/* Previous */}
 
-                                            onClick={previousImage}
+                    {images.length > 1 && (
 
-                                            className="
-                                            absolute
-                                            top-1/2
-                                            left-4
-                                            -translate-y-1/2
-                                            bg-white
-                                            rounded-full
-                                            shadow-xl
-                                            p-3
-                                        "
+                        <button
 
-                                        >
+                            type="button"
 
-                                            <ChevronLeft />
+                            onClick={
+                                onPrevious
+                            }
 
-                                        </button>
+                            className="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white text-slate-700 shadow-md transition hover:text-indigo-600"
 
-                                    )
+                            aria-label="Previous image"
 
-                                }
+                        >
 
-                                {/* Next */}
+                            <ChevronLeft
+                                size={18}
+                            />
 
-                                {
+                        </button>
 
-                                    currentIndex < images.length - 1 && (
+                    )}
 
-                                        <button
 
-                                            onClick={nextImage}
+                    {/* Next */}
 
-                                            className="
-                                            absolute
-                                            top-1/2
-                                            right-4
-                                            -translate-y-1/2
-                                            bg-white
-                                            rounded-full
-                                            shadow-xl
-                                            p-3
-                                        "
+                    {images.length > 1 && (
 
-                                        >
+                        <button
 
-                                            <ChevronRight />
+                            type="button"
 
-                                        </button>
+                            onClick={
+                                onNext
+                            }
 
-                                    )
+                            className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white text-slate-700 shadow-md transition hover:text-indigo-600"
 
-                                }
+                            aria-label="Next image"
 
-                            </>
+                        >
 
-                        )
+                            <ChevronRight
+                                size={18}
+                            />
 
-                    }
+                        </button>
+
+                    )}
+
+
+                    {/* Counter */}
+
+                    {images.length > 1 && (
+
+                        <div className="absolute bottom-3 left-3 rounded-full bg-slate-950/85 px-2.5 py-1 text-[10px] font-bold text-white">
+
+                            {currentIndex + 1}
+                            /
+                            {images.length}
+
+                        </div>
+
+                    )}
 
                 </div>
 
             </div>
 
-        </div>
+
+            {/* Mobile thumbnails */}
+
+            {images.length > 1 && (
+
+                <div className="mt-2 flex gap-2 overflow-x-auto sm:hidden">
+
+                    {images.map(
+                        (
+                            image,
+                            index
+                        ) => (
+
+                            <button
+
+                                key={`${image}-mobile-${index}`}
+
+                                type="button"
+
+                                onClick={() =>
+                                    setSelectedImage(
+                                        image
+                                    )
+                                }
+
+                                className={`h-14 w-14 shrink-0 overflow-hidden rounded-xl border p-1 ${selectedImage ===
+                                        image
+
+                                        ? "border-indigo-500 ring-2 ring-indigo-100"
+
+                                        : "border-slate-200"
+                                    }`}
+
+                            >
+
+                                <img
+
+                                    src={
+                                        image
+                                    }
+
+                                    alt=""
+
+                                    className="h-full w-full object-contain"
+
+                                    loading="lazy"
+
+                                />
+
+                            </button>
+
+                        )
+                    )}
+
+                </div>
+
+            )}
+
+        </article>
 
     );
+
 }
