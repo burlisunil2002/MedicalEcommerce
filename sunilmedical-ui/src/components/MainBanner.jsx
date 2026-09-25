@@ -14,7 +14,7 @@ export default function Banner() {
         <section aria-label="Featured offers" className="w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-sm sm:rounded-2xl">
             <Swiper
                 modules={[Autoplay, Pagination]}
-                autoplay={{ delay: 3500, disableOnInteraction: false, pauseOnMouseEnter: true }}
+                autoplay={{ delay: 2000, disableOnInteraction: false, pauseOnMouseEnter: true }}
                 loop={banners.length > 1}
                 pagination={{ clickable: true }}
                 className="w-full"
