@@ -1,235 +1,123 @@
 ﻿import { useMemo } from "react";
+import { Heart, Truck } from "lucide-react";
 import { useWishlist } from "../context/WishlistContext";
 import AddToCartButton from "../components/AddToCartButton";
 import { useNavigate } from "react-router-dom";
 
 export default function ProductCard({ p, setMessage }) {
-
     const navigate = useNavigate();
     const { toggleWishlist, isWishlisted } = useWishlist();
-
-    const defaultVariant =
-        p.defaultVariant;
-
-    console.log("PRODUCT", p);
-    console.log("DEFAULT VARIANT", p.defaultVariant);
-    console.log("VARIANTS", p.variants);
+    const defaultVariant = p?.defaultVariant;
 
     const data = useMemo(() => {
-        const id = p.id ?? p.Id;
-        const name = p.name ?? p.Name;
-        const brand = p.brand ?? p.Brand;
-
-        // ✅ IMAGE FIX
-        const imageUrl =
-            defaultVariant?.imageUrl ||
-            p.imageUrl ||
-            p.ImageUrl;
-
-
-        const price =
-            p.price ??
-            defaultVariant?.price ??
-            0;
-
-        const discount = Number(p.discount ?? p.DiscountPercentage ?? 0);
-
-        const isDeal = discount > 0;
-
-        const finalPrice = isDeal
-            ? price - (price * discount) / 100
-            : price;
-
-        const priceTypeRaw = p.priceType ?? p.PriceType;
-
-        const isNormal =
-            priceTypeRaw &&
-            priceTypeRaw.toLowerCase() === "normal";
-
-        const isRFQ = !isNormal;
-
-        const minQty =
-            Number(defaultVariant?.minQuantity ?? 1);
-
-        const maxQty =
-            Number(defaultVariant?.maxQuantity ?? null);
-
-        const stepQty =
-            Number(defaultVariant?.stepQuantity ?? 1);
+        const id = p?.id ?? p?.Id;
+        const name = p?.name ?? p?.Name ?? "Medical Product";
+        const brand = p?.brand ?? p?.Brand ?? "";
+        const imageUrl = defaultVariant?.imageUrl ?? defaultVariant?.ImageUrl ?? p?.imageUrl ?? p?.ImageUrl ?? "/images/no-image.png";
+        const price = Number(defaultVariant?.price ?? defaultVariant?.Price ?? p?.price ?? p?.Price ?? 0);
+        const discount = Math.max(0, Math.min(100, Number(p?.discount ?? p?.DiscountPercentage ?? 0)));
+        const finalPrice = discount > 0 ? price - (price * discount) / 100 : price;
+        const priceType = String(p?.priceType ?? p?.PriceType ?? "").toLowerCase();
 
         return {
-            id,
-            name,
-            brand,
-            imageUrl,
-            price,
-            minQty,
-            maxQty,
-            stepQty,
-            finalPrice,
-            discount,
-            isDeal,
-            isNormal,
-            isRFQ,
-            defaultVariant
+            id, name, brand, imageUrl, price, discount, finalPrice,
+            isDeal: discount > 0,
+            isRFQ: priceType !== "normal",
         };
+    }, [p, defaultVariant]);
 
-    }, [p]);
+    const variantId = Number(defaultVariant?.productVariantId ?? defaultVariant?.id ?? p?.variantId ?? 0);
+    const wishlisted = isWishlisted(data.id, variantId);
+    const openProduct = () => navigate(`/product/${data.id}`);
 
-    const wishlisted = isWishlisted(
-        data.id,
-        defaultVariant?.productVariantId ??
-        defaultVariant?.id ??
-        p.variantId
-    );
-
-    const variantId = Number(
-        defaultVariant?.productVariantId ??
-        defaultVariant?.id ??
-        p.variantId ??
-        0
-    );
-
-    console.log("ProductCard Data:", data);
-    console.log("Product ID:", data.id);
-    console.log("Variant:", defaultVariant);
-
+    const handleWishlist = async (event) => {
+        event.stopPropagation();
+        await toggleWishlist({
+            ...p,
+            id: data.id,
+            variantId: defaultVariant?.productVariantId ?? defaultVariant?.id ?? p?.variantId,
+            selectedVariant: defaultVariant,
+        });
+    };
 
     return (
-        <div className="group h-full flex flex-col bg-white rounded-2xl border border-gray-100 
-        shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-
-            {/* IMAGE */}
-            <div
-                onClick={() => navigate(`/product/${data.id}`)}
-                className="relative h-44 bg-gray-50 flex items-center justify-center p-4 cursor-pointer overflow-hidden"
-            >
-
-                {/* 🔥 DEAL BADGES */}
+        <article className="group flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md sm:rounded-2xl">
+            <div onClick={openProduct} role="link" tabIndex={0}
+                onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openProduct();
+                    }
+                }}
+                className="relative block h-[168px] w-full cursor-pointer overflow-hidden bg-slate-50 text-left sm:h-[190px] lg:h-[200px]">
                 {data.isDeal && !data.isRFQ && (
-                    <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
-
-                        <span className="bg-pink-500 text-white text-[10px] px-2 py-[2px] rounded-full">
-                            {data.discount}% OFF
-                        </span>
-
-                        <span className="bg-black text-white text-[10px] px-2 py-[2px] rounded-full">
-                            🔥 Hurry
-                        </span>
-
+                    <div className="absolute left-2 top-2 z-10 flex flex-col gap-1">
+                        <span className="rounded-md bg-rose-600 px-1.5 py-1 text-[9px] font-extrabold text-white shadow-sm">{data.discount}% OFF</span>
+                        <span className="rounded-md bg-slate-950 px-1.5 py-1 text-[9px] font-bold text-white shadow-sm">Deal</span>
                     </div>
                 )}
 
-                <img
-                    src={data.imageUrl || "/images/no-image.png"}
-                    loading="lazy"
-                    decoding="async"
-                    className="w-full h-full object-contain transition group-hover:scale-105"
-                />
+                <button type="button" onClick={handleWishlist}
+                    aria-label={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
+                    className="absolute right-2 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-500 shadow-sm backdrop-blur transition hover:border-rose-200 hover:text-rose-500 active:scale-95">
+                    <Heart size={15} fill={wishlisted ? "currentColor" : "none"} />
+                </button>
+
+                <img src={data.imageUrl} alt={data.name} loading="lazy" decoding="async"
+                    className="h-full w-full object-contain p-4 transition duration-300 group-hover:scale-[1.04]"
+                    onError={(e) => { e.currentTarget.src = "/images/no-image.png"; }} />
             </div>
 
-            {/* CONTENT */}
-            <div className="p-3 flex flex-col flex-grow">
+            <div className="flex flex-1 flex-col p-2.5 sm:p-3.5">
+                <p className="truncate text-[9px] font-bold uppercase tracking-wider text-slate-400 sm:text-[10px]">{data.brand || "Medical Product"}</p>
 
-                <p className="text-[10px] text-gray-400 uppercase">
-                    {data.brand}
-                </p>
-
-                <h3
-                    onClick={() => navigate(`/product/${data.id}`)}
-                    className="text-sm font-medium mt-1 line-clamp-2 cursor-pointer hover:underline"
-                >
+                <button type="button" onClick={openProduct} className="mt-1 line-clamp-2 min-h-[36px] text-left text-xs font-semibold leading-[18px] text-slate-900 transition hover:text-blue-600 sm:text-sm">
                     {data.name}
-                </h3>
+                </button>
 
-                {/* PRICE + ❤️ */}
-                <div className="mt-2 flex justify-between items-start">
-
+                <div className="mt-2 min-h-[48px]">
                     {data.isRFQ ? (
-                        <p className="text-sm font-medium text-orange-500">
-                            Price on Request
-                        </p>
+                        <p className="text-xs font-bold text-orange-600 sm:text-sm">Price on Request</p>
                     ) : (
-                        <div>
-                            <p className="text-base font-semibold text-gray-900">
-                                ₹{Math.round(data.finalPrice)}
-                            </p>
-
-                            {data.isDeal && (
-                                <>
-                                    <p className="text-xs text-gray-400 line-through">
-                                        ₹{Math.round(data.price)}
-                                    </p>
-
-                                    <p className="text-[11px] text-green-600">
-                                        Save ₹{Math.round(data.price - data.finalPrice)}
-                                    </p>
-                                </>
-                            )}
-                        </div>
+                        <>
+                            <div className="flex flex-wrap items-baseline gap-1.5">
+                                <span className="text-base font-extrabold tracking-tight text-slate-950 sm:text-lg">
+                                    ₹{Math.round(data.finalPrice).toLocaleString("en-IN")}
+                                </span>
+                                {data.isDeal && <span className="text-[10px] text-slate-400 line-through sm:text-xs">₹{Math.round(data.price).toLocaleString("en-IN")}</span>}
+                            </div>
+                            {data.isDeal && <p className="mt-0.5 text-[9px] font-bold text-emerald-600 sm:text-[10px]">Save ₹{Math.round(data.price - data.finalPrice).toLocaleString("en-IN")}</p>}
+                        </>
                     )}
-
-                    <button
-                        onClick={() =>
-                            toggleWishlist({
-                                ...p,
-
-                                id: data.id,
-
-                                variantId:
-                                    defaultVariant?.productVariantId ??
-                                    defaultVariant?.id,
-
-                                selectedVariant:
-                                    defaultVariant
-                            })
-                        }
-                    >
-                        {wishlisted ? "❤️" : "🤍"}
-                    </button>
                 </div>
 
-                {/* DELIVERY */}
                 {!data.isRFQ && (
-                    <p className="text-[11px] text-gray-500 mt-2">
-                        🚚 Delivery in 3–5 days
-                    </p>
+                    <div className="mt-1 flex items-center gap-1 text-[9px] font-medium text-slate-500 sm:text-[10px]">
+                        <Truck size={12} className="shrink-0" /> Delivery in 3–5 days
+                    </div>
                 )}
 
-                {/* CTA */}
                 <div className="mt-auto pt-3">
-
-                   
                     {data.isRFQ ? (
-                        <button
-                            onClick={() => navigate(`/product/${data.id}`)}
-                            className="w-full h-9 text-sm bg-black text-white rounded-lg"
-                        >
+                        <button type="button" onClick={openProduct} className="h-9 w-full rounded-lg bg-slate-950 px-2 text-[11px] font-bold text-white transition hover:bg-blue-700 active:scale-[0.98] sm:h-10 sm:text-xs">
                             Request Quote
                         </button>
                     ) : variantId > 0 ? (
-
-                    <AddToCartButton
-                        productId={Number(data.id)}
-                        variantId={defaultVariant.productVariantId}
-                        minQty={defaultVariant.minQuantity}
-                        stepQty={defaultVariant.stepQuantity}
-                        maxQty={defaultVariant.maxQuantity}
-                        setMessage={setMessage}
-
-                    />
+                        <AddToCartButton
+                            productId={Number(data.id)}
+                            variantId={defaultVariant?.productVariantId ?? defaultVariant?.id}
+                            minQty={Number(defaultVariant?.minQuantity ?? 1)}
+                            stepQty={Number(defaultVariant?.stepQuantity ?? 1)}
+                            maxQty={Number(defaultVariant?.maxQuantity ?? 0) || null}
+                            setMessage={setMessage}
+                        />
                     ) : (
-                        <button
-                            onClick={() => navigate(`/product/${data.id}`)}
-                            className="w-full h-9 text-sm border rounded-lg"
-                        >
+                        <button type="button" onClick={openProduct} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-[11px] font-bold text-slate-800 transition hover:border-blue-400 hover:text-blue-600 active:scale-[0.98] sm:h-10 sm:text-xs">
                             View Product
                         </button>
                     )}
-
                 </div>
-
             </div>
-        </div>
+        </article>
     );
 }

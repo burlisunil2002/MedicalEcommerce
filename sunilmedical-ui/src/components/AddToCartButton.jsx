@@ -1,213 +1,193 @@
-﻿import { useCart } from "../context/CartContext";
-import { useState, useEffect } from "react";
+﻿import { useEffect, useState } from "react";
+import { Minus, Plus, ShoppingCart } from "lucide-react";
+import { useCart } from "../context/CartContext";
 
 export default function AddToCartButton({
     productId,
     variantId,
     minQty = 1,
     maxQty = null,
+    stockQty = null,
     stepQty = 1,
-    setMessage
+    setMessage,
 }) {
-
-    const {
-        addToCart,
-        updateCart,
-        removeFromCart,
-        getQty
-    } = useCart();
+    const { addToCart, updateCart, removeFromCart, getQty } = useCart();
 
     const productKey = Number(productId);
     const variantKey = Number(variantId);
+    const cartQty = Number(getQty?.(productKey, variantKey) || 0);
 
-    const cartQty = getQty(
-        productKey,
-        variantKey
-    );
+    const min = Math.max(1, Number(minQty) || 1);
+    const step = Math.max(1, Number(stepQty) || 1);
+
+    const configuredMax =
+        maxQty != null && Number(maxQty) > 0 ? Number(maxQty) : null;
+    const stock =
+        stockQty != null && stockQty !== "" && Number(stockQty) >= 0
+            ? Number(stockQty)
+            : null;
+
+    const effectiveMax =
+        configuredMax !== null && stock !== null
+            ? Math.min(configuredMax, stock)
+            : configuredMax ?? stock;
 
     const [uiQty, setUiQty] = useState(cartQty);
+    const [busy, setBusy] = useState(false);
 
-    const [loading, setLoading] = useState(false);
-
-    /*
-     * IMPORTANT:
-     * Don't allow CartContext's old quantity (0)
-     * to overwrite our instant UI while Add is processing.
-     */
     useEffect(() => {
+        if (!busy) setUiQty(cartQty);
+    }, [cartQty, busy]);
 
-        if (!loading) {
-            setUiQty(cartQty);
+    const canIncrease =
+        effectiveMax === null || uiQty + step <= effectiveMax;
+
+    const handleAdd = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (busy) return;
+
+        if (effectiveMax !== null && min > effectiveMax) {
+            setMessage?.(`Maximum available quantity is ${effectiveMax}.`);
+            return;
         }
 
-    }, [cartQty, loading]);
-
-
-    const min =
-        Number(minQty) || 1;
-
-    const step =
-        Number(stepQty) || 1;
-
-    const max =
-        maxQty != null
-            ? Number(maxQty)
-            : Infinity;
-
-
-    // ==========================
-    // ADD
-    // ==========================
-
-    const handleAdd = async (e) => {
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        if (loading) return;
-
-        setLoading(true);
-
-        // 🔥 INSTANT UI
+        setBusy(true);
+        const previous = uiQty;
         setUiQty(min);
 
-        setMessage?.(
-            "Product added to your cart"
-        );
+        try {
+            const result = await addToCart(productKey, variantKey, min);
+            if (result === false) {
+                setUiQty(previous);
+                setMessage?.("Unable to add product to cart.");
+                return;
+            }
+            setMessage?.("Product added to your cart.");
+        } catch {
+            setUiQty(previous);
+            setMessage?.("Unable to add product to cart.");
+        } finally {
+            setBusy(false);
+        }
+    };
 
-        const success =
-            await addToCart(
-                productKey,
-                variantKey,
-                min
-            );
+    const increase = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
 
-        if (!success) {
-
-            // Rollback
-            setUiQty(cartQty);
-
-            setMessage?.(
-                "Unable to add product"
-            );
-
+        if (busy || !canIncrease) {
+            if (!canIncrease) {
+                setMessage?.(`Maximum available quantity is ${effectiveMax}.`);
+            }
+            return;
         }
 
-        setLoading(false);
+        const previous = uiQty;
+        const nextQty = uiQty + step;
 
-        setTimeout(() => {
-            setMessage?.("");
-        }, 1000);
-    };
-
-
-    // ==========================
-    // INCREASE
-    // ==========================
-
-    const increase = async (e) => {
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        const nextQty =
-            uiQty + step;
-
-        if (nextQty > max)
-            return;
-
-        // 🔥 Instant UI
         setUiQty(nextQty);
+        setBusy(true);
 
-        await updateCart(
-            productKey,
-            variantKey,
-            nextQty
-        );
+        try {
+            const result = await updateCart(productKey, variantKey, nextQty);
+            if (result === false) {
+                setUiQty(previous);
+                setMessage?.("Unable to update quantity.");
+            }
+        } catch {
+            setUiQty(previous);
+            setMessage?.("Unable to update quantity.");
+        } finally {
+            setBusy(false);
+        }
     };
 
+    const decrease = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
 
-    // ==========================
-    // DECREASE
-    // ==========================
+        if (busy) return;
 
-    const decrease = async (e) => {
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        const nextQty =
-            uiQty - step;
+        const nextQty = uiQty - step;
 
         if (nextQty < min) {
-
-            // 🔥 Instant UI
+            setBusy(true);
             setUiQty(0);
 
-            await removeFromCart(
-                productKey,
-                variantKey
-            );
-
+            try {
+                const result = await removeFromCart(productKey, variantKey);
+                if (result === false) {
+                    setUiQty(cartQty);
+                    setMessage?.("Unable to remove product from cart.");
+                }
+            } catch {
+                setUiQty(cartQty);
+                setMessage?.("Unable to remove product from cart.");
+            } finally {
+                setBusy(false);
+            }
             return;
         }
 
-        // 🔥 Instant UI
+        const previous = uiQty;
         setUiQty(nextQty);
+        setBusy(true);
 
-        await updateCart(
-            productKey,
-            variantKey,
-            nextQty
-        );
+        try {
+            const result = await updateCart(productKey, variantKey, nextQty);
+            if (result === false) {
+                setUiQty(previous);
+                setMessage?.("Unable to update quantity.");
+            }
+        } catch {
+            setUiQty(previous);
+            setMessage?.("Unable to update quantity.");
+        } finally {
+            setBusy(false);
+        }
     };
 
+    if (uiQty <= 0) {
+        return (
+            <button
+                type="button"
+                onClick={handleAdd}
+                disabled={busy}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 px-4 text-sm font-extrabold text-white shadow-sm transition hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 sm:h-12"
+            >
+                <ShoppingCart size={17} />
+                {busy ? "Adding..." : "Add to Cart"}
+            </button>
+        );
+    }
 
     return (
-        <div className="w-full">
+        <div className="flex h-11 w-full overflow-hidden rounded-xl border border-slate-300 bg-white sm:h-12">
+            <button
+                type="button"
+                onClick={decrease}
+                disabled={busy}
+                className="flex w-11 shrink-0 items-center justify-center border-r border-slate-200 text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+                aria-label="Decrease quantity"
+            >
+                <Minus size={17} />
+            </button>
 
-            {uiQty <= 0 ? (
+            <span className="flex min-w-0 flex-1 items-center justify-center text-sm font-extrabold text-slate-900">
+                {uiQty}
+            </span>
 
-                <button
-                    type="button"
-                    onClick={handleAdd}
-                    disabled={loading}
-                    className="w-full h-12 rounded-xl font-semibold text-white bg-gradient-to-r from-pink-500 to-red-500 hover:shadow-md transition-all"
-                >
-                    {loading
-                        ? "Adding..."
-                        : "🛒 Add To Cart"}
-                </button>
-
-            ) : (
-
-                <div className="flex items-center justify-between h-12 rounded-xl border bg-white overflow-hidden">
-
-                    <button
-                        type="button"
-                        onClick={decrease}
-                        className="w-12 h-full text-lg"
-                    >
-                        −
-                    </button>
-
-                    <span className="flex-1 text-center font-semibold">
-                        {uiQty}
-                    </span>
-
-                    <button
-                        type="button"
-                        onClick={increase}
-                        disabled={uiQty >= max}
-                        className="w-12 h-full text-lg disabled:opacity-40"
-                    >
-                        +
-                    </button>
-
-                </div>
-
-            )}
-
+            <button
+                type="button"
+                onClick={increase}
+                disabled={busy || !canIncrease}
+                className="flex w-11 shrink-0 items-center justify-center border-l border-slate-200 text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+                aria-label="Increase quantity"
+            >
+                <Plus size={17} />
+            </button>
         </div>
     );
 }

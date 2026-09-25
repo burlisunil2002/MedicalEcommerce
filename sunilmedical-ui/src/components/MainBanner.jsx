@@ -1,40 +1,32 @@
 ﻿import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Pagination } from "swiper/modules";
-
 import "swiper/css";
 import "swiper/css/pagination";
 
+const banners = [
+    { image: "/images/MadeInIndiaBanner.png", alt: "Made in India medical products" },
+    { image: "/images/bannerMRI.png", alt: "MRI medical equipment" },
+    { image: "/images/offerbanner.png", alt: "Special medical product offers" },
+];
+
 export default function Banner() {
-    const banners = [
-        { image: "/images/MadeInIndiaBanner.png" },
-        { image: "/images/bannerMRI.png" },
-        { image: "/images/offerbanner.png" },
-    ];
-
     return (
-        <div className="mb-6 rounded-2xl overflow-hidden shadow-md border border-blue-100">
-
+        <section aria-label="Featured offers" className="w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-sm sm:rounded-2xl">
             <Swiper
                 modules={[Autoplay, Pagination]}
-                autoplay={{ delay: 2000 }}
-                loop
+                autoplay={{ delay: 3500, disableOnInteraction: false, pauseOnMouseEnter: true }}
+                loop={banners.length > 1}
                 pagination={{ clickable: true }}
+                className="w-full"
             >
-                {banners.map((b, i) => (
-                    <SwiperSlide key={i}>
-                        <div className="w-full aspect-[3020/820]">
-
-                            <img
-                                src={b.image}
-                                alt="banner"
-                                className="w-full h-full object-cover animate-[zoom_8s_linear_infinite]"
-                            />
-
+                {banners.map((b) => (
+                    <SwiperSlide key={b.image}>
+                        <div className="relative aspect-[3.68/1] min-h-[112px] w-full overflow-hidden sm:min-h-0">
+                            <img src={b.image} alt={b.alt} loading="eager" decoding="async" className="h-full w-full object-cover" />
                         </div>
                     </SwiperSlide>
                 ))}
             </Swiper>
-
-        </div>
+        </section>
     );
 }

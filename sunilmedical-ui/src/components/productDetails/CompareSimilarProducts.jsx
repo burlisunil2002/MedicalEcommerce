@@ -506,7 +506,8 @@ export default function CompareSimilarProducts({
                                         `${name}-${index}`
                                     }
                                     className={`
-                                        w-[218px]
+                                        w-[82vw]
+                                        max-w-[280px]
                                         shrink-0
                                         bg-white
                                         sm:w-[238px]

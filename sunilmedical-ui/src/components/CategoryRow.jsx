@@ -1,109 +1,53 @@
 ﻿import { useMemo } from "react";
+import { LayoutGrid } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export default function CategoryRow({ activeCategory, products = [] }) {
     const navigate = useNavigate();
 
-    // 🔥 Generate categories from products (NO API call)
     const categories = useMemo(() => {
-        const map = {};
-
-        products.forEach(p => {
-            const cat = (p.category || p.Category || "").trim();
-
-            if (cat && !map[cat]) {
-                map[cat] = {
-                    name: cat,
-                    image: p.imageUrl || p.ImageUrl || "/images/no-image.png"
-                };
-            }
+        const map = new Map();
+        products.forEach((p) => {
+            const name = String(p?.category ?? p?.Category ?? "").trim();
+            if (!name || map.has(name.toLowerCase())) return;
+            map.set(name.toLowerCase(), {
+                name,
+                image: p?.imageUrl ?? p?.ImageUrl ?? "/images/no-image.png",
+            });
         });
-
-        return [
-            { name: "All" },
-            ...Object.values(map).slice(0, 8)
-        ];    }, [products]);
+        return [{ name: "All", image: null }, ...Array.from(map.values()).slice(0, 10)];
+    }, [products]);
 
     return (
-        <div className="overflow-visible pt-2">
-            <div className="flex items-start gap-5 overflow-x-auto pb-4 pt-4 min-h-[110px] no-scrollbar">
-
-                {categories.map((c, i) => {
+        <nav aria-label="Product categories" className="w-full">
+            <div className="no-scrollbar flex gap-3 overflow-x-auto px-1 py-1 sm:gap-4">
+                {categories.map((c) => {
                     const isActive =
                         (!activeCategory && c.name === "All") ||
                         activeCategory?.toLowerCase() === c.name.toLowerCase();
 
                     return (
-                        <button
-                            key={i}
-                            onClick={() =>
-                                c.name === "All"
-                                    ? navigate("/")
-                                    : navigate(`/category/${encodeURIComponent(c.name)}`)
-                            }
-                            className="flex flex-col items-center w-[88px] flex-shrink-0 group focus:outline-none"
-                        >
-                            {/* Glow */}
-                            <div className="relative flex items-center justify-center">
-
-                                {isActive && (
-                                    <span className="absolute inset-[-6px] rounded-full bg-blue-300/50 blur-md"></span>
+                        <button key={c.name} type="button"
+                            onClick={() => c.name === "All" ? navigate("/") : navigate(`/category/${encodeURIComponent(c.name)}`)}
+                            aria-current={isActive ? "page" : undefined}
+                            className="group flex w-[72px] shrink-0 flex-col items-center gap-2 outline-none sm:w-[82px]">
+                            <span className={`relative flex h-[58px] w-[58px] items-center justify-center overflow-hidden rounded-full bg-white transition duration-200 sm:h-[68px] sm:w-[68px] ${isActive ? "ring-2 ring-blue-600 ring-offset-2 shadow-md" : "border border-slate-200 shadow-sm group-hover:border-blue-200 group-hover:shadow-md"
+                                }`}>
+                                {c.name === "All" ? (
+                                    <span className="flex h-full w-full items-center justify-center bg-slate-950 text-white"><LayoutGrid size={21} /></span>
+                                ) : (
+                                    <img src={c.image} alt={c.name} loading="lazy" decoding="async" className="h-full w-full object-cover"
+                                        onError={(e) => { e.currentTarget.src = "/images/no-image.png"; }} />
                                 )}
-
-                                {/* Circle */}
-                                <span
-                                    className={`
-                                        relative z-10
-                                        w-[56px] h-[56px] sm:w-[72px] sm:h-[72px]
-                                        rounded-full aspect-square
-                                        overflow-hidden
-                                        flex items-center justify-center
-                                        bg-white
-                                        transition-all duration-300
-                                        ${isActive
-                                            ? "ring-2 ring-blue-500 shadow-lg scale-105"
-                                            : "shadow-sm group-hover:shadow-md group-hover:scale-105"
-                                        }
-                                    `}
-                                >
-                                    {c.name === "All" ? (
-                                        <span className="
-                                            w-full h-full flex items-center justify-center
-                                            bg-gradient-to-br from-blue-500 via-sky-400 to-indigo-500
-                                            text-white text-xs font-bold
-                                        ">
-                                            All
-                                        </span>
-                                    ) : (
-                                            <img
-                                                src={c.image}
-                                                alt={c.name}
-                                                loading="lazy"
-                                                decoding="async"
-                                                fetchPriority="low"
-                                                className="w-full h-full object-cover"
-                                            />
-                                    )}
-                                </span>
-                            </div>
-
-                            {/* Label */}
-                            <span
-                                className={`
-                                    mt-2 text-[11px] leading-tight text-center transition
-                                    ${isActive
-                                        ? "text-blue-600 font-semibold"
-                                        : "text-gray-600 group-hover:text-blue-500"
-                                    }
-                                `}
-                            >
+                            </span>
+                            <span className={`line-clamp-2 w-full text-center text-[10px] font-semibold leading-4 transition sm:text-[11px] ${isActive ? "text-blue-700" : "text-slate-600 group-hover:text-blue-600"
+                                }`}>
                                 {c.name}
                             </span>
                         </button>
                     );
                 })}
-
             </div>
-        </div>
+        </nav>
     );
 }

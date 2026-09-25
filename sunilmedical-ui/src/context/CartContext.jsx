@@ -34,6 +34,11 @@ export const CartProvider = ({ children }) => {
      * a newer cart state.
      */
     const mutationIdRef = useRef(0);
+    const itemsRef = useRef(null);
+
+    useEffect(() => {
+        itemsRef.current = items;
+    }, [items]);
 
     const syncCartResponse = useCallback((data) => {
         if (!data) return;
@@ -168,6 +173,69 @@ export const CartProvider = ({ children }) => {
                 return false;
             }
 
+            /*
+             * AMAZON-STYLE OPTIMISTIC UPDATE
+             *
+             * The header/cart badge changes immediately.
+             * The server remains authoritative and will
+             * reconcile the value after the request completes.
+             */
+            setCartCount((previous) =>
+                Math.max(0, Number(previous || 0) + qty)
+            );
+
+            /*
+             * If this product/variant already exists in the
+             * local cart, update its quantity immediately too.
+             * We intentionally do not create a fake item when
+             * it does not exist because the full item shape
+             * belongs to the backend response.
+             */
+            setItems((previous) => {
+                if (!Array.isArray(previous)) {
+                    return previous;
+                }
+
+                let found = false;
+
+                const next = previous.map((item) => {
+                    if (
+                        Number(item?.productId) !== pid ||
+                        Number(item?.variantId) !== vid
+                    ) {
+                        return item;
+                    }
+
+                    found = true;
+
+                    const currentQty =
+                        Number(item?.quantity) || 0;
+
+                    const nextQty =
+                        currentQty + qty;
+
+                    const unitPrice = Number(
+                        item?.finalPrice ??
+                        item?.sellingPrice ??
+                        item?.unitPrice ??
+                        item?.price ??
+                        item?.product?.finalPrice ??
+                        item?.product?.sellingPrice ??
+                        item?.product?.price ??
+                        0
+                    );
+
+                    return {
+                        ...item,
+                        quantity: nextQty,
+                        lineTotal:
+                            unitPrice * nextQty,
+                    };
+                });
+
+                return found ? next : previous;
+            });
+
             const mutationId =
                 ++mutationIdRef.current;
 
@@ -195,11 +263,14 @@ export const CartProvider = ({ children }) => {
                     return true;
                 }
 
+                /*
+                 * Server response is authoritative.
+                 */
                 syncCartResponse(data);
 
                 /*
-                 * If the add endpoint doesn't return the
-                 * complete cart, reconcile in background.
+                 * Only make the extra GET when the add endpoint
+                 * did not return the complete cart.
                  */
                 if (
                     !Array.isArray(data?.items) &&
@@ -220,6 +291,73 @@ export const CartProvider = ({ children }) => {
                     "Add To Cart Error:",
                     error
                 );
+
+                /*
+                 * Every successful optimistic add increased the
+                 * badge by qty. A failed request must therefore
+                 * remove exactly that optimistic increment.
+                 *
+                 * We intentionally do this even when a newer
+                 * mutation exists. Each add request owns its own
+                 * optimistic increment.
+                 */
+                if (mountedRef.current) {
+                    setCartCount((previous) =>
+                        Math.max(
+                            0,
+                            Number(previous || 0) - qty
+                        )
+                    );
+
+                    /*
+                     * Roll back the optimistic item quantity too,
+                     * but only if the item already existed locally.
+                     */
+                    setItems((previous) => {
+                        if (!Array.isArray(previous)) {
+                            return previous;
+                        }
+
+                        return previous.map((item) => {
+                            if (
+                                Number(item?.productId) !== pid ||
+                                Number(item?.variantId) !== vid
+                            ) {
+                                return item;
+                            }
+
+                            const currentQty =
+                                Number(item?.quantity) || 0;
+
+                            const nextQty =
+                                Math.max(
+                                    0,
+                                    currentQty - qty
+                                );
+
+                            const unitPrice = Number(
+                                item?.finalPrice ??
+                                item?.sellingPrice ??
+                                item?.unitPrice ??
+                                item?.price ??
+                                item?.product?.finalPrice ??
+                                item?.product?.sellingPrice ??
+                                item?.product?.price ??
+                                0
+                            );
+
+                            return {
+                                ...item,
+                                quantity: nextQty,
+                                lineTotal:
+                                    unitPrice * nextQty,
+                            };
+                        }).filter(
+                            (item) =>
+                                Number(item?.quantity) > 0
+                        );
+                    });
+                }
 
                 return false;
             }
@@ -255,12 +393,39 @@ export const CartProvider = ({ children }) => {
                 return false;
             }
 
-            const previousItems = items
-                ? [...items]
+            const previousItems = itemsRef.current
+                ? [...itemsRef.current]
                 : null;
 
             const mutationId =
                 ++mutationIdRef.current;
+
+            /*
+             * Optimistic item update.
+             *
+             * The cart badge represents total units, so update
+             * it by the quantity delta immediately.
+             */
+            const currentItem = itemsRef.current?.find(
+                (item) =>
+                    Number(item?.productId) === pid &&
+                    Number(item?.variantId) === vid
+            );
+
+            const previousQty =
+                Number(currentItem?.quantity) || 0;
+
+            const quantityDelta =
+                qty - previousQty;
+
+            if (quantityDelta !== 0) {
+                setCartCount((previous) =>
+                    Math.max(
+                        0,
+                        Number(previous || 0) + quantityDelta
+                    )
+                );
+            }
 
             /*
              * Optimistic item update.
@@ -351,16 +516,27 @@ export const CartProvider = ({ children }) => {
                 if (
                     mountedRef.current &&
                     mutationId ===
-                    mutationIdRef.current &&
-                    previousItems
+                    mutationIdRef.current
                 ) {
-                    setItems(previousItems);
+                    if (quantityDelta !== 0) {
+                        setCartCount((previous) =>
+                            Math.max(
+                                0,
+                                Number(previous || 0) -
+                                quantityDelta
+                            )
+                        );
+                    }
+
+                    if (previousItems) {
+                        setItems(previousItems);
+                    }
                 }
 
                 return false;
             }
         },
-        [items, loadCart, syncCartResponse]
+        [loadCart, syncCartResponse]
     );
 
     /*
@@ -385,12 +561,28 @@ export const CartProvider = ({ children }) => {
                 return false;
             }
 
-            const previousItems = items
-                ? [...items]
+            const previousItems = itemsRef.current
+                ? [...itemsRef.current]
                 : null;
 
             const mutationId =
                 ++mutationIdRef.current;
+
+            const removedItem = itemsRef.current?.find(
+                (item) =>
+                    Number(item?.productId) === pid &&
+                    Number(item?.variantId) === vid
+            );
+
+            const removedQty =
+                Number(removedItem?.quantity) || 0;
+
+            setCartCount((previous) =>
+                Math.max(
+                    0,
+                    Number(previous || 0) - removedQty
+                )
+            );
 
             setItems((previous) => {
                 if (!Array.isArray(previous)) {
@@ -456,16 +648,24 @@ export const CartProvider = ({ children }) => {
                 if (
                     mountedRef.current &&
                     mutationId ===
-                    mutationIdRef.current &&
-                    previousItems
+                    mutationIdRef.current
                 ) {
-                    setItems(previousItems);
+                    setCartCount((previous) =>
+                        Math.max(
+                            0,
+                            Number(previous || 0) + removedQty
+                        )
+                    );
+
+                    if (previousItems) {
+                        setItems(previousItems);
+                    }
                 }
 
                 return false;
             }
         },
-        [items, loadCart, syncCartResponse]
+        [loadCart, syncCartResponse]
     );
 
     /*

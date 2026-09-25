@@ -10,7 +10,6 @@ import {
     Zap,
     Plus,
     Minus,
-    Loader2,
     ShieldCheck,
     Truck,
     ReceiptText,
@@ -133,12 +132,6 @@ export default function ProductPurchaseSection({
     ] = useState(cartQty);
 
 
-    const [
-        busy,
-        setBusy
-    ] = useState(false);
-
-
     useEffect(() => {
 
         setLocalQty(cartQty);
@@ -158,15 +151,28 @@ export default function ProductPurchaseSection({
         quantity > 0;
 
 
+    /*
+     * QUANTITY RULES
+     *
+     * MinQuantity  = minimum allowed quantity
+     * StepQuantity = amount changed by + / -
+     * MaxQuantity  = configured maximum
+     * StockQuantity = actual available stock
+     */
     const minQty =
-        Number(
-            selectedVariant?.minQuantity
-        ) > 0
-            ? Number(
-                selectedVariant.minQuantity
-            )
+        Number(selectedVariant?.minQuantity) > 0
+            ? Number(selectedVariant.minQuantity)
             : 1;
 
+    const stepQty =
+        Number(selectedVariant?.stepQuantity) > 0
+            ? Number(selectedVariant.stepQuantity)
+            : 1;
+
+    const maxQty =
+        Number(selectedVariant?.maxQuantity) > 0
+            ? Number(selectedVariant.maxQuantity)
+            : null;
 
     const stockValue =
         selectedVariant?.stockQuantity ??
@@ -189,6 +195,15 @@ export default function ProductPurchaseSection({
         stock !== null &&
         !Number.isNaN(stock) &&
         stock <= 0;
+
+    const effectiveMaxQty =
+        maxQty !== null && stock !== null
+            ? Math.min(maxQty, stock)
+            : maxQty ?? stock;
+
+    const cannotAddMinimum =
+        effectiveMaxQty !== null &&
+        minQty > effectiveMaxQty;
 
 
     const wishlistActive =
@@ -280,226 +295,222 @@ export default function ProductPurchaseSection({
        ADD TO CART
     ========================================================= */
 
-    const handleAddToCart =
-        async () => {
+    const handleAddToCart = async () => {
 
-            if (busy)
-                return;
-
-
-            if (
-                Array.isArray(
-                    product.variants
-                ) &&
-                product.variants.length > 0 &&
-                !variantId
-            ) {
-
-                setMessage?.(
-                    "Please select a model first."
-                );
-
-                return;
-            }
-
-
-            if (outOfStock) {
-
-                setMessage?.(
-                    "This product is currently unavailable."
-                );
-
-                return;
-            }
-
-
-            setBusy(true);
-
-
-            /*
-             * OPTIMISTIC UI
-             *
-             * Button changes immediately.
-             */
-
-            const optimisticQty =
-                Math.max(
-                    quantity,
-                    cartQty,
-                    0
-                ) +
-                minQty;
-
-
-            setLocalQty(
-                optimisticQty
+        if (
+            Array.isArray(product.variants) &&
+            product.variants.length > 0 &&
+            !variantId
+        ) {
+            setMessage?.(
+                "Please select a model first."
             );
+            return;
+        }
 
+        if (outOfStock) {
+            setMessage?.(
+                "This product is currently unavailable."
+            );
+            return;
+        }
 
-            try {
+        if (cannotAddMinimum) {
+            setMessage?.(
+                `Only ${effectiveMaxQty} items are available.`
+            );
+            return;
+        }
 
-                const result =
-                    await addToCart(
-                        product.id,
-                        variantId,
-                        minQty
-                    );
+        /*
+         * First add always starts at MinQuantity.
+         * The API runs in the background while the UI
+         * immediately reflects the optimistic quantity.
+         */
+        const optimisticQty =
+            Math.max(
+                quantity,
+                cartQty,
+                0
+            ) + minQty;
 
+        if (
+            effectiveMaxQty !== null &&
+            optimisticQty > effectiveMaxQty
+        ) {
+            setMessage?.(
+                `Maximum available quantity is ${effectiveMaxQty}.`
+            );
+            return;
+        }
 
-                if (result === false) {
+        setLocalQty(optimisticQty);
 
-                    setLocalQty(
-                        cartQty
-                    );
+        try {
 
-                    setMessage?.(
-                        "Unable to add product to cart."
-                    );
+            const result =
+                await addToCart(
+                    product.id,
+                    variantId,
+                    minQty
+                );
 
-                    return;
-                }
+            if (result === false) {
 
+                setLocalQty(cartQty);
 
                 setMessage?.(
-                    `Added to cart • ${optimisticQty} item${optimisticQty === 1
-                        ? ""
-                        : "s"
-                    }`
-                );
-
-            } catch (error) {
-
-                console.error(
-                    "Add to cart error:",
-                    error
-                );
-
-                setLocalQty(
-                    cartQty
-                );
-
-                setMessage?.(
-                    error?.response
-                        ?.data
-                        ?.message ||
                     "Unable to add product to cart."
                 );
 
-            } finally {
-
-                setBusy(false);
-
+                return;
             }
 
-        };
+            setMessage?.(
+                `Added to cart • ${optimisticQty} item${optimisticQty === 1
+                    ? ""
+                    : "s"
+                }`
+            );
+
+        } catch (error) {
+
+            console.error(
+                "Add to cart error:",
+                error
+            );
+
+            setLocalQty(cartQty);
+
+            setMessage?.(
+                error?.response?.data?.message ||
+                "Unable to add product to cart."
+            );
+        }
+    };
+
+
+    /* =========================================================
+       BUY NOW
+    ========================================================= */
+
+    const handleBuyNow = () => {
+        if (
+            Array.isArray(product.variants) &&
+            product.variants.length > 0 &&
+            !variantId
+        ) {
+            setMessage?.("Please select a model first.");
+            return;
+        }
+
+        if (outOfStock) {
+            setMessage?.("This product is currently unavailable.");
+            return;
+        }
+
+        if (cannotAddMinimum) {
+            setMessage?.(`Only ${effectiveMaxQty} items are available.`);
+            return;
+        }
+
+        if (typeof onBuyNow === "function") {
+            onBuyNow();
+        }
+    };
 
 
     /* =========================================================
        QUANTITY
     ========================================================= */
 
-    const changeQuantity =
-        async nextQty => {
+    const changeQuantity = async nextQty => {
 
-            if (
-                busy ||
-                !variantId
-            )
-                return;
+        if (!variantId)
+            return;
 
+        const requestedQty =
+            Number(nextQty);
 
-            /*
-             * CartContext updateCart requires
-             * quantity >= 1.
-             *
-             * Therefore quantity stops at 1.
-             */
+        if (!Number.isFinite(requestedQty))
+            return;
 
-            const safeQty =
-                Math.max(
-                    1,
-                    Number(nextQty)
-                );
-
-
-            if (
-                stock !== null &&
-                !Number.isNaN(stock) &&
-                safeQty > stock
-            ) {
-
-                setMessage?.(
-                    `Only ${stock} items are available.`
-                );
-
-                return;
-            }
-
-
-            setLocalQty(
-                safeQty
+        /*
+         * Never go below MinQuantity.
+         */
+        const safeQty =
+            Math.max(
+                minQty,
+                requestedQty
             );
 
+        /*
+         * Never exceed MaxQuantity or StockQuantity.
+         */
+        if (
+            effectiveMaxQty !== null &&
+            safeQty > effectiveMaxQty
+        ) {
 
-            setBusy(true);
+            setMessage?.(
+                `Maximum available quantity is ${effectiveMaxQty}.`
+            );
 
+            return;
+        }
 
-            try {
+        /*
+         * Instant UI update.
+         */
+        setLocalQty(safeQty);
 
-                const result =
-                    await updateCart(
-                        product.id,
-                        variantId,
-                        safeQty
-                    );
+        /*
+         * API runs in the background.
+         */
+        try {
 
-
-                if (result === false) {
-
-                    setLocalQty(
-                        cartQty
-                    );
-
-                    setMessage?.(
-                        "Unable to update quantity."
-                    );
-
-                }
-
-            } catch (error) {
-
-                console.error(
-                    "Quantity update error:",
-                    error
+            const result =
+                await updateCart(
+                    product.id,
+                    variantId,
+                    safeQty
                 );
 
-                setLocalQty(
-                    cartQty
-                );
+            if (result === false) {
+
+                setLocalQty(cartQty);
 
                 setMessage?.(
                     "Unable to update quantity."
                 );
-
-            } finally {
-
-                setBusy(false);
-
             }
 
-        };
+        } catch (error) {
+
+            console.error(
+                "Quantity update error:",
+                error
+            );
+
+            setLocalQty(cartQty);
+
+            setMessage?.(
+                "Unable to update quantity."
+            );
+        }
+    };
 
 
     return (
 
-        <article className="flex h-full min-h-[360px] flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_10px_35px_rgba(15,23,42,0.06)]">
+        <article className="flex min-w-0 w-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:rounded-3xl">
 
 
             {/* =====================================================
                 PRODUCT INFORMATION
             ====================================================== */}
 
-            <div className="flex-1 px-5 py-5 sm:px-6 sm:py-6">
+            <div className="min-w-0 px-4 py-4 sm:px-6 sm:py-6">
 
 
                 <div className="flex items-start justify-between gap-4">
@@ -558,9 +569,9 @@ export default function ProductPurchaseSection({
 
                             className={`flex h-10 w-10 items-center justify-center rounded-full border transition ${wishlistActive
 
-                                    ? "border-pink-200 bg-pink-50 text-pink-500"
+                                ? "border-pink-200 bg-pink-50 text-pink-500"
 
-                                    : "border-slate-200 bg-white text-slate-500 hover:border-indigo-300 hover:text-indigo-600"
+                                : "border-slate-200 bg-white text-slate-500 hover:border-indigo-300 hover:text-indigo-600"
                                 }`}
 
                             aria-label="Wishlist"
@@ -677,86 +688,44 @@ export default function ProductPurchaseSection({
                     PURCHASE ACTION
                 ================================================== */}
 
-                <div className="mt-4">
-
+                <div className="mt-4 hidden lg:block">
 
                     <div className="mb-2 flex items-center justify-between">
 
                         <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
-
                             Purchase
-
                         </span>
 
-
                         {inCart && (
-
                             <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
-
                                 ✓ In Cart
-
                             </span>
-
                         )}
 
                     </div>
 
-
                     <div className="grid grid-cols-2 gap-3">
-
-
-                        {/* =================================================
-                            ADD TO CART → QUANTITY
-                        ================================================== */}
 
                         {!inCart ? (
 
                             <button
-
                                 type="button"
-
-                                onClick={
-                                    handleAddToCart
-                                }
-
+                                onClick={handleAddToCart}
                                 disabled={
-                                    busy ||
-                                    outOfStock
+                                    outOfStock ||
+                                    cannotAddMinimum
                                 }
-
-                                className="col-span-1 inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-sm font-extrabold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100 active:scale-[0.99] disabled:opacity-60"
-
+                                className="col-span-1 inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-sm font-extrabold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
                             >
 
-                                {busy ? (
-
-                                    <Loader2
-                                        size={17}
-                                        className="animate-spin"
-                                    />
-
-                                ) : (
-
-                                    <ShoppingCart
-                                        size={17}
-                                    />
-
-                                )}
+                                <ShoppingCart size={17} />
 
                                 <span className="hidden sm:inline">
-
-                                    {busy
-                                        ? "Adding..."
-                                        : "Add to Cart"}
-
+                                    Add to Cart
                                 </span>
 
                                 <span className="sm:hidden">
-
-                                    {busy
-                                        ? "Adding"
-                                        : "Add"}
-
+                                    Add
                                 </span>
 
                             </button>
@@ -765,136 +734,69 @@ export default function ProductPurchaseSection({
 
                             <div className="col-span-1 flex h-12 overflow-hidden rounded-xl border border-indigo-200 bg-indigo-50">
 
-
                                 <button
-
                                     type="button"
-
                                     onClick={() =>
                                         changeQuantity(
-                                            quantity - 1
+                                            quantity - stepQty
                                         )
                                     }
-
                                     disabled={
-                                        busy ||
-                                        quantity <= 1
+                                        quantity <= minQty
                                     }
-
-                                    className="flex w-11 shrink-0 items-center justify-center text-indigo-700 transition hover:bg-indigo-100 disabled:opacity-40"
-
+                                    className="flex w-11 shrink-0 items-center justify-center text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-40"
                                     aria-label="Decrease quantity"
-
                                 >
-
-                                    <Minus
-                                        size={16}
-                                    />
-
+                                    <Minus size={16} />
                                 </button>
-
 
                                 <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5 border-x border-indigo-200 text-sm font-extrabold text-slate-900">
 
-                                    {busy ? (
+                                    <ShoppingCart
+                                        size={15}
+                                        className="text-indigo-600"
+                                    />
 
-                                        <Loader2
-                                            size={16}
-                                            className="animate-spin text-indigo-600"
-                                        />
+                                    <span>
+                                        {quantity}
+                                    </span>
 
-                                    ) : (
-
-                                        <>
-
-                                            <ShoppingCart
-                                                size={15}
-                                                className="text-indigo-600"
-                                            />
-
-                                            <span>
-
-                                                {quantity}
-
-                                            </span>
-
-                                            <span className="hidden text-[10px] font-semibold text-slate-500 sm:inline">
-
-                                                in cart
-
-                                            </span>
-
-                                        </>
-
-                                    )}
+                                    <span className="hidden text-[10px] font-semibold text-slate-500 sm:inline">
+                                        in cart
+                                    </span>
 
                                 </div>
 
-
                                 <button
-
                                     type="button"
-
                                     onClick={() =>
                                         changeQuantity(
-                                            quantity + 1
+                                            quantity + stepQty
                                         )
                                     }
-
                                     disabled={
-                                        busy ||
-                                        (
-                                            stock !== null &&
-                                            quantity >= stock
-                                        )
+                                        effectiveMaxQty !== null &&
+                                        quantity + stepQty >
+                                        effectiveMaxQty
                                     }
-
-                                    className="flex w-11 shrink-0 items-center justify-center text-indigo-700 transition hover:bg-indigo-100 disabled:opacity-40"
-
+                                    className="flex w-11 shrink-0 items-center justify-center text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-40"
                                     aria-label="Increase quantity"
-
                                 >
-
-                                    <Plus
-                                        size={16}
-                                    />
-
+                                    <Plus size={16} />
                                 </button>
 
                             </div>
 
                         )}
 
-
-                        {/* =================================================
-                            BUY NOW
-                        ================================================== */}
-
                         <button
                             type="button"
-                            onClick={onBuyNow}
-                            disabled={busy || outOfStock}
-                            className="
-        col-span-1
-        inline-flex
-        h-12
-        items-center
-        justify-center
-        gap-2
-        rounded-xl
-        bg-slate-950
-        px-3
-        text-sm
-        font-extrabold
-        text-white
-        shadow-lg
-        shadow-slate-900/10
-        transition
-        hover:bg-indigo-700
-        active:scale-[0.99]
-        disabled:cursor-not-allowed
-        disabled:opacity-60
-    "
+                            onClick={handleBuyNow}
+                            disabled={
+                                outOfStock ||
+                                cannotAddMinimum
+                            }
+                            className="col-span-1 inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-sm font-extrabold text-white shadow-lg shadow-slate-900/10 transition hover:bg-indigo-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
                         >
                             <Zap size={17} />
                             <span>Buy Now</span>
@@ -902,56 +804,61 @@ export default function ProductPurchaseSection({
 
                     </div>
 
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-semibold text-slate-500">
 
-                    {inCart && (
+                        <span>
+                            Minimum: {minQty}
+                        </span>
 
-                        <p className="mt-2 text-[10px] text-slate-400">
+                        <span>
+                            Step: {stepQty}
+                        </span>
 
-                            Quantity is synchronized with your cart automatically.
+                        {effectiveMaxQty !== null && (
+                            <span>
+                                Maximum: {effectiveMaxQty}
+                            </span>
+                        )}
 
-                        </p>
-
-                    )}
+                    </div>
 
                 </div>
 
-            </div>
-
-
-            {/* =====================================================
+                {/* =====================================================
                 TRUST BAR
             ====================================================== */}
 
-            <div className="grid grid-cols-2 border-t border-slate-100 bg-slate-50/80 sm:grid-cols-4">
+                <div className="grid grid-cols-2 border-t border-slate-100 bg-slate-50/80 sm:grid-cols-4">
 
 
-                <TrustItem
-                    icon={ShieldCheck}
-                    title="Secure Purchase"
-                    text="Protected checkout"
-                />
+                    <TrustItem
+                        icon={ShieldCheck}
+                        title="Secure Purchase"
+                        text="Protected checkout"
+                    />
 
 
-                <TrustItem
-                    icon={Truck}
-                    title="Reliable Delivery"
-                    text="Trackable orders"
-                />
+                    <TrustItem
+                        icon={Truck}
+                        title="Reliable Delivery"
+                        text="Trackable orders"
+                    />
 
 
-                <TrustItem
-                    icon={ReceiptText}
-                    title="GST Invoice"
-                    text="Clear billing"
-                />
+                    <TrustItem
+                        icon={ReceiptText}
+                        title="GST Invoice"
+                        text="Clear billing"
+                    />
 
 
-                <TrustItem
-                    icon={PackageCheck}
-                    title="Medical Products"
-                    text="Quality-focused supply"
-                />
+                    <TrustItem
+                        icon={PackageCheck}
+                        title="Medical Products"
+                        text="Quality-focused supply"
+                    />
 
+                </div>
             </div>
 
         </article>

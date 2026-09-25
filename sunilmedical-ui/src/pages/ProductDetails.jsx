@@ -33,6 +33,7 @@ export default function ProductDetails() {
     const {
         addToCart,
         loadCart,
+        getQty,
     } = useCart();
 
     // ============================================================
@@ -483,16 +484,14 @@ export default function ProductDetails() {
     // BUY NOW
     //
     // IMPORTANT:
-    // Buy Now always starts with ONE quantity.
+    // ProductPurchaseSection calculates the exact Buy Now quantity
+    // using MinQuantity + StepQuantity and passes it here.
     //
-    // It does NOT use:
-    // - existing cart quantity
-    // - minQuantity
-    //
+    // This handler MUST use that quantity instead of hard-coding 1.
     // ============================================================
 
-    const handleBuyNow =
-        useCallback(async () => {
+    const handleBuyNow = useCallback(
+        async () => {
             if (!product) {
                 showMessage(
                     "Product information is unavailable."
@@ -500,12 +499,11 @@ export default function ProductDetails() {
                 return;
             }
 
-            const variants =
-                Array.isArray(
-                    product?.variants
-                )
-                    ? product.variants
-                    : [];
+            const variants = Array.isArray(
+                product?.variants
+            )
+                ? product.variants
+                : [];
 
             const hasVariants =
                 variants.length > 0;
@@ -535,31 +533,132 @@ export default function ProductDetails() {
                 return;
             }
 
+            // =========================================================
+            // QUANTITY RULES
+            // =========================================================
+
+            const minQty =
+                Number(selectedVariant?.minQuantity) > 0
+                    ? Number(selectedVariant.minQuantity)
+                    : 1;
+
+            const stepQty =
+                Number(selectedVariant?.stepQuantity) > 0
+                    ? Number(selectedVariant.stepQuantity)
+                    : 1;
+
+            const maxQty =
+                Number(selectedVariant?.maxQuantity) > 0
+                    ? Number(selectedVariant.maxQuantity)
+                    : null;
+
             const stockValue =
                 selectedVariant?.stockQuantity ??
                 product?.stockQuantity;
 
-            if (
+            const stock =
                 stockValue !== null &&
-                stockValue !== undefined &&
-                stockValue !== ""
-            ) {
-                const stock =
-                    Number(stockValue);
+                    stockValue !== undefined &&
+                    stockValue !== ""
+                    ? Number(stockValue)
+                    : null;
 
-                if (
-                    !Number.isNaN(stock) &&
-                    stock <= 0
-                ) {
-                    showMessage(
-                        "This product is currently out of stock."
-                    );
-                    return;
-                }
+            // =========================================================
+            // STOCK VALIDATION
+            // =========================================================
+
+            if (
+                stock !== null &&
+                !Number.isNaN(stock) &&
+                stock <= 0
+            ) {
+                showMessage(
+                    "This product is currently out of stock."
+                );
+                return;
             }
 
-            // BUY NOW = EXACTLY ONE
-            const quantity = 1;
+            const effectiveMaxQty =
+                maxQty !== null &&
+                    stock !== null
+                    ? Math.min(
+                        maxQty,
+                        stock
+                    )
+                    : maxQty ?? stock;
+
+            if (
+                effectiveMaxQty !== null &&
+                minQty > effectiveMaxQty
+            ) {
+                showMessage(
+                    `Only ${effectiveMaxQty} items are available.`
+                );
+                return;
+            }
+
+            // =========================================================
+            // CURRENT CART QUANTITY
+            // =========================================================
+
+            const currentQty = variantId
+                ? Number(
+                    getQty?.(
+                        product.id,
+                        variantId
+                    ) || 0
+                )
+                : 0;
+
+            /*
+             * IMPORTANT:
+             *
+             * addToCart() is additive.
+             *
+             * Therefore:
+             *
+             * First Buy Now:
+             *   current = 0
+             *   add = MinQuantity
+             *
+             * Next Buy Now:
+             *   current = 5
+             *   add = StepQuantity
+             *
+             * We NEVER send currentQty + stepQty
+             * to addToCart().
+             */
+
+            const addQuantity =
+                currentQty > 0
+                    ? stepQty
+                    : minQty;
+
+            // =========================================================
+            // CALCULATE RESULTING CART QUANTITY
+            // =========================================================
+
+            const resultingQty =
+                currentQty +
+                addQuantity;
+
+            // =========================================================
+            // MAX / STOCK VALIDATION
+            // =========================================================
+
+            if (
+                effectiveMaxQty !== null &&
+                resultingQty > effectiveMaxQty
+            ) {
+                showMessage(
+                    `Maximum available quantity is ${effectiveMaxQty}.`
+                );
+                return;
+            }
+
+            // =========================================================
+            // ADD ONLY THE REQUIRED DELTA
+            // =========================================================
 
             try {
                 showMessage("");
@@ -568,7 +667,7 @@ export default function ProductDetails() {
                     await addToCart(
                         product.id,
                         variantId,
-                        quantity
+                        addQuantity
                     );
 
                 if (result === false) {
@@ -581,26 +680,30 @@ export default function ProductDetails() {
                 await loadCart();
 
                 navigate("/cart");
-            } catch (err) {
+
+            } catch (error) {
                 console.error(
                     "Buy Now error:",
-                    err
+                    error
                 );
 
                 showMessage(
-                    err?.response?.data
+                    error?.response?.data
                         ?.message ||
                     "Unable to proceed. Please try again."
                 );
             }
-        }, [
+        },
+        [
             product,
             selectedVariant,
             addToCart,
             loadCart,
+            getQty,
             navigate,
             showMessage,
-        ]);
+        ]
+    );
 
     // ============================================================
     // SHARE PRODUCT
@@ -987,15 +1090,15 @@ export default function ProductDetails() {
                 MAIN PRODUCT PAGE
             ===================================================== */}
 
-            <main className="min-h-screen bg-slate-50 pb-24 lg:pb-8">
+            <main className="min-h-screen overflow-x-hidden bg-slate-50 pb-[190px] lg:pb-8">
 
-                <div className="mx-auto w-full max-w-[1240px] px-3 py-4 sm:px-5 sm:py-6 lg:px-6">
+                <div className="mx-auto w-full max-w-[1440px] px-3 py-3 sm:px-5 sm:py-6 lg:px-8">
 
                     {/* =================================================
                         PRODUCT HERO
                     ================================================== */}
 
-                    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[380px_minmax(0,1fr)] lg:gap-4 xl:grid-cols-[390px_minmax(0,1fr)]">
+                    <div className="grid min-w-0 grid-cols-1 items-start gap-3 sm:gap-4 lg:grid-cols-[minmax(320px,390px)_minmax(0,1fr)] lg:gap-5 xl:grid-cols-[minmax(360px,430px)_minmax(0,1fr)] xl:gap-6">
 
                         {/* ===============================
                             GALLERY
