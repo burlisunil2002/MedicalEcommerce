@@ -37,7 +37,7 @@ import toast from "react-hot-toast";
 // CONSTANTS
 // =========================================================
 
-const CACHE_KEY_BASE = "seller_admin_orders_v4";
+const CACHE_KEY_BASE = "seller_admin_orders_v5";
 const PAGE_SIZE = 100;
 const SEARCH_DELAY = 450;
 
@@ -127,6 +127,35 @@ const money = (value) =>
 
 const number = (value) =>
     numberValue(value).toLocaleString("en-IN");
+
+// The API now exposes itemFinalPaidAmount as the authoritative amount
+// paid/allocated to this individual order item. Keep the older fields
+// only as backwards-compatible fallbacks for existing orders.
+const getItemPaidAmount = (order) =>
+    numberValue(
+        order?.itemFinalPaidAmount ??
+        order?.finalPaidAmount ??
+        order?.lineTotal ??
+        0
+    );
+
+// GrandTotal is the complete order amount. It is intentionally not used
+// as the Item Amount because this screen is one row per order item.
+const getOrderTotal = (order) =>
+    numberValue(
+        order?.orderFinalPaidAmount ??
+        order?.grandTotal ??
+        0
+    );
+
+const getRazorpayPaymentId = (order) => {
+    const id = String(
+        order?.razorpayPaymentId ??
+        ""
+    ).trim();
+
+    return id && id !== "-" ? id : "";
+};
 
 const dateText = (value) => {
     if (!value) return "-";
@@ -2117,6 +2146,8 @@ export default function AdminOrders() {
                             </h2>
 
                             <p className="text-xs text-slate-500 mt-1">
+                                Item Amount is the paid amount allocated to each order item.
+                                Order-level delivery/coupon differences are not added to this item value.
                                 Showing{" "}
                                 {number(
                                     visibleOrders.length
@@ -2213,7 +2244,7 @@ export default function AdminOrders() {
 
                     <div className="hidden lg:block overflow-x-auto">
 
-                        <table className="w-full min-w-[1450px]">
+                        <table className="w-full min-w-[1650px]">
 
                             <thead className="bg-slate-50 border-b border-slate-200">
 
@@ -2245,8 +2276,12 @@ export default function AdminOrders() {
                                         Qty
                                     </th>
 
-                                    <th className="p-4">
+                                    <th className="p-4 whitespace-nowrap">
                                         Item Amount
+                                    </th>
+
+                                    <th className="p-4 min-w-[190px]">
+                                        Razorpay Payment ID
                                     </th>
 
                                     <th className="p-4">
@@ -2277,8 +2312,8 @@ export default function AdminOrders() {
                                         <td
                                             colSpan={
                                                 isAdmin
-                                                    ? 11
-                                                    : 10
+                                                    ? 12
+                                                    : 11
                                             }
                                         >
                                             <EmptyOrders />
@@ -2766,13 +2801,35 @@ function DesktopOrderRow({
 
 
             <td className="p-4 align-top">
-                <p className="font-black text-emerald-600 whitespace-nowrap">
-                    {money(
-                        order.finalPaidAmount ??
-                        order.lineTotal ??
-                        0
-                    )}
-                </p>
+                <div className="min-w-[130px]">
+                    <p className="font-black text-emerald-600 whitespace-nowrap">
+                        {money(getItemPaidAmount(order))}
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                        Item paid amount
+                    </p>
+                </div>
+            </td>
+
+
+            <td className="p-4 align-top">
+                {getRazorpayPaymentId(order) ? (
+                    <div className="max-w-[220px]">
+                        <p
+                            className="font-mono text-[11px] font-bold text-slate-700 break-all leading-5"
+                            title={getRazorpayPaymentId(order)}
+                        >
+                            {getRazorpayPaymentId(order)}
+                        </p>
+                        <p className="text-[10px] text-emerald-600 font-bold mt-1">
+                            Online payment
+                        </p>
+                    </div>
+                ) : (
+                    <span className="inline-flex items-center rounded-lg bg-slate-100 px-2.5 py-1.5 text-[10px] font-black text-slate-500">
+                        Not applicable
+                    </span>
+                )}
             </td>
 
 
@@ -2993,10 +3050,34 @@ function MobileOrderCard({
                     </Info>
 
                     <Info label="Item Amount">
-                        {money(
-                            order.finalPaidAmount ??
-                            order.lineTotal ??
-                            0
+                        <div>
+                            <span className="font-black text-emerald-600">
+                                {money(getItemPaidAmount(order))}
+                            </span>
+                            <span className="block text-[10px] text-slate-400 mt-0.5">
+                                Item paid amount
+                            </span>
+                        </div>
+                    </Info>
+
+                    <Info label="Order Total">
+                        {money(getOrderTotal(order))}
+                    </Info>
+
+                    <Info label="Razorpay Payment ID">
+                        {getRazorpayPaymentId(order) ? (
+                            <div>
+                                <p className="font-mono text-[11px] font-bold text-slate-700 break-all leading-5">
+                                    {getRazorpayPaymentId(order)}
+                                </p>
+                                <span className="inline-flex mt-1 rounded-md bg-emerald-50 px-1.5 py-1 text-[9px] font-black text-emerald-700">
+                                    Online payment
+                                </span>
+                            </div>
+                        ) : (
+                            <span className="text-slate-400">
+                                Not applicable
+                            </span>
                         )}
                     </Info>
 
@@ -3135,7 +3216,7 @@ function Info({
                 {label}
             </p>
 
-            <div className="text-sm font-semibold text-slate-700 mt-1 break-words">
+            <div className="text-sm font-semibold text-slate-700 mt-1 break-words min-w-0">
                 {children}
             </div>
         </div>

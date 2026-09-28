@@ -92,6 +92,13 @@ namespace VivekMedicalProducts.Controllers
                         PaymentStatus = order.PaymentStatus ?? "Pending",
                         RazorpayPaymentId = order.RazorpayPaymentId ?? "-",
 
+                        IsOnlinePayment = !string.IsNullOrWhiteSpace(order.RazorpayPaymentId),
+
+                        // Item amount after discount/coupon allocation.
+                        ItemFinalPaidAmount = item.FinalPaidAmount,
+                        // Complete order amount, including any order-level delivery charge.
+                        OrderFinalPaidAmount = order.GrandTotal,
+
                         OrderStatus = item.OrderItemStatus ?? "Placed",
 
                         PackedDate = item.PackedDate,

@@ -79,15 +79,24 @@ const getExplicitFinalUnitPrice = (item) => {
 };
 
 const getProductDiscountPerUnit = (item, originalUnitPrice) => {
-    const quantity = getQuantity(item);
-
-    const discountAmount = toNumber(
+    /*
+     * IMPORTANT:
+     * In the current OrderController, DiscountAmount is stored PER UNIT.
+     * Therefore we must NOT divide DiscountAmount by quantity here.
+     * The total product discount is calculated later as:
+     *
+     *   discountPerUnit × quantity
+     */
+    const storedDiscountPerUnit = toNumber(
         item?.discountAmount ??
         item?.productDiscountAmount
     );
 
-    if (discountAmount > 0) {
-        return Math.max(0, discountAmount / quantity);
+    if (storedDiscountPerUnit > 0) {
+        return Math.min(
+            originalUnitPrice,
+            roundMoney(storedDiscountPerUnit)
+        );
     }
 
     const discountPercentage = toNumber(
@@ -96,9 +105,13 @@ const getProductDiscountPerUnit = (item, originalUnitPrice) => {
     );
 
     if (discountPercentage > 0) {
-        return Math.max(
-            0,
-            originalUnitPrice * discountPercentage / 100
+        return Math.min(
+            originalUnitPrice,
+            roundMoney(
+                originalUnitPrice *
+                discountPercentage /
+                100
+            )
         );
     }
 
@@ -150,20 +163,23 @@ const buildInvoiceLine = (item) => {
     const quantity = getQuantity(item);
     const gstRate = getGstRate(item);
 
-    // Product price in the application is GST-inclusive.
+    // Product prices in the application are GST-inclusive.
     const originalUnitPrice = roundMoney(
         getOriginalUnitPrice(item)
     );
 
-    // Product discount is applied before GST extraction.
-    const finalUnitPrice = roundMoney(
-        getFinalUnitPrice(item)
+    // DiscountAmount from the backend is PER UNIT.
+    const discountPerUnit = roundMoney(
+        getProductDiscountPerUnit(
+            item,
+            originalUnitPrice
+        )
     );
 
-    const discountPerUnit = roundMoney(
+    const finalUnitPrice = roundMoney(
         Math.max(
             0,
-            originalUnitPrice - finalUnitPrice
+            originalUnitPrice - discountPerUnit
         )
     );
 
@@ -171,23 +187,30 @@ const buildInvoiceLine = (item) => {
         originalUnitPrice * quantity
     );
 
+    // Product discount is a LINE total here.
     const productDiscount = roundMoney(
         discountPerUnit * quantity
     );
 
-    const totalWithGst = roundMoney(
+    // GST-inclusive amount after PRODUCT discount,
+    // but BEFORE the order-level coupon.
+    const totalBeforeCoupon = roundMoney(
         finalUnitPrice * quantity
     );
 
-    // Reverse-calculate GST from the discounted GST-inclusive amount.
-    const taxableLine = roundMoney(
+    const taxableBeforeCoupon = roundMoney(
         gstRate > 0
-            ? totalWithGst / (1 + gstRate / 100)
-            : totalWithGst
+            ? totalBeforeCoupon /
+            (1 + gstRate / 100)
+            : totalBeforeCoupon
     );
 
-    const gstLine = roundMoney(
-        Math.max(0, totalWithGst - taxableLine)
+    const gstBeforeCoupon = roundMoney(
+        Math.max(
+            0,
+            totalBeforeCoupon -
+            taxableBeforeCoupon
+        )
     );
 
     return {
@@ -199,10 +222,121 @@ const buildInvoiceLine = (item) => {
         discountPerUnit,
         originalLineTotal,
         productDiscount,
-        taxableLine,
-        gstLine,
-        totalWithGst,
+        taxableBeforeCoupon,
+        gstBeforeCoupon,
+        totalBeforeCoupon,
+
+        // Filled by applyCouponToLines().
+        couponDiscount: 0,
+        taxableLine: taxableBeforeCoupon,
+        gstLine: gstBeforeCoupon,
+        totalWithGst: totalBeforeCoupon,
+        finalPaidAmount: totalBeforeCoupon
     };
+};
+
+const applyCouponToLines = (lines, couponDiscount) => {
+    const safeCoupon = Math.max(
+        0,
+        roundMoney(couponDiscount)
+    );
+
+    const totalBeforeCoupon = roundMoney(
+        lines.reduce(
+            (sum, line) =>
+                sum + line.totalBeforeCoupon,
+            0
+        )
+    );
+
+    if (
+        safeCoupon <= 0 ||
+        totalBeforeCoupon <= 0 ||
+        !lines.length
+    ) {
+        return lines.map((line) => ({
+            ...line,
+            couponDiscount: 0,
+            taxableLine: line.taxableBeforeCoupon,
+            gstLine: line.gstBeforeCoupon,
+            totalWithGst: line.totalBeforeCoupon,
+            finalPaidAmount: line.totalBeforeCoupon
+        }));
+    }
+
+    const couponToAllocate = Math.min(
+        safeCoupon,
+        totalBeforeCoupon
+    );
+
+    let allocatedCoupon = 0;
+
+    return lines.map((line, index) => {
+        const isLast =
+            index === lines.length - 1;
+
+        let lineCoupon;
+
+        if (isLast) {
+            // Give the rounding remainder to the last item.
+            lineCoupon = roundMoney(
+                couponToAllocate -
+                allocatedCoupon
+            );
+        } else {
+            lineCoupon = roundMoney(
+                couponToAllocate *
+                line.totalBeforeCoupon /
+                totalBeforeCoupon
+            );
+        }
+
+        lineCoupon = Math.max(
+            0,
+            Math.min(
+                lineCoupon,
+                line.totalBeforeCoupon
+            )
+        );
+
+        allocatedCoupon = roundMoney(
+            allocatedCoupon + lineCoupon
+        );
+
+        const finalPaidAmount = roundMoney(
+            Math.max(
+                0,
+                line.totalBeforeCoupon -
+                lineCoupon
+            )
+        );
+
+        // GST is extracted from the FINAL GST-inclusive
+        // amount after coupon.
+        const taxableLine = roundMoney(
+            line.gstRate > 0
+                ? finalPaidAmount /
+                (1 + line.gstRate / 100)
+                : finalPaidAmount
+        );
+
+        const gstLine = roundMoney(
+            Math.max(
+                0,
+                finalPaidAmount -
+                taxableLine
+            )
+        );
+
+        return {
+            ...line,
+            couponDiscount: lineCoupon,
+            taxableLine,
+            gstLine,
+            totalWithGst: line.totalBeforeCoupon,
+            finalPaidAmount
+        };
+    });
 };
 
 const getShipping = (order) =>
@@ -248,35 +382,42 @@ const getFinalPaidAmount = (order) => {
 const buildTotals = (order, lines) => {
     const productValueBeforeDiscount = roundMoney(
         lines.reduce(
-            (sum, line) => sum + line.originalLineTotal,
+            (sum, line) =>
+                sum + line.originalLineTotal,
             0
         )
     );
 
     const productDiscount = roundMoney(
         lines.reduce(
-            (sum, line) => sum + line.productDiscount,
+            (sum, line) =>
+                sum + line.productDiscount,
             0
         )
     );
 
+    // GST-exclusive amount AFTER product discount and coupon.
     const subtotalExclGst = roundMoney(
         lines.reduce(
-            (sum, line) => sum + line.taxableLine,
+            (sum, line) =>
+                sum + line.taxableLine,
             0
         )
     );
 
     const gstAmount = roundMoney(
         lines.reduce(
-            (sum, line) => sum + line.gstLine,
+            (sum, line) =>
+                sum + line.gstLine,
             0
         )
     );
 
+    // Product amount after product discount, before coupon.
     const totalWithGst = roundMoney(
         lines.reduce(
-            (sum, line) => sum + line.totalWithGst,
+            (sum, line) =>
+                sum + line.totalBeforeCoupon,
             0
         )
     );
@@ -288,32 +429,33 @@ const buildTotals = (order, lines) => {
     const backendFinalPaidAmount =
         getFinalPaidAmount(order);
 
-    /*
-     * If the backend has the actual paid total, derive the coupon from it.
-     * This prevents the invoice from displaying a coupon that doesn't
-     * reconcile with the amount actually paid.
-     */
-    const derivedCoupon = backendFinalPaidAmount > 0
-        ? roundMoney(
-            Math.max(
-                0,
-                totalWithGst +
-                shipping -
-                backendFinalPaidAmount
-            )
-        )
-        : 0;
-
     const explicitCoupon = roundMoney(
         getExplicitCoupon(order)
     );
 
+    /*
+     * Prefer the coupon stored on the order.
+     * If it is unavailable, derive it from the authoritative
+     * backend final amount.
+     */
+    const derivedCoupon =
+        backendFinalPaidAmount > 0
+            ? roundMoney(
+                Math.max(
+                    0,
+                    totalWithGst +
+                    shipping -
+                    backendFinalPaidAmount
+                )
+            )
+            : 0;
+
     const couponDiscount = roundMoney(
         Math.min(
-            totalWithGst + shipping,
-            backendFinalPaidAmount > 0
-                ? derivedCoupon
-                : explicitCoupon
+            totalWithGst,
+            explicitCoupon > 0
+                ? explicitCoupon
+                : derivedCoupon
         )
     );
 
@@ -340,7 +482,7 @@ const buildTotals = (order, lines) => {
         shipping,
         couponDiscount,
         calculatedFinalPaid,
-        finalPaidAmount,
+        finalPaidAmount
     };
 };
 
@@ -526,7 +668,7 @@ const addSummary = (
             -totals.productDiscount,
         ],
         [
-            "Subtotal Excl. GST",
+            "Net Subtotal Excl. GST",
             totals.subtotalExclGst,
         ],
         [
@@ -534,7 +676,7 @@ const addSummary = (
             totals.gstAmount,
         ],
         [
-            "Total With GST",
+            "Discounted Product Value",
             totals.totalWithGst,
         ],
         [
@@ -597,6 +739,21 @@ const addSummary = (
         { align: "right" }
     );
 
+    const netProductAmount =
+        roundMoney(
+            totals.subtotalExclGst +
+            totals.gstAmount
+        );
+
+    const productReconciliationDifference =
+        roundMoney(
+            netProductAmount -
+            (
+                totals.totalWithGst -
+                totals.couponDiscount
+            )
+        );
+
     const difference =
         roundMoney(
             totals.finalPaidAmount -
@@ -611,17 +768,24 @@ const addSummary = (
     doc.setFontSize(7.5);
 
     doc.text(
-        Math.abs(difference) <= 0.01
-            ? "Payment calculation reconciled."
-            : "Final paid amount is taken from the order total.",
+        Math.abs(productReconciliationDifference) <= 0.01 &&
+            Math.abs(difference) <= 0.01
+            ? "Payment and GST calculation reconciled."
+            : "Final paid amount is taken from the order total; review reconciliation.",
         14,
         y + 15
     );
 
     doc.text(
-        "All product prices are GST-inclusive; GST is shown separately above.",
+        "Audit reconciliation: Net Subtotal Excl. GST + GST Amount = Final Product Amount After Coupon.",
         14,
         y + 20
+    );
+
+    doc.text(
+        "Discounted Product Value - Coupon Discount = Final Paid Product Amount; shipping is added separately.",
+        14,
+        y + 24.5
     );
 
     doc.text(
@@ -654,8 +818,54 @@ export const generateInvoicePdf = async (
         );
     }
 
-    const lines =
+    const rawLines =
         items.map(buildInvoiceLine);
+
+    /*
+     * Coupon is an ORDER-level discount.
+     * Allocate it proportionally across discounted
+     * GST-inclusive product lines. The last line receives
+     * the rounding remainder so all item coupon amounts
+     * add up exactly to the order coupon.
+     */
+    const explicitCoupon = getExplicitCoupon(order);
+
+    const backendFinalPaidAmount =
+        getFinalPaidAmount(order);
+
+    const rawProductTotal = roundMoney(
+        rawLines.reduce(
+            (sum, line) =>
+                sum + line.totalBeforeCoupon,
+            0
+        )
+    );
+
+    const shipping = getShipping(order);
+
+    const derivedCoupon =
+        backendFinalPaidAmount > 0
+            ? roundMoney(
+                Math.max(
+                    0,
+                    rawProductTotal +
+                    shipping -
+                    backendFinalPaidAmount
+                )
+            )
+            : 0;
+
+    const couponDiscount = Math.min(
+        rawProductTotal,
+        explicitCoupon > 0
+            ? explicitCoupon
+            : derivedCoupon
+    );
+
+    const lines = applyCouponToLines(
+        rawLines,
+        couponDiscount
+    );
 
     const totals =
         buildTotals(
@@ -691,19 +901,27 @@ export const generateInvoicePdf = async (
         lines.map((line) => [
             line.name,
             String(line.quantity),
+
+            // FINAL taxable unit price after product discount
+            // and coupon allocation.
             formatMoney(
                 line.quantity > 0
                     ? line.taxableLine /
                     line.quantity
                     : 0
             ),
+
             `${line.gstRate.toFixed(2)}%`,
-            formatMoney(
-                line.gstLine
-            ),
-            formatMoney(
-                line.totalWithGst
-            ),
+
+            // GST contained in the FINAL paid amount
+            // after product discount + coupon.
+            formatMoney(line.gstLine),
+
+            // Order-level coupon allocated to this item.
+            formatMoney(line.couponDiscount),
+
+            // Actual amount paid for this item.
+            formatMoney(line.finalPaidAmount)
         ]);
 
     autoTable(doc, {
@@ -721,10 +939,11 @@ export const generateInvoicePdf = async (
         head: [[
             "Product / Model",
             "Qty",
-            "Price Excl. GST",
+            "Final Price Excl. GST",
             "GST %",
             "GST Amount",
-            "Total With GST",
+            "Coupon Discount",
+            "Final Paid",
         ]],
 
         body: tableRows,
@@ -746,26 +965,30 @@ export const generateInvoicePdf = async (
 
         columnStyles: {
             0: {
-                cellWidth: 60,
+                cellWidth: 49,
             },
             1: {
-                cellWidth: 13,
+                cellWidth: 11,
                 halign: "center",
             },
             2: {
-                cellWidth: 31,
+                cellWidth: 30,
                 halign: "right",
             },
             3: {
-                cellWidth: 18,
+                cellWidth: 15,
                 halign: "right",
             },
             4: {
-                cellWidth: 28,
+                cellWidth: 25,
                 halign: "right",
             },
             5: {
-                cellWidth: 32,
+                cellWidth: 27,
+                halign: "right",
+            },
+            6: {
+                cellWidth: 28,
                 halign: "right",
             },
         },

@@ -158,114 +158,408 @@ namespace VivekMedicalProducts.Controllers
         private static string GenerateOrderNumber() =>
             $"ORD-{DateTime.UtcNow:yyyyMMddHHmmssfff}-{Random.Shared.Next(1000, 9999)}";
 
-        /// <summary>
-        /// Builds OrderItemModel rows for a set of cart lines against a
-        /// freshly created order. Single source of truth for pricing math
-        /// (discount, GST, coupon-share allocation) — previously duplicated
-        /// almost verbatim between PlaceCOD and VerifyPayment, which is how
-        /// pricing bugs quietly diverge between COD and prepaid orders.
-        /// </summary>
         private List<OrderItemModel> BuildOrderItems(
-            int orderId,
-            IEnumerable<CartModel> carts,
-            decimal couponDiscountTotal)
+     int orderId,
+     IEnumerable<CartModel> carts,
+     decimal couponDiscountTotal)
         {
             var cartList = carts.ToList();
 
-            decimal totalTaxableAmount = cartList.Sum(item =>
+            // ============================================================
+            // IMPORTANT:
+            // ProductVariant.Price is GST-INCLUSIVE.
+            //
+            // Therefore:
+            //
+            // Product Price
+            // - Product Discount
+            // = Discounted Product Amount
+            //
+            // Discounted Product Amount
+            // - Coupon
+            // = Final Item Paid Amount
+            //
+            // GST is extracted from the final GST-inclusive amount.
+            // GST must NOT be added again.
+            // ============================================================
+
+            decimal totalProductAmount = cartList.Sum(item =>
             {
-                decimal originalPrice = item.ProductVariant?.Price ?? 0;
-                decimal discountPercent = item.Product?.DiscountPercentage ?? 0;
+                decimal originalPrice =
+                    Math.Max(
+                        0m,
+                        item.ProductVariant?.Price ?? 0m
+                    );
 
-                decimal discountAmount = item.Product?.IsHotDeal == true
-                    ? originalPrice * discountPercent / 100m
-                    : 0;
+                decimal discountPercent =
+                    Math.Max(
+                        0m,
+                        item.Product?.DiscountPercentage ?? 0m
+                    );
 
-                decimal finalPrice = originalPrice - discountAmount;
-                return finalPrice * item.Quantity;
+                decimal discountAmount =
+                    item.Product?.IsHotDeal == true
+                        ? originalPrice *
+                          discountPercent /
+                          100m
+                        : 0m;
+
+                decimal finalUnitPrice =
+                    Math.Max(
+                        0m,
+                        originalPrice - discountAmount
+                    );
+
+                int quantity =
+                    Math.Max(
+                        1,
+                        item.Quantity
+                    );
+
+                return finalUnitPrice * quantity;
             });
 
-            return cartList.Select(item =>
+            totalProductAmount =
+                Math.Round(
+                    totalProductAmount,
+                    2,
+                    MidpointRounding.AwayFromZero
+                );
+
+
+            // ============================================================
+            // BUILD ORDER ITEMS
+            // ============================================================
+
+            var orderItems = new List<OrderItemModel>();
+
+            decimal allocatedCouponTotal = 0m;
+
+            for (int index = 0; index < cartList.Count; index++)
             {
-                decimal originalPrice = item.ProductVariant?.Price ?? 0;
-                decimal discountPercent = item.Product?.DiscountPercentage ?? 0;
+                var item = cartList[index];
 
-                decimal discountAmount = item.Product?.IsHotDeal == true
-                    ? originalPrice * discountPercent / 100m
-                    : 0;
+                decimal originalPrice =
+                    Math.Max(
+                        0m,
+                        item.ProductVariant?.Price ?? 0m
+                    );
 
-                decimal finalUnitPrice = originalPrice - discountAmount;
-                decimal taxableAmount = finalUnitPrice * item.Quantity;
+                decimal discountPercent =
+                    Math.Max(
+                        0m,
+                        item.Product?.DiscountPercentage ?? 0m
+                    );
 
-                decimal gstPercent = item.Product?.GSTPercentage ?? 0;
-                decimal gstAmount = taxableAmount * gstPercent / 100m;
+                decimal discountAmount =
+                    item.Product?.IsHotDeal == true
+                        ? originalPrice *
+                          discountPercent /
+                          100m
+                        : 0m;
 
-                decimal couponShare = 0;
+                decimal finalUnitPrice =
+                    Math.Max(
+                        0m,
+                        originalPrice - discountAmount
+                    );
 
-                if (couponDiscountTotal > 0 && totalTaxableAmount > 0)
+                int quantity =
+                    Math.Max(
+                        1,
+                        item.Quantity
+                    );
+
+
+                // ========================================================
+                // GST-INCLUSIVE LINE AMOUNT
+                // ========================================================
+
+                decimal lineAmount =
+                    finalUnitPrice * quantity;
+
+                lineAmount =
+                    Math.Round(
+                        lineAmount,
+                        2,
+                        MidpointRounding.AwayFromZero
+                    );
+
+
+                // ============================================================
+                // COUPON ALLOCATION
+                // ============================================================
+
+                decimal safeCouponTotal =
+                    Math.Round(
+                        Math.Max(
+                            0m,
+                            Math.Min(
+                                couponDiscountTotal,
+                                totalProductAmount
+                            )
+                        ),
+                        2,
+                        MidpointRounding.AwayFromZero
+                    );
+
+                decimal couponShare;
+
+                bool isLastItem =
+                    index == cartList.Count - 1;
+
+                if (safeCouponTotal <= 0m)
                 {
-                    couponShare = (taxableAmount / totalTaxableAmount) * couponDiscountTotal;
+                    couponShare = 0m;
+                }
+                else if (isLastItem)
+                {
+                    // Give the last item the exact remaining amount.
+                    couponShare =
+                        safeCouponTotal -
+                        allocatedCouponTotal;
+
+                    couponShare =
+                        Math.Round(
+                            couponShare,
+                            2,
+                            MidpointRounding.AwayFromZero
+                        );
+                }
+                else
+                {
+                    // IMPORTANT:
+                    // Coupon is allocated according to each item's
+                    // discounted GST-inclusive line value.
+                    couponShare =
+                        safeCouponTotal *
+                        (
+                            lineAmount /
+                            totalProductAmount
+                        );
+
+                    couponShare =
+                        Math.Round(
+                            couponShare,
+                            2,
+                            MidpointRounding.AwayFromZero
+                        );
                 }
 
-                decimal finalPaidAmount = taxableAmount + gstAmount - couponShare;
+                couponShare =
+                    Math.Max(
+                        0m,
+                        Math.Min(
+                            couponShare,
+                            lineAmount
+                        )
+                    );
 
-                return new OrderItemModel
-                {
-                    OrderId = orderId,
-                    SellerId = item.SellerId,
-                    ProductId = item.ProductId,
-                    ProductVariantId = item.ProductVariantId,
-                    ProductName = item.Product?.Name ?? "",
-                    Quantity = item.Quantity,
+                allocatedCouponTotal =
+                    Math.Round(
+                        allocatedCouponTotal + couponShare,
+                        2,
+                        MidpointRounding.AwayFromZero
+                    );
 
-                    Price = Math.Round(originalPrice, 2),
-                    DiscountAmount = Math.Round(discountAmount, 2),
-                    CouponDiscountAmount = Math.Round(couponShare, 2),
-                    TaxableAmount = Math.Round(taxableAmount, 2),
-                    GSTPercentage = gstPercent,
-                    GSTAmount = Math.Round(gstAmount, 2),
-                    NetAmount = Math.Round(finalPaidAmount, 2),
-                    FinalPaidAmount = Math.Round(finalPaidAmount, 2),
-                    LineTotal = Math.Round(finalPaidAmount, 2),
 
-                    OrderItemStatus = OrderItemStatuses.Placed,
+                // ============================================================
+                // FINAL ITEM PAID AMOUNT
+                // ============================================================
 
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow,
-                    ItemOrderModifiedDate = DateTime.UtcNow,
+                decimal finalPaidAmount =
+                    Math.Round(
+                        lineAmount - couponShare,
+                        2,
+                        MidpointRounding.AwayFromZero
+                    );
 
-                    // Delivery
-                    PackedDate = null,
-                    ShippedDate = null,
-                    OutForDeliveryDate = null,
-                    DeliveredDate = null,
 
-                    // Return
-                    IsReturnEligible = false,
-                    ReturnEligibleTill = null,
-                    ReturnStatus = ReturnStatuses.None,
-                    ReturnReason = null,
-                    ReturnRemarks = null,
-                    ReturnRequestedDate = null,
-                    ReturnApprovedDate = null,
-                    PickupDate = null,
+                // ========================================================
+                // GST EXTRACTION
+                //
+                // GST is contained inside the final paid amount.
+                // ========================================================
 
-                    // Refund
-                    RefundAmount = null,
-                    RefundStatus = "None",
-                    RefundCompletedDate = null,
+                decimal gstPercent =
+                    Math.Max(
+                        0m,
+                        item.Product?.GSTPercentage ?? 0m
+                    );
 
-                    // Cancellation
-                    CancelledAt = null,
-                    CancelledReason = null,
-                    CancelledBy = null,
+                decimal gstAmount =
+                    gstPercent > 0m
+                        ? finalPaidAmount *
+                          gstPercent /
+                          (100m + gstPercent)
+                        : 0m;
 
-                    // Logistics
-                    TrackingNumber = null,
-                    CourierPartner = null,
-                    ReturnReviewedBy = null
-                };
-            }).ToList();
+                gstAmount =
+                    Math.Round(
+                        gstAmount,
+                        2,
+                        MidpointRounding.AwayFromZero
+                    );
+
+
+                // ========================================================
+                // TAXABLE AMOUNT
+                // ========================================================
+
+                decimal taxableAmount =
+                    finalPaidAmount -
+                    gstAmount;
+
+                taxableAmount =
+                    Math.Round(
+                        Math.Max(
+                            0m,
+                            taxableAmount
+                        ),
+                        2,
+                        MidpointRounding.AwayFromZero
+                    );
+
+
+                // ========================================================
+                // CREATE ORDER ITEM
+                // ========================================================
+
+                orderItems.Add(
+                    new OrderItemModel
+                    {
+                        OrderId =
+                            orderId,
+
+                        SellerId =
+                            item.SellerId,
+
+                        ProductId =
+                            item.ProductId,
+
+                        ProductVariantId =
+                            item.ProductVariantId,
+
+                        ProductName =
+                            item.Product?.Name ?? "",
+
+                        Quantity =
+                            quantity,
+
+
+                        // Original GST-inclusive price.
+                        Price =
+                            Math.Round(
+                                originalPrice,
+                                2,
+                                MidpointRounding.AwayFromZero
+                            ),
+
+
+                        // Product discount before coupon.
+                        DiscountAmount =
+                            Math.Round(
+                                discountAmount,
+                                2,
+                                MidpointRounding.AwayFromZero
+                            ),
+
+
+                        // Coupon allocated to this item.
+                        CouponDiscountAmount =
+                            couponShare,
+
+
+                        // GST-exclusive amount after coupon.
+                        TaxableAmount =
+                            taxableAmount,
+
+
+                        GSTPercentage =
+                            gstPercent,
+
+
+                        // GST contained within final paid amount.
+                        GSTAmount =
+                            gstAmount,
+
+
+                        // Actual amount paid for this item.
+                        NetAmount =
+                            finalPaidAmount,
+
+                        FinalPaidAmount =
+                            finalPaidAmount,
+
+                        LineTotal =
+                            finalPaidAmount,
+
+
+                        OrderItemStatus =
+                            OrderItemStatuses.Placed,
+
+
+                        CreatedAt =
+                            DateTime.UtcNow,
+
+                        UpdatedAt =
+                            DateTime.UtcNow,
+
+                        ItemOrderModifiedDate =
+                            DateTime.UtcNow,
+
+
+                        // Delivery
+                        PackedDate = null,
+                        ShippedDate = null,
+                        OutForDeliveryDate = null,
+                        DeliveredDate = null,
+
+
+                        // Return
+                        IsReturnEligible = false,
+                        ReturnEligibleTill = null,
+                        ReturnStatus = ReturnStatuses.None,
+                        ReturnReason = null,
+                        ReturnRemarks = null,
+                        ReturnRequestedDate = null,
+                        ReturnApprovedDate = null,
+                        PickupDate = null,
+
+
+                        // Refund
+                        RefundAmount = null,
+                        RefundStatus = "None",
+                        RefundCompletedDate = null,
+
+
+                        // Cancellation
+                        CancelledAt = null,
+                        CancelledReason = null,
+                        CancelledBy = null,
+
+
+                        // Logistics
+                        TrackingNumber = null,
+                        CourierPartner = null,
+                        ReturnReviewedBy = null
+                    }
+                );
+            }
+
+
+            // ============================================================
+            // FINAL SAFETY CHECK
+            //
+            // Item amounts should equal:
+            //
+            // Product subtotal - coupon
+            //
+            // Delivery is NOT included in individual item amounts.
+            // Delivery remains at Order.GrandTotal level.
+            // ============================================================
+
+            return orderItems;
         }
 
         /// <summary>
@@ -375,7 +669,11 @@ namespace VivekMedicalProducts.Controllers
                 _context.Orders.Add(order);
                 await _context.SaveChangesAsync(cancellationToken); // OrderId generated here
 
-                var orderItems = BuildOrderItems(order.OrderId, carts, totals.CouponDiscount);
+                var orderItems =
+                    BuildOrderItems(
+                        order.OrderId,
+                        carts,
+                        totals.CouponDiscount);
 
                 _context.OrderItems.AddRange(orderItems);
                 _context.Carts.RemoveRange(carts);
@@ -1679,62 +1977,355 @@ namespace VivekMedicalProducts.Controllers
         {
             var address = order.UserAddress;
 
-            decimal subtotal = order.OrderItems.Sum(x => x.Price * x.Quantity);
-            decimal productDiscount = order.OrderItems.Sum(x => x.DiscountAmount * x.Quantity);
-            decimal taxableAmount = order.OrderItems.Sum(x => x.TaxableAmount);
-            decimal couponDiscount = order.OrderItems.Sum(x => x.CouponDiscountAmount);
-            decimal gstTotal = order.OrderItems.Sum(x => x.GSTAmount);
-            decimal finalPaid = order.OrderItems.Sum(x => x.FinalPaidAmount);
+            // ============================================================
+            // PRODUCT VALUE BEFORE DISCOUNT
+            //
+            // Price = original UNIT price
+            // Quantity = number of units
+            // ============================================================
 
-            var orderStatus = DeriveOrderStatus(order.OrderItems.Select(x => x.OrderItemStatus));
+            decimal subtotal = order.OrderItems.Sum(x =>
+                x.Price * x.Quantity
+            );
+
+            subtotal = Math.Round(
+                subtotal,
+                2,
+                MidpointRounding.AwayFromZero
+            );
+
+
+            // ============================================================
+            // PRODUCT DISCOUNT
+            //
+            // IMPORTANT:
+            // DiscountAmount is stored PER UNIT.
+            //
+            // Therefore:
+            //
+            // DiscountAmount × Quantity
+            // ============================================================
+
+            decimal productDiscount = order.OrderItems.Sum(x =>
+                x.DiscountAmount * x.Quantity
+            );
+
+            productDiscount = Math.Round(
+                productDiscount,
+                2,
+                MidpointRounding.AwayFromZero
+            );
+
+
+            // ============================================================
+            // COUPON DISCOUNT
+            //
+            // CouponDiscountAmount is already the allocated
+            // LINE-LEVEL coupon amount.
+            //
+            // DO NOT multiply by quantity.
+            // ============================================================
+
+            decimal couponDiscount = order.OrderItems.Sum(x =>
+                x.CouponDiscountAmount
+            );
+
+            couponDiscount = Math.Round(
+                couponDiscount,
+                2,
+                MidpointRounding.AwayFromZero
+            );
+
+
+            // ============================================================
+            // TAXABLE AMOUNT
+            //
+            // Already calculated per ORDER ITEM LINE after:
+            //
+            // Product discount
+            // + Coupon allocation
+            //
+            // DO NOT multiply by quantity.
+            // ============================================================
+
+            decimal taxableAmount = order.OrderItems.Sum(x =>
+                x.TaxableAmount
+            );
+
+            taxableAmount = Math.Round(
+                taxableAmount,
+                2,
+                MidpointRounding.AwayFromZero
+            );
+
+
+            // ============================================================
+            // GST
+            //
+            // GSTAmount is already the GST for the complete line.
+            // ============================================================
+
+            decimal gstTotal = order.OrderItems.Sum(x =>
+                x.GSTAmount
+            );
+
+            gstTotal = Math.Round(
+                gstTotal,
+                2,
+                MidpointRounding.AwayFromZero
+            );
+
+
+            // ============================================================
+            // FINAL PRODUCT AMOUNT
+            //
+            // This is the sum of item FinalPaidAmount.
+            //
+            // It does NOT include delivery.
+            // ============================================================
+
+            decimal finalPaid = order.OrderItems.Sum(x =>
+                x.FinalPaidAmount
+            );
+
+            finalPaid = Math.Round(
+                finalPaid,
+                2,
+                MidpointRounding.AwayFromZero
+            );
+
+
+            // ============================================================
+            // ORDER GRAND TOTAL
+            //
+            // This is the authoritative complete order amount.
+            //
+            // Product Final Paid
+            // + Delivery
+            // = Grand Total
+            // ============================================================
+
+            decimal grandTotal = Math.Round(
+                order.GrandTotal,
+                2,
+                MidpointRounding.AwayFromZero
+            );
+
+
+            // ============================================================
+            // DELIVERY / SHIPPING
+            //
+            // Derive it from the authoritative order total.
+            //
+            // This avoids recalculating delivery differently.
+            // ============================================================
+
+            decimal deliveryAmount = Math.Round(
+                Math.Max(
+                    0m,
+                    grandTotal - finalPaid
+                ),
+                2,
+                MidpointRounding.AwayFromZero
+            );
+
+
+            // ============================================================
+            // AUDIT RECONCILIATION
+            //
+            // Taxable + GST must equal Final Product Paid.
+            // ============================================================
+
+            decimal taxablePlusGst = Math.Round(
+                taxableAmount + gstTotal,
+                2,
+                MidpointRounding.AwayFromZero
+            );
+
+
+            // ============================================================
+            // ORDER STATUS
+            // ============================================================
+
+            var orderStatus =
+                DeriveOrderStatus(
+                    order.OrderItems.Select(
+                        x => x.OrderItemStatus
+                    )
+                );
+
+
+            // ============================================================
+            // RETURN INVOICE MODEL
+            // ============================================================
 
             return new OrderInvoiceViewModel
             {
-                OrderId = order.OrderId,
-                InvoiceNumber = $"INV-{order.OrderNumber}",
-                Date = order.OrderDate,
+                OrderId =
+                    order.OrderId,
 
-                CompanyName = _config["Company:Name"] ?? "Sunil Medical Products Pvt Ltd",
-                CompanyGST = _config["Company:GST"] ?? "37ABCDE1234F1Z5",
-                CompanyAddress = _config["Company:Address"] ?? "Visakhapatnam, Andhra Pradesh, India",
-                CompanyPhone = _config["Company:Phone"] ?? "9014060858",
+                InvoiceNumber =
+                    $"INV-{order.OrderNumber}",
 
-                CustomerName = address?.FullName ?? "",
-                Address = $"{address?.AddressLine1}, {address?.AddressLine2}",
-                City = address?.City ?? "",
-                Pincode = address?.Pincode ?? "",
-                Phone = address?.MobileNumber ?? "",
+                Date =
+                    order.OrderDate,
 
-                PaymentId = order.RazorpayPaymentId ?? "",
-                PaymentStatus = order.PaymentStatus,
-                OrderStatus = orderStatus,
-                Currency = order.Currency,
 
-                SubTotal = subtotal,
-                DiscountTotal = productDiscount,
-                TaxableAmount = taxableAmount,
-                CouponDiscount = couponDiscount,
-                GSTTotal = gstTotal,
-                FinalPaidAmount = finalPaid,
-                GrandTotal = order.GrandTotal,
+                // --------------------------------------------------------
+                // COMPANY
+                // --------------------------------------------------------
 
-                Items = order.OrderItems.Select(item => new InvoiceItemViewModel
-                {
-                    ProductName = item.ProductName,
-                    VariantName = item.ProductVariant?.Model ?? "",
-                    Quantity = item.Quantity,
-                    Price = item.Price,
-                    DiscountAmount = item.DiscountAmount,
-                    TaxableAmount = item.TaxableAmount,
-                    GSTPercentage = item.GSTPercentage,
-                    GSTAmount = item.GSTAmount,
-                    CouponDiscountAmount = item.CouponDiscountAmount,
-                    FinalPaidAmount = item.FinalPaidAmount,
-                    Total = item.LineTotal,
-                    ItemStatus = item.OrderItemStatus,
-                    SellerId = item.SellerId,
-                    ReturnStatus = item.ReturnStatus
-                }).ToList()
+                CompanyName =
+                    _config["Company:Name"]
+                    ?? "Sunil Medical Products Pvt Ltd",
+
+                CompanyGST =
+                    _config["Company:GST"]
+                    ?? "37ABCDE1234F1Z5",
+
+                CompanyAddress =
+                    _config["Company:Address"]
+                    ?? "Visakhapatnam, Andhra Pradesh, India",
+
+                CompanyPhone =
+                    _config["Company:Phone"]
+                    ?? "9014060858",
+
+
+                // --------------------------------------------------------
+                // CUSTOMER
+                // --------------------------------------------------------
+
+                CustomerName =
+                    address?.FullName ?? "",
+
+                Address =
+                    $"{address?.AddressLine1}, {address?.AddressLine2}",
+
+                City =
+                    address?.City ?? "",
+
+                Pincode =
+                    address?.Pincode ?? "",
+
+                Phone =
+                    address?.MobileNumber ?? "",
+
+
+                // --------------------------------------------------------
+                // PAYMENT
+                // --------------------------------------------------------
+
+                PaymentId =
+                    order.RazorpayPaymentId ?? "",
+
+                PaymentStatus =
+                    order.PaymentStatus,
+
+                OrderStatus =
+                    orderStatus,
+
+                Currency =
+                    order.Currency,
+
+
+                // --------------------------------------------------------
+                // TOTALS
+                // --------------------------------------------------------
+
+                // Product value before product discount.
+                SubTotal =
+                    subtotal,
+
+                // Product discount only.
+                DiscountTotal =
+                    productDiscount,
+
+                // GST-exclusive value AFTER product discount
+                // and coupon discount.
+                TaxableAmount =
+                    taxableAmount,
+
+                // Total coupon allocated across order items.
+                CouponDiscount =
+                    couponDiscount,
+
+                // GST contained in the final product paid amount.
+                GSTTotal =
+                    gstTotal,
+
+                // Final product amount after coupon.
+                // Delivery is NOT included here.
+                FinalPaidAmount =
+                    finalPaid,
+
+                // Complete order amount including delivery.
+                GrandTotal =
+                    grandTotal,
+
+
+                // --------------------------------------------------------
+                // ITEMS
+                // --------------------------------------------------------
+
+                Items =
+                    order.OrderItems
+                        .Select(item =>
+                            new InvoiceItemViewModel
+                            {
+                                ProductName =
+                                    item.ProductName,
+
+                                VariantName =
+                                    item.ProductVariant?.Model
+                                    ?? "",
+
+                                Quantity =
+                                    item.Quantity,
+
+                                // Original UNIT price.
+                                Price =
+                                    item.Price,
+
+                                // Product discount PER UNIT.
+                                DiscountAmount =
+                                    item.DiscountAmount,
+
+                                // GST-exclusive LINE taxable amount
+                                // after product + coupon discounts.
+                                TaxableAmount =
+                                    item.TaxableAmount,
+
+                                GSTPercentage =
+                                    item.GSTPercentage,
+
+                                // GST amount for the complete LINE.
+                                GSTAmount =
+                                    item.GSTAmount,
+
+                                // Coupon allocated to this LINE.
+                                CouponDiscountAmount =
+                                    item.CouponDiscountAmount,
+
+                                // Final amount actually paid for this LINE.
+                                FinalPaidAmount =
+                                    item.FinalPaidAmount,
+
+                                // Same final LINE amount.
+                                Total =
+                                    item.LineTotal,
+
+                                ItemStatus =
+                                    item.OrderItemStatus,
+
+                                SellerId =
+                                    item.SellerId,
+
+                                ReturnStatus =
+                                    item.ReturnStatus
+                            }
+                        )
+                        .ToList()
             };
         }
 
