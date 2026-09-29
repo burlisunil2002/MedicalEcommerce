@@ -443,21 +443,23 @@ namespace VivekMedicalProducts.Controllers
                 // -------------------------------------------------
 
                 var sellers = await _context.Sellers
-                    .AsNoTracking()
-                    .Select(s => new
-                    {
-                        s.SellerId,
-                        s.BusinessName,
-                        s.OwnerName,
-                        s.Email,
-                        s.Phone,
-                        s.ProductType,
-                        s.IsActive,
-                        s.SubscriptionEndDate,
-                        s.CreatedAt
-                    })
-                    .OrderBy(s => s.BusinessName)
-                    .ToListAsync();
+    .IgnoreQueryFilters()
+    .AsNoTracking()
+    .Select(s => new
+    {
+        s.SellerId,
+        s.BusinessName,
+        s.OwnerName,
+        s.Email,
+        s.Phone,
+        s.ProductType,
+        s.Status,
+        s.IsActive,
+        s.SubscriptionEndDate,
+        s.CreatedAt
+    })
+    .OrderBy(s => s.BusinessName)
+    .ToListAsync();
 
                 if (sellers.Count == 0)
                 {
@@ -595,6 +597,10 @@ namespace VivekMedicalProducts.Controllers
                         email = s.Email ?? "-",
                         phone = s.Phone ?? "-",
                         productType = s.ProductType ?? "-",
+                        status = string.IsNullOrWhiteSpace(s.Status)
+    ? (s.IsActive ? "Active" : "Inactive")
+    : s.Status,
+
                         isActive = s.IsActive,
                         subscriptionEndDate = s.SubscriptionEndDate,
                         createdAt = s.CreatedAt,
@@ -655,7 +661,9 @@ namespace VivekMedicalProducts.Controllers
         {
             try
             {
+                
                 var seller = await _context.Sellers
+                        .IgnoreQueryFilters()
                     .AsNoTracking()
                     .Where(s => s.SellerId == sellerId)
                     .Select(s => new
@@ -666,6 +674,7 @@ namespace VivekMedicalProducts.Controllers
                         s.Email,
                         s.Phone,
                         s.ProductType,
+                        s.Status,
                         s.IsActive,
                         s.SubscriptionEndDate,
                         s.CreatedAt
@@ -762,6 +771,9 @@ namespace VivekMedicalProducts.Controllers
                         email = seller.Email ?? "-",
                         phone = seller.Phone ?? "-",
                         productType = seller.ProductType ?? "-",
+                        status = string.IsNullOrWhiteSpace(seller.Status)
+                            ? (seller.IsActive ? "Active" : "Inactive")
+                            : seller.Status,
                         isActive = seller.IsActive,
                         subscriptionEndDate = seller.SubscriptionEndDate,
                         createdAt = seller.CreatedAt,
@@ -790,6 +802,137 @@ namespace VivekMedicalProducts.Controllers
                         message = "Unable to load seller details.",
                         error = ex.Message,
                         innerException = ex.InnerException?.Message
+                    });
+            }
+        }
+
+
+        // =========================================================
+        // SELLER MANAGEMENT - UPDATE SELLER ACCOUNT STATUS
+        //
+        // PUT:
+        // /api/admin/orders/sellers/{sellerId}/status
+        //
+        // Body:
+        // {
+        //     "status": "Active"
+        // }
+        // =========================================================
+
+        [HttpPut("sellers/{sellerId:int}/status")]
+        public async Task<IActionResult> UpdateSellerStatus(
+            int sellerId,
+            [FromBody] UpdateSellerStatusDto model)
+        {
+            try
+            {
+                if (model == null ||
+                    string.IsNullOrWhiteSpace(model.Status))
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Seller status is required."
+                    });
+                }
+
+                var requestedStatus = model.Status.Trim();
+
+                // -------------------------------------------------
+                // VALID STATUS VALUES
+                // -------------------------------------------------
+
+                var validStatuses = new[]
+                {
+            "Active",
+            "Inactive",
+            "Pending",
+            "Suspended"
+        };
+
+                if (!validStatuses.Contains(
+                        requestedStatus,
+                        StringComparer.OrdinalIgnoreCase))
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message =
+                            "Invalid seller status. Allowed values: Active, Inactive, Pending, Suspended."
+                    });
+                }
+
+                // Normalize status
+                requestedStatus = validStatuses.First(
+                    x => x.Equals(
+                        requestedStatus,
+                        StringComparison.OrdinalIgnoreCase));
+
+                // -------------------------------------------------
+                // FIND SELLER
+                // -------------------------------------------------
+
+                var seller = await _context.Sellers
+    .IgnoreQueryFilters()
+    .FirstOrDefaultAsync(s => s.SellerId == sellerId);
+
+                if (seller == null)
+                {
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "Seller not found."
+                    });
+                }
+
+                // -------------------------------------------------
+                // UPDATE STATUS
+                // -------------------------------------------------
+
+                seller.Status = requestedStatus;
+
+                // Keep IsActive synchronized with account status.
+                seller.IsActive =
+                    requestedStatus.Equals(
+                        "Active",
+                        StringComparison.OrdinalIgnoreCase);
+
+                // -------------------------------------------------
+                // SAVE
+                // -------------------------------------------------
+
+                await _context.SaveChangesAsync();
+
+                // -------------------------------------------------
+                // RESPONSE
+                // -------------------------------------------------
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Seller status updated successfully.",
+                    seller = new
+                    {
+                        sellerId = seller.SellerId,
+                        status = seller.Status,
+                        isActive = seller.IsActive
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(
+                    $"Update Seller Status Error: {ex}");
+
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    new
+                    {
+                        success = false,
+                        message = "Unable to update seller status.",
+                        error = ex.Message,
+                        innerException =
+                            ex.InnerException?.Message
                     });
             }
         }

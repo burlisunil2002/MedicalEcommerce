@@ -35,8 +35,6 @@ namespace VivekMedicalProducts.Models
         public string Status { get; set; } = "Active";
         public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
 
-        // ✅ ONLY THESE TWO (CORRECT)
-
         public ICollection<ProductVariant> Variants { get; set; } = new List<ProductVariant>();
     }
 }

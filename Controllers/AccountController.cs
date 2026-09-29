@@ -421,13 +421,27 @@ public class AccountController : Controller
         }
 
         // UPDATE USER
-        user.CompanyName = model.CompanyName;
-        user.CustomerName = model.CustomerName;
-        user.MobileNo = model.MobileNo;
-        user.GSTNo = model.GSTNo;
-        user.PANNo = model.PANNo;
-        user.Address = model.Address;
-        user.DocumentPath = documentPath;
+        // UPDATE USER
+        user.CompanyName = model.CompanyName?.Trim();
+        user.CustomerName = model.CustomerName?.Trim();
+        user.IndustrySector = model.IndustrySector?.Trim();
+
+        user.MobileNo = model.MobileNo?.Trim();
+        user.SecondaryEmail = model.SecondaryEmail?.Trim();
+        user.SecondaryMobile = model.SecondaryMobile?.Trim();
+
+        user.GSTNo = model.GSTNo?.Trim().ToUpper();
+        user.PANNo = model.PANNo?.Trim().ToUpper();
+
+        user.Address = model.Address?.Trim();
+
+
+        // Only replace document when a NEW document was uploaded
+        if (!string.IsNullOrWhiteSpace(documentPath))
+        {
+            user.DocumentPath = documentPath;
+        }
+
         user.IsProfileCompleted = true;
 
         await _userManager.UpdateAsync(user);
@@ -450,36 +464,326 @@ public class AccountController : Controller
 
         var user = await _userManager.FindByIdAsync(userId);
 
+        if (user == null)
+            return NotFound();
+
+        // Existing checkout/customer addresses
+        var addresses = await _context.UserAddresses
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .OrderByDescending(x => x.IsDefault)
+            .ThenByDescending(x => x.Id)
+            .Select(x => new
+            {
+                id = x.Id,
+
+                fullName = x.FullName,
+                mobile = x.MobileNumber,
+
+                addressLine1 = x.AddressLine1,
+                addressLine2 = x.AddressLine2,
+                landmark = x.Landmark,
+
+                city = x.City,
+                state = x.State,
+                pincode = x.Pincode,
+
+                label = x.AddressType,
+                isDefault = x.IsDefault
+            })
+            .ToListAsync();
+
         return Ok(new
         {
+            // ==========================
+            // CUSTOMER DETAILS
+            // ==========================
+
             name = user.CustomerName,
             email = user.Email,
             mobile = user.MobileNo,
-            address = user.Address
+
+
+            // ==========================
+            // KYC / BUSINESS DETAILS
+            // ==========================
+
+            kyc = new
+            {
+                companyName = user.CompanyName,
+                customerName = user.CustomerName,
+
+                // These require the corresponding
+                // ApplicationUser properties.
+                industrySector = user.IndustrySector,
+
+                mobileNo = user.MobileNo,
+                email = user.Email,
+
+                secondaryEmail = user.SecondaryEmail,
+                secondaryMobile = user.SecondaryMobile,
+
+                gstNo = user.GSTNo,
+                panNo = user.PANNo,
+
+                address = user.Address,
+
+                documentPath = user.DocumentPath,
+
+                isProfileCompleted =
+                    user.IsProfileCompleted,
+
+                status =
+                    user.IsProfileCompleted
+                        ? "Completed"
+                        : "Pending"
+            },
+
+            // ==========================
+            // EXISTING CHECKOUT ADDRESSES
+            // ==========================
+
+            addresses = addresses
         });
     }
 
 
     [HttpPost("/api/account/update-profile")]
-    public IActionResult UpdateProfile([FromBody] RegisterViewModel model)
+    public async Task<IActionResult> UpdateProfile(
+     [FromBody] RegisterViewModel model)
     {
         var userId = _userContext.GetUserId();
 
-        var user = _context.Users.FirstOrDefault(x => x.Id == userId);
+        if (userId == null)
+            return Unauthorized();
+
+        var user = await _userManager.FindByIdAsync(userId);
 
         if (user == null)
             return NotFound();
 
-        user.CustomerName = model.CustomerName;
-        user.MobileNo = model.MobileNo;
-        user.Address = model.Address;
+        if (string.IsNullOrWhiteSpace(model.CustomerName))
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Customer name is required."
+            });
+        }
 
-        _context.SaveChanges();
+        user.CustomerName =
+            model.CustomerName.Trim();
+
+        user.MobileNo =
+            model.MobileNo?.Trim();
+
+        await _userManager.UpdateAsync(user);
 
         return Ok(new
         {
             success = true,
-            message = "Profile updated"
+            message = "Profile updated successfully."
+        });
+    }
+
+
+    [HttpGet("/api/account/addresses")]
+    public async Task<IActionResult> GetAddresses()
+    {
+        var userId = _userContext.GetUserId();
+
+        if (userId == null)
+            return Unauthorized();
+
+        var addresses = await _context.UserAddresses
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .OrderByDescending(x => x.IsDefault)
+            .ThenByDescending(x => x.Id)
+            .Select(x => new
+            {
+                id = x.Id,
+                fullName = x.FullName,
+                mobile = x.MobileNumber,
+                addressLine1 = x.AddressLine1,
+                addressLine2 = x.AddressLine2,
+                landmark = x.Landmark,
+                city = x.City,
+                state = x.State,
+                pincode = x.Pincode,
+                label = x.AddressType,
+                isDefault = x.IsDefault
+            })
+            .ToListAsync();
+
+        return Ok(addresses);
+    }
+
+    [HttpPut("/api/account/addresses/{id:int}")]
+    public async Task<IActionResult> UpdateAddress(
+    int id,
+    [FromBody] UserAddress model)
+    {
+        var userId = _userContext.GetUserId();
+
+        if (userId == null)
+            return Unauthorized();
+
+        var address = await _context.UserAddresses
+            .FirstOrDefaultAsync(x =>
+                x.Id == id &&
+                x.UserId == userId);
+
+        if (address == null)
+            return NotFound(new
+            {
+                message = "Address not found."
+            });
+
+        if (string.IsNullOrWhiteSpace(model.FullName) ||
+            string.IsNullOrWhiteSpace(model.MobileNumber) ||
+            string.IsNullOrWhiteSpace(model.AddressLine1) ||
+            string.IsNullOrWhiteSpace(model.City) ||
+            string.IsNullOrWhiteSpace(model.State) ||
+            string.IsNullOrWhiteSpace(model.Pincode))
+        {
+            return BadRequest(new
+            {
+                message = "Please fill all required fields."
+            });
+        }
+
+        if (model.IsDefault)
+        {
+            var others = await _context.UserAddresses
+                .Where(x =>
+                    x.UserId == userId &&
+                    x.Id != id)
+                .ToListAsync();
+
+            foreach (var item in others)
+            {
+                item.IsDefault = false;
+            }
+        }
+
+        address.FullName =
+            model.FullName.Trim();
+
+        address.MobileNumber =
+            model.MobileNumber.Trim();
+
+        address.AddressLine1 =
+            model.AddressLine1.Trim();
+
+        address.AddressLine2 =
+            model.AddressLine2?.Trim();
+
+        address.Landmark =
+            model.Landmark?.Trim();
+
+        address.City =
+            model.City.Trim();
+
+        address.State =
+            model.State.Trim();
+
+        address.Pincode =
+            model.Pincode.Trim();
+
+        address.AddressType =
+            string.IsNullOrWhiteSpace(model.AddressType)
+                ? "Home"
+                : model.AddressType.Trim();
+
+        address.IsDefault =
+            model.IsDefault;
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            success = true,
+            message = "Address updated successfully."
+        });
+    }
+
+    [HttpDelete("/api/account/addresses/{id:int}")]
+    public async Task<IActionResult> DeleteAddress(int id)
+    {
+        var userId = _userContext.GetUserId();
+
+        if (userId == null)
+            return Unauthorized();
+
+        var address = await _context.UserAddresses
+            .FirstOrDefaultAsync(x =>
+                x.Id == id &&
+                x.UserId == userId);
+
+        if (address == null)
+            return NotFound();
+
+        bool wasDefault = address.IsDefault;
+
+        _context.UserAddresses.Remove(address);
+
+        await _context.SaveChangesAsync();
+
+        if (wasDefault)
+        {
+            var next = await _context.UserAddresses
+                .Where(x => x.UserId == userId)
+                .OrderByDescending(x => x.Id)
+                .FirstOrDefaultAsync();
+
+            if (next != null)
+            {
+                next.IsDefault = true;
+
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        return Ok(new
+        {
+            success = true,
+            message = "Address deleted successfully."
+        });
+    }
+
+    [HttpPut("/api/account/addresses/{id:int}/default")]
+    public async Task<IActionResult> SetDefaultAddress(int id)
+    {
+        var userId = _userContext.GetUserId();
+
+        if (userId == null)
+            return Unauthorized();
+
+        var selected = await _context.UserAddresses
+            .FirstOrDefaultAsync(x =>
+                x.Id == id &&
+                x.UserId == userId);
+
+        if (selected == null)
+            return NotFound();
+
+        var addresses = await _context.UserAddresses
+            .Where(x => x.UserId == userId)
+            .ToListAsync();
+
+        foreach (var address in addresses)
+        {
+            address.IsDefault =
+                address.Id == id;
+        }
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            success = true,
+            message = "Default address updated successfully."
         });
     }
 

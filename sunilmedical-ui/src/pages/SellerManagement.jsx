@@ -70,6 +70,18 @@ const normalize = data => {
             s?.productType ?? s?.ProductType ?? "-",
         isActive:
             s?.isActive ?? s?.IsActive ?? true,
+        status:
+            s?.status ??
+            s?.Status ??
+            ((s?.isActive ?? s?.IsActive ?? true) ? "Active" : "Inactive"),
+        documentPath:
+            s?.documentPath ??
+            s?.DocumentPath ??
+            s?.documentUrl ??
+            s?.DocumentUrl ??
+            s?.kycDocumentPath ??
+            s?.KycDocumentPath ??
+            null,
         subscriptionEndDate:
             s?.subscriptionEndDate ?? s?.SubscriptionEndDate ?? null,
         createdAt: s?.createdAt ?? s?.CreatedAt ?? null,
@@ -131,6 +143,7 @@ export default function SellerManagement() {
     const [sort, setSort] = useState("revenue");
     const [selected, setSelected] = useState(null);
     const [detailsLoading, setDetailsLoading] = useState(false);
+    const [statusUpdating, setStatusUpdating] = useState(false);
 
     const requestedSellerId = searchParams.get("sellerId");
 
@@ -204,21 +217,6 @@ export default function SellerManagement() {
                 ),
                 sellers
             });
-
-            try {
-                sessionStorage.setItem(
-                    "admin-seller-management",
-                    JSON.stringify({
-                        savedAt: Date.now(),
-                        totalSellers: next?.totalSellers,
-                        activeSellers: next?.activeSellers,
-                        inactiveSellers: next?.inactiveSellers,
-                        sellers
-                    })
-                );
-            } catch {
-                // Cache is optional.
-            }
         } catch (err) {
             console.error("Seller management load error:", err);
             setError(
@@ -232,25 +230,7 @@ export default function SellerManagement() {
     }, []);
 
     useEffect(() => {
-        try {
-            const cached = sessionStorage.getItem("admin-seller-management");
-            if (cached) {
-                const parsed = JSON.parse(cached);
-                if (Array.isArray(parsed?.sellers)) {
-                    setData({
-                        totalSellers: toNumber(parsed.totalSellers ?? parsed.sellers.length),
-                        activeSellers: toNumber(parsed.activeSellers ?? parsed.sellers.filter(x => x.isActive).length),
-                        inactiveSellers: toNumber(parsed.inactiveSellers ?? parsed.sellers.filter(x => !x.isActive).length),
-                        sellers: parsed.sellers
-                    });
-                    setLoading(false);
-                }
-            }
-        } catch {
-            // Ignore invalid cache.
-        }
-
-        loadSellers(Boolean(sessionStorage.getItem("admin-seller-management")));
+        loadSellers(false);
 
         const timer = setInterval(() => {
             loadSellers(true);
@@ -288,10 +268,13 @@ export default function SellerManagement() {
                 String(seller.sellerId)
             ].join(" ").toLowerCase().includes(q);
 
+            const normalizedStatus =
+                String(seller.status || (seller.isActive ? "Active" : "Inactive")).toLowerCase();
+
             const matchesStatus =
                 status === "all" ||
-                (status === "active" && seller.isActive) ||
-                (status === "inactive" && !seller.isActive);
+                (status === "active" && normalizedStatus === "active") ||
+                (status === "inactive" && normalizedStatus === "inactive");
 
             return matchesSearch && matchesStatus;
         });
@@ -499,7 +482,7 @@ export default function SellerManagement() {
                                                 <td className="px-5 py-4 font-bold text-emerald-700">{number(seller.completedOrders)}</td>
                                                 <td className="px-5 py-4 font-bold text-amber-700">{number(seller.pendingOrders)}</td>
                                                 <td className="px-5 py-4 font-black text-emerald-700">{money(seller.revenue)}</td>
-                                                <td className="px-5 py-4"><Status active={seller.isActive} /></td>
+                                                <td className="px-5 py-4"><Status active={seller.isActive} label={seller.status} /></td>
                                                 <td className="px-5 py-4">
                                                     <button type="button" onClick={() => openSellerDetails(seller)} className="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-black">View</button>
                                                 </td>
@@ -520,7 +503,7 @@ export default function SellerManagement() {
                                                     <p className="text-xs text-slate-500 mt-1">#{seller.sellerId} · {seller.ownerName}</p>
                                                 </div>
                                             </div>
-                                            <Status active={seller.isActive} />
+                                            <Status active={seller.isActive} label={seller.status} />
                                         </div>
 
                                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
@@ -555,6 +538,40 @@ export default function SellerManagement() {
                     seller={selected}
                     onClose={closeSellerDetails}
                     loading={detailsLoading}
+                    statusUpdating={statusUpdating}
+                    onStatusUpdate={async (sellerId, nextStatus) => {
+                        try {
+                            setStatusUpdating(true);
+
+                            const response = await API.put(
+                                `/api/admin/orders/sellers/${sellerId}/status`,
+                                { status: nextStatus }
+                            );
+
+                            const updatedSeller = response?.data?.seller;
+
+                            toast.success(
+                                response?.data?.message ||
+                                "Seller status updated successfully"
+                            );
+
+                            await loadSellers(true);
+
+                            setSelected(prev => prev ? {
+                                ...prev,
+                                status: updatedSeller?.status ?? nextStatus,
+                                isActive: updatedSeller?.isActive ?? (nextStatus === "Active")
+                            } : prev);
+                        } catch (err) {
+                            console.error("Seller status update error:", err);
+                            toast.error(
+                                err?.response?.data?.message ||
+                                "Unable to update seller status."
+                            );
+                        } finally {
+                            setStatusUpdating(false);
+                        }
+                    }}
                 />
             )}
         </div>
@@ -604,39 +621,98 @@ function Avatar({ name }) {
     );
 }
 
-function Status({ active }) {
+function Status({ active, label }) {
+    const status = label || (active ? "Active" : "Inactive");
+
+    const styles = {
+        Active: "bg-emerald-50 text-emerald-700",
+        Inactive: "bg-slate-100 text-slate-500",
+        Pending: "bg-amber-50 text-amber-700",
+        Suspended: "bg-rose-50 text-rose-700"
+    };
+
+    const dots = {
+        Active: "bg-emerald-500",
+        Inactive: "bg-slate-400",
+        Pending: "bg-amber-500",
+        Suspended: "bg-rose-500"
+    };
+
     return (
-        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black whitespace-nowrap ${active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-slate-400"}`} />
-            {active ? "Active" : "Inactive"}
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black whitespace-nowrap ${styles[status] || styles.Inactive}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${dots[status] || dots.Inactive}`} />
+            {status}
         </span>
     );
 }
 
-function SellerDetails({ seller, onClose, loading = false }) {
+function SellerDetails({
+    seller,
+    onClose,
+    loading = false,
+    statusUpdating = false,
+    onStatusUpdate
+}) {
+    const currentStatus =
+        seller?.status ||
+        (seller?.isActive ? "Active" : "Inactive");
+
+    const [nextStatus, setNextStatus] = useState(currentStatus);
+
+    useEffect(() => {
+        setNextStatus(
+            seller?.status ||
+            (seller?.isActive ? "Active" : "Inactive")
+        );
+    }, [seller]);
+
+    const documentUrl = seller?.documentPath || null;
+
+    const handleStatusUpdate = async () => {
+        if (!seller?.sellerId) return;
+
+        if (nextStatus === currentStatus) {
+            toast("No status changes to update.");
+            return;
+        }
+
+        await onStatusUpdate?.(seller.sellerId, nextStatus);
+    };
+
     return (
-        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-5" onMouseDown={onClose}>
-            <div className="w-full sm:max-w-3xl max-h-[92vh] overflow-y-auto bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl" onMouseDown={e => e.stopPropagation()}>
-                <div className="sticky top-0 bg-white border-b border-slate-100 p-4 sm:p-5 flex items-center justify-between gap-3">
+        <div
+            className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-5"
+            onMouseDown={onClose}
+        >
+            <div
+                className="w-full sm:max-w-3xl max-h-[92vh] overflow-y-auto bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl"
+                onMouseDown={e => e.stopPropagation()}
+            >
+                <div className="sticky top-0 z-10 bg-white border-b border-slate-100 p-4 sm:p-5 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                         <Avatar name={seller.businessName} />
                         <div className="min-w-0">
-                            <h2 className="font-black text-lg truncate">{seller.businessName}</h2>
-                            <p className="text-xs text-slate-500">Seller #{seller.sellerId} · {seller.ownerName}</p>
+                            <h2 className="font-black text-lg truncate">
+                                {seller.businessName}
+                            </h2>
+                            <p className="text-xs text-slate-500">
+                                Seller #{seller.sellerId} · {seller.ownerName}
+                            </p>
                         </div>
                     </div>
+
                     <div className="flex items-center gap-2 shrink-0">
                         {loading && (
                             <RefreshCw
                                 size={16}
                                 className="text-violet-600 animate-spin"
-                                aria-label="Loading seller details"
                             />
                         )}
+
                         <button
                             type="button"
                             onClick={onClose}
-                            className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0"
+                            className="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center"
                             aria-label="Close seller details"
                         >
                             <X size={18} />
@@ -653,25 +729,173 @@ function SellerDetails({ seller, onClose, loading = false }) {
                         <Metric label="Completed" value={seller.completedOrders} />
                         <Metric label="Pending" value={seller.pendingOrders} />
                         <Metric label="Delivered" value={seller.deliveredOrders} />
-                        <Metric label="Revenue" value={money(seller.revenue)} moneyValue />
+                        <Metric
+                            label="Revenue"
+                            value={money(seller.revenue)}
+                            moneyValue
+                        />
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <Info icon={<Building2 size={16} />} label="Product Type" value={seller.productType} />
-                        <Info icon={<CheckCircle2 size={16} />} label="Account Status" value={seller.isActive ? "Active" : "Inactive"} />
-                        <Info icon={<Mail size={16} />} label="Email" value={seller.email} />
-                        <Info icon={<Phone size={16} />} label="Phone" value={seller.phone} />
-                        <Info icon={<Activity size={16} />} label="Subscription" value={subscriptionState(seller.subscriptionEndDate)} />
-                        <Info icon={<Clock3 size={16} />} label="Subscription End" value={formatDate(seller.subscriptionEndDate)} />
-                        <Info icon={<Store size={16} />} label="Created" value={formatDate(seller.createdAt)} />
+                        <Info
+                            icon={<Building2 size={16} />}
+                            label="Product Type"
+                            value={seller.productType}
+                        />
+                        <Info
+                            icon={<Mail size={16} />}
+                            label="Email"
+                            value={seller.email}
+                        />
+                        <Info
+                            icon={<Phone size={16} />}
+                            label="Phone"
+                            value={seller.phone}
+                        />
+                        <Info
+                            icon={<Activity size={16} />}
+                            label="Subscription"
+                            value={subscriptionState(seller.subscriptionEndDate)}
+                        />
+                        <Info
+                            icon={<Clock3 size={16} />}
+                            label="Subscription End"
+                            value={formatDate(seller.subscriptionEndDate)}
+                        />
+                        <Info
+                            icon={<Store size={16} />}
+                            label="Created"
+                            value={formatDate(seller.createdAt)}
+                        />
+                    </div>
+
+                    {/* ACCOUNT STATUS */}
+                    <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4 sm:p-5">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div>
+                                <p className="text-xs font-black uppercase tracking-wide text-violet-600">
+                                    Account Status
+                                </p>
+                                <p className="text-sm text-slate-600 mt-1">
+                                    Change the seller account status and save it to the database.
+                                </p>
+                            </div>
+
+                            <Status
+                                active={nextStatus === "Active"}
+                                label={nextStatus}
+                            />
+                        </div>
+
+                        <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                            <select
+                                value={nextStatus}
+                                onChange={e => setNextStatus(e.target.value)}
+                                disabled={statusUpdating}
+                                className="h-11 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 disabled:opacity-60"
+                            >
+                                <option value="Active">Active</option>
+                                <option value="Inactive">Inactive</option>
+                                <option value="Pending">Pending</option>
+                                <option value="Suspended">Suspended</option>
+                            </select>
+
+                            <button
+                                type="button"
+                                onClick={handleStatusUpdate}
+                                disabled={
+                                    statusUpdating ||
+                                    nextStatus === currentStatus
+                                }
+                                className="h-11 px-5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-black disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                            >
+                                {statusUpdating && (
+                                    <RefreshCw
+                                        size={15}
+                                        className="animate-spin"
+                                    />
+                                )}
+                                {statusUpdating
+                                    ? "Updating..."
+                                    : "Update Status"}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* CUSTOMER / SELLER UPLOADED DOCUMENT */}
+                    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+                        <div className="p-4 sm:p-5 border-b border-slate-100">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <div>
+                                    <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+                                        KYC / Uploaded Document
+                                    </p>
+                                    <p className="text-sm text-slate-600 mt-1">
+                                        Document uploaded by the customer/seller during registration.
+                                    </p>
+                                </div>
+
+                                {documentUrl ? (
+                                    <a
+                                        href={documentUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="h-10 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-black inline-flex items-center justify-center"
+                                    >
+                                        View Document
+                                    </a>
+                                ) : (
+                                    <span className="inline-flex items-center rounded-full px-3 py-1.5 bg-slate-100 text-slate-500 text-xs font-black">
+                                        No Document
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="p-4 sm:p-5">
+                            {documentUrl ? (
+                                <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                                    <p className="text-xs font-bold text-slate-500 break-all">
+                                        {documentUrl}
+                                    </p>
+                                    <p className="text-[11px] text-slate-400 mt-2">
+                                        Click View Document to open the uploaded file in a new tab.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+                                    <p className="font-bold text-slate-600">
+                                        No uploaded document available
+                                    </p>
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        No customer/seller KYC document was returned by the server.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
-                        <p className="text-xs font-black uppercase tracking-wide text-slate-400">Operational summary</p>
+                        <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+                            Operational summary
+                        </p>
+
                         <div className="mt-3 space-y-3">
-                            <Progress label="Completed Items" value={seller.completedOrders} total={seller.orderItems} />
-                            <Progress label="Delivered Items" value={seller.deliveredOrders} total={seller.orderItems} />
-                            <Progress label="Pending Items" value={seller.pendingOrders} total={seller.orderItems} />
+                            <Progress
+                                label="Completed Items"
+                                value={seller.completedOrders}
+                                total={seller.orderItems}
+                            />
+                            <Progress
+                                label="Delivered Items"
+                                value={seller.deliveredOrders}
+                                total={seller.orderItems}
+                            />
+                            <Progress
+                                label="Pending Items"
+                                value={seller.pendingOrders}
+                                total={seller.orderItems}
+                            />
                         </div>
                     </div>
                 </div>
@@ -679,7 +903,6 @@ function SellerDetails({ seller, onClose, loading = false }) {
         </div>
     );
 }
-
 function Info({ icon, label, value }) {
     return (
         <div className="rounded-2xl border border-slate-200 p-4">
