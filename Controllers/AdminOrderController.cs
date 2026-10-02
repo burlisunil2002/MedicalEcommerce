@@ -940,11 +940,15 @@ namespace VivekMedicalProducts.Controllers
         [Authorize(Roles = "Admin")]
         [HttpPut("items/{orderItemId}/status")]
         public async Task<IActionResult> UpdateOrderItemStatusDTO(
-    int orderItemId,
-    [FromBody] UpdateOrderStatusDto model)
+     int orderItemId,
+     [FromBody] UpdateOrderStatusDto model)
         {
             try
             {
+                // =========================================================
+                // 1. VALIDATE REQUEST
+                // =========================================================
+
                 if (model == null)
                 {
                     return BadRequest(new
@@ -954,8 +958,19 @@ namespace VivekMedicalProducts.Controllers
                     });
                 }
 
+                // At least one status must be supplied
+                if (string.IsNullOrWhiteSpace(model.PaymentStatus) &&
+                    string.IsNullOrWhiteSpace(model.ItemOrderStatus))
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Please provide PaymentStatus or ItemOrderStatus."
+                    });
+                }
+
                 // =========================================================
-                // GET ORDER ITEM
+                // 2. GET ORDER ITEM + ORDER
                 // =========================================================
 
                 var item = await _context.OrderItems
@@ -968,22 +983,34 @@ namespace VivekMedicalProducts.Controllers
                     return NotFound(new
                     {
                         success = false,
-                        message = "Order item not found."
+                        message = $"Order item with ID {orderItemId} was not found."
+                    });
+                }
+
+                if (item.Order == null)
+                {
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "Associated order was not found."
                     });
                 }
 
                 var now = DateTime.UtcNow;
 
+                // Track what was changed
+                bool paymentStatusChanged = false;
+                bool itemStatusChanged = false;
 
                 // =========================================================
-                // PAYMENT STATUS
+                // 3. PAYMENT STATUS
                 //
                 // PaymentStatus belongs to Orders table.
                 // =========================================================
 
                 if (!string.IsNullOrWhiteSpace(model.PaymentStatus))
                 {
-                    var paymentStatus =
+                    var requestedPaymentStatus =
                         model.PaymentStatus.Trim();
 
                     var validPaymentStatuses = new[]
@@ -994,40 +1021,42 @@ namespace VivekMedicalProducts.Controllers
                 "Refunded"
             };
 
-                    if (!validPaymentStatuses.Contains(
-                        paymentStatus,
-                        StringComparer.OrdinalIgnoreCase))
+                    var normalizedPaymentStatus =
+                        validPaymentStatuses.FirstOrDefault(x =>
+                            x.Equals(
+                                requestedPaymentStatus,
+                                StringComparison.OrdinalIgnoreCase));
+
+                    if (normalizedPaymentStatus == null)
                     {
                         return BadRequest(new
                         {
                             success = false,
-                            message = "Invalid payment status."
+                            message =
+                                $"Invalid payment status '{requestedPaymentStatus}'.",
+                            allowedStatuses = validPaymentStatuses
                         });
                     }
 
-                    paymentStatus =
-                        validPaymentStatuses.First(x =>
-                            x.Equals(
-                                paymentStatus,
-                                StringComparison.OrdinalIgnoreCase));
-
+                    // Update payment status
                     item.Order.PaymentStatus =
-                        paymentStatus;
+                        normalizedPaymentStatus;
 
                     item.Order.OrderModifiedDate =
                         now;
+
+                    paymentStatusChanged = true;
                 }
 
-
                 // =========================================================
-                // ORDER ITEM STATUS
+                // 4. ORDER ITEM / DELIVERY STATUS
                 //
-                // Delivery status belongs to OrderItems table.
+                // OrderItemStatus belongs to OrderItems table.
                 // =========================================================
 
                 if (!string.IsNullOrWhiteSpace(model.ItemOrderStatus))
                 {
-                    var itemStatus =
+                    var requestedItemStatus =
                         model.ItemOrderStatus.Trim();
 
                     var validItemStatuses = new[]
@@ -1040,30 +1069,35 @@ namespace VivekMedicalProducts.Controllers
                 "Cancelled"
             };
 
-                    if (!validItemStatuses.Contains(
-                        itemStatus,
-                        StringComparer.OrdinalIgnoreCase))
+                    var normalizedItemStatus =
+                        validItemStatuses.FirstOrDefault(x =>
+                            x.Equals(
+                                requestedItemStatus,
+                                StringComparison.OrdinalIgnoreCase));
+
+                    if (normalizedItemStatus == null)
                     {
                         return BadRequest(new
                         {
                             success = false,
-                            message = "Invalid order item status."
+                            message =
+                                $"Invalid order item status '{requestedItemStatus}'.",
+                            allowedStatuses = validItemStatuses
                         });
                     }
-
-                    itemStatus =
-                        validItemStatuses.First(x =>
-                            x.Equals(
-                                itemStatus,
-                                StringComparison.OrdinalIgnoreCase));
-
 
                     // =====================================================
                     // PREVENT DELIVERED → OTHER STATUS
                     // =====================================================
 
-                    if (item.OrderItemStatus == "Delivered" &&
-                        itemStatus != "Delivered")
+                    if (string.Equals(
+                            item.OrderItemStatus,
+                            "Delivered",
+                            StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(
+                            normalizedItemStatus,
+                            "Delivered",
+                            StringComparison.OrdinalIgnoreCase))
                     {
                         return BadRequest(new
                         {
@@ -1073,14 +1107,22 @@ namespace VivekMedicalProducts.Controllers
                         });
                     }
 
-
                     // =====================================================
                     // PREVENT INVALID CANCELLATION
                     // =====================================================
 
-                    if (itemStatus == "Cancelled" &&
-                        item.OrderItemStatus != "Placed" &&
-                        item.OrderItemStatus != "Packed")
+                    if (string.Equals(
+                            normalizedItemStatus,
+                            "Cancelled",
+                            StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(
+                            item.OrderItemStatus,
+                            "Placed",
+                            StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(
+                            item.OrderItemStatus,
+                            "Packed",
+                            StringComparison.OrdinalIgnoreCase))
                     {
                         return BadRequest(new
                         {
@@ -1090,20 +1132,20 @@ namespace VivekMedicalProducts.Controllers
                         });
                     }
 
-
                     // =====================================================
-                    // UPDATE ITEM STATUS
+                    // UPDATE ORDER ITEM STATUS
                     // =====================================================
 
                     item.OrderItemStatus =
-                        itemStatus;
+                        normalizedItemStatus;
 
+                    itemStatusChanged = true;
 
                     // =====================================================
                     // STATUS TIMESTAMPS
                     // =====================================================
 
-                    switch (itemStatus)
+                    switch (normalizedItemStatus)
                     {
                         case "Packed":
 
@@ -1111,20 +1153,17 @@ namespace VivekMedicalProducts.Controllers
 
                             break;
 
-
                         case "Shipped":
 
                             item.ShippedDate ??= now;
 
                             break;
 
-
                         case "OutForDelivery":
 
                             item.OutForDeliveryDate ??= now;
 
                             break;
-
 
                         case "Delivered":
 
@@ -1137,7 +1176,6 @@ namespace VivekMedicalProducts.Controllers
 
                             break;
 
-
                         case "Cancelled":
 
                             item.CancelledAt ??= now;
@@ -1146,33 +1184,51 @@ namespace VivekMedicalProducts.Controllers
                     }
                 }
 
-
                 // =========================================================
-                // COMMON AUDIT FIELDS
+                // 5. COMMON AUDIT FIELDS
                 // =========================================================
 
                 item.UpdatedAt = now;
 
                 item.ItemOrderModifiedDate = now;
 
-
                 // =========================================================
-                // SAVE
+                // 6. SAVE CHANGES
                 // =========================================================
 
                 await _context.SaveChangesAsync();
 
+                // =========================================================
+                // 7. RESPONSE MESSAGE
+                // =========================================================
+
+                string message;
+
+                if (paymentStatusChanged && itemStatusChanged)
+                {
+                    message =
+                        "Payment status and order delivery status updated successfully.";
+                }
+                else if (paymentStatusChanged)
+                {
+                    message =
+                        "Payment status updated successfully.";
+                }
+                else
+                {
+                    message =
+                        "Order delivery status updated successfully.";
+                }
 
                 // =========================================================
-                // RESPONSE
+                // 8. RESPONSE
                 // =========================================================
 
                 return Ok(new
                 {
                     success = true,
 
-                    message =
-                        "Order status updated successfully.",
+                    message = message,
 
                     data = new
                     {
@@ -1199,7 +1255,16 @@ namespace VivekMedicalProducts.Controllers
                             item.DeliveredDate,
 
                         cancelledAt =
-                            item.CancelledAt
+                            item.CancelledAt,
+
+                        updatedAt =
+                            item.UpdatedAt,
+
+                        itemOrderModifiedDate =
+                            item.ItemOrderModifiedDate,
+
+                        orderModifiedDate =
+                            item.Order.OrderModifiedDate
                     }
                 });
             }
@@ -1214,7 +1279,10 @@ namespace VivekMedicalProducts.Controllers
                     {
                         success = false,
                         message =
-                            "An unexpected error occurred while updating the order."
+                            "An unexpected error occurred while updating the order status.",
+                        error = ex.Message,
+                        innerException =
+                            ex.InnerException?.Message
                     });
             }
         }

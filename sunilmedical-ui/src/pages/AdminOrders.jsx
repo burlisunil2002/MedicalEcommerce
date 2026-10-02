@@ -62,7 +62,6 @@ const EMPTY_STATS = {
 
     delivery: {
         placed: 0,
-        accepted: 0,
         packed: 0,
         shipped: 0,
         outForDelivery: 0,
@@ -100,7 +99,6 @@ const PAYMENT_STATUSES = [
 const DELIVERY_STATUSES = [
     "",
     "Placed",
-    "Accepted",
     "Packed",
     "Shipped",
     "OutForDelivery",
@@ -670,12 +668,6 @@ export default function AdminOrders() {
                             numberValue(
                                 delivery.placed ??
                                 delivery.placedItems
-                            ),
-
-                        accepted:
-                            numberValue(
-                                delivery.accepted ??
-                                delivery.acceptedItems
                             ),
 
                         packed:
@@ -1635,12 +1627,6 @@ export default function AdminOrders() {
                             }
                         />
 
-                        <MiniStat
-                            label="Accepted"
-                            value={
-                                stats.delivery.accepted
-                            }
-                        />
 
                         <MiniStat
                             label="Packed"
@@ -2689,8 +2675,7 @@ function StatusBadge({
         normalized === "approved" ||
         normalized === "packed" ||
         normalized === "shipped" ||
-        normalized === "outfordelivery" ||
-        normalized === "accepted"
+        normalized === "outfordelivery"
     ) {
         className =
             "bg-blue-50 text-blue-700";

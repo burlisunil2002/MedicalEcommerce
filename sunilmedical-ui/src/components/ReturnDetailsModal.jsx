@@ -1,5 +1,15 @@
 ﻿import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import {
+    X,
+    Landmark,
+    User,
+    CreditCard,
+    Building2,
+    MapPin,
+    Package,
+    RotateCcw
+} from "lucide-react";
+
 import { updateReturn } from "../services/returnService";
 
 export default function ReturnDetailsModal({
@@ -8,28 +18,49 @@ export default function ReturnDetailsModal({
     returnData,
     onSuccess
 }) {
-
     const [status, setStatus] = useState("");
     const [refundAmount, setRefundAmount] = useState("");
     const [remarks, setRemarks] = useState("");
     const [saving, setSaving] = useState(false);
 
-    useEffect(() => {
+    // Refund Bank Details
+    const [accountHolderName, setAccountHolderName] = useState("");
+    const [bankName, setBankName] = useState("");
+    const [accountNumber, setAccountNumber] = useState("");
+    const [ifscCode, setIfscCode] = useState("");
 
+    useEffect(() => {
         if (!returnData) return;
 
         setStatus(returnData.status || "Requested");
-        setRefundAmount(returnData.refundAmount ?? "");
+
+        setRefundAmount(
+            returnData.refundAmount ?? ""
+        );
+
         setRemarks("");
 
+        setAccountHolderName(
+            returnData.accountHolderName || ""
+        );
+
+        setBankName(
+            returnData.bankName || ""
+        );
+
+        setAccountNumber(
+            returnData.accountNumber || ""
+        );
+
+        setIfscCode(
+            returnData.ifscCode || ""
+        );
     }, [returnData]);
 
     if (!open || !returnData) return null;
 
     async function saveReturn() {
-
         try {
-
             setSaving(true);
 
             await updateReturn(
@@ -37,10 +68,23 @@ export default function ReturnDetailsModal({
                 {
                     status,
                     remarks,
+
                     refundAmount:
                         refundAmount === ""
                             ? null
-                            : Number(refundAmount)
+                            : Number(refundAmount),
+
+                    accountHolderName:
+                        accountHolderName.trim(),
+
+                    bankName:
+                        bankName.trim(),
+
+                    accountNumber:
+                        accountNumber.trim(),
+
+                    ifscCode:
+                        ifscCode.trim().toUpperCase()
                 }
             );
 
@@ -51,127 +95,172 @@ export default function ReturnDetailsModal({
             onClose();
 
         } catch (err) {
-
             console.error(err);
 
-            alert("Unable to update return.");
+            alert(
+                err?.response?.data?.message ||
+                "Unable to update return."
+            );
 
         } finally {
-
             setSaving(false);
-
         }
     }
 
+    const images = [
+        returnData.image1,
+        returnData.image2,
+        returnData.image3
+    ].filter(Boolean);
+
     return (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
 
-        <div className="fixed inset-0 z-50 bg-black/50">
+            <div className="absolute inset-0 flex items-center justify-center p-2 sm:p-4">
 
-            <div className="absolute inset-0 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[96vh] sm:h-[92vh] flex flex-col overflow-hidden">
 
-                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden">
+                    {/* =====================================================
+                        HEADER
+                    ====================================================== */}
+                    <div className="border-b bg-white px-4 sm:px-6 py-4 flex justify-between items-center flex-shrink-0">
 
-                    {/* Header */}
+                        <div className="flex items-center gap-3 min-w-0">
 
-                    <div className="border-b px-6 py-4 flex justify-between items-center flex-shrink-0">
+                            <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
 
-                        <div>
+                                <RotateCcw
+                                    size={21}
+                                    className="text-orange-600"
+                                />
 
-                            <h2 className="text-2xl font-bold text-gray-800">
+                            </div>
 
-                                Return Request Details
+                            <div className="min-w-0">
 
-                            </h2>
+                                <h2 className="text-lg sm:text-2xl font-bold text-gray-800 truncate">
+                                    Return Request Details
+                                </h2>
 
-                            <p className="text-sm text-gray-500 mt-1">
+                                <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                                    Return ID :
+                                    <span className="font-medium text-gray-700 ml-2">
+                                        #{returnData.returnId}
+                                    </span>
+                                </p>
 
-                                Return ID :
-                                <span className="font-medium text-gray-700 ml-2">
-                                    #{returnData.returnId}
-                                </span>
-
-                            </p>
+                            </div>
 
                         </div>
 
                         <button
+                            type="button"
                             onClick={onClose}
-                            className="h-10 w-10 rounded-full hover:bg-gray-100 transition flex items-center justify-center"
+                            disabled={saving}
+                            className="h-9 w-9 sm:h-10 sm:w-10 rounded-full hover:bg-gray-100 transition flex items-center justify-center flex-shrink-0 disabled:opacity-50"
                         >
                             <X size={22} />
                         </button>
 
                     </div>
 
-                    {/* Scrollable Body */}
 
-                        <div className="flex-1 overflow-y-auto p-6">
+                    {/* =====================================================
+                        SCROLLABLE BODY
+                    ====================================================== */}
+                    <div className="flex-1 overflow-y-auto p-3 sm:p-6">
 
-                        {/* Product & Customer */}
 
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                        {/* =================================================
+                            PRODUCT & CUSTOMER
+                        ================================================== */}
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 sm:gap-6">
 
-                            {/* Product Card */}
 
-                            <div className="bg-gray-50 border rounded-xl p-5">
+                            {/* PRODUCT CARD */}
+                            <div className="bg-gray-50 border rounded-xl p-4 sm:p-5">
 
-                                <h3 className="text-lg font-semibold text-gray-800 mb-5">
-                                    Product Details
-                                </h3>
+                                <div className="flex items-center gap-2 mb-5">
 
-                                <div className="flex flex-col md:flex-row gap-5">
-
-                                    <img
-                                        src={returnData.productImage}
-                                        alt={returnData.productName}
-                                        className="w-40 h-40 rounded-xl border object-cover bg-white"
+                                    <Package
+                                        size={20}
+                                        className="text-blue-600"
                                     />
 
-                                    <div className="flex-1 space-y-3">
+                                    <h3 className="text-base sm:text-lg font-semibold text-gray-800">
+                                        Product Details
+                                    </h3>
+
+                                </div>
+
+
+                                <div className="flex flex-col sm:flex-row gap-5">
+
+                                    {returnData.productImage ? (
+
+                                        <img
+                                            src={returnData.productImage}
+                                            alt={returnData.productName}
+                                            className="w-full sm:w-40 h-40 rounded-xl border object-cover bg-white"
+                                        />
+
+                                    ) : (
+
+                                        <div className="w-full sm:w-40 h-40 rounded-xl border bg-white flex items-center justify-center text-gray-400">
+                                            No Image
+                                        </div>
+
+                                    )}
+
+
+                                    <div className="flex-1 space-y-4">
 
                                         <div>
 
-                                            <p className="text-sm text-gray-500">
+                                            <p className="text-xs sm:text-sm text-gray-500">
                                                 Product
                                             </p>
 
-                                            <p className="font-semibold text-gray-800">
-                                                {returnData.productName}
+                                            <p className="font-semibold text-gray-800 break-words">
+                                                {returnData.productName || "-"}
                                             </p>
 
                                         </div>
 
+
                                         <div>
 
-                                            <p className="text-sm text-gray-500">
+                                            <p className="text-xs sm:text-sm text-gray-500">
                                                 Variant
                                             </p>
 
-                                            <p className="font-medium">
+                                            <p className="font-medium text-gray-800">
                                                 {returnData.variantName || "-"}
                                             </p>
 
                                         </div>
 
+
                                         <div>
 
-                                            <p className="text-sm text-gray-500">
+                                            <p className="text-xs sm:text-sm text-gray-500">
                                                 Quantity
                                             </p>
 
-                                            <p className="font-medium">
-                                                {returnData.quantity}
+                                            <p className="font-medium text-gray-800">
+                                                {returnData.quantity ?? "-"}
                                             </p>
 
                                         </div>
 
+
                                         <div>
 
-                                            <p className="text-sm text-gray-500">
+                                            <p className="text-xs sm:text-sm text-gray-500 mb-1">
                                                 Return Status
                                             </p>
 
-                                            <span className="inline-flex px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-medium">
+                                            <span className="inline-flex px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs sm:text-sm font-medium">
                                                 {status}
                                             </span>
 
@@ -183,73 +272,102 @@ export default function ReturnDetailsModal({
 
                             </div>
 
-                            {/* Customer Card */}
 
-                            <div className="bg-gray-50 border rounded-xl p-5">
+                            {/* CUSTOMER CARD */}
+                            <div className="bg-gray-50 border rounded-xl p-4 sm:p-5">
 
-                                <h3 className="text-lg font-semibold text-gray-800 mb-5">
-                                    Customer Details
-                                </h3>
+                                <div className="flex items-center gap-2 mb-5">
+
+                                    <User
+                                        size={20}
+                                        className="text-blue-600"
+                                    />
+
+                                    <h3 className="text-base sm:text-lg font-semibold text-gray-800">
+                                        Customer Details
+                                    </h3>
+
+                                </div>
+
 
                                 <div className="space-y-4">
 
                                     <div>
 
-                                        <p className="text-sm text-gray-500">
+                                        <p className="text-xs sm:text-sm text-gray-500">
                                             Customer Name
                                         </p>
 
                                         <p className="font-semibold text-gray-800">
-                                            {returnData.customerName}
+                                            {returnData.customerName || "-"}
                                         </p>
 
                                     </div>
 
+
                                     <div>
 
-                                        <p className="text-sm text-gray-500">
+                                        <p className="text-xs sm:text-sm text-gray-500">
                                             Mobile Number
                                         </p>
 
-                                        <p className="font-medium">
-                                            {returnData.mobileNumber}
+                                        <p className="font-medium text-gray-800">
+                                            {returnData.mobileNumber || "-"}
                                         </p>
 
                                     </div>
 
+
                                     <div>
 
-                                        <p className="text-sm text-gray-500 mb-2">
+                                        <p className="text-xs sm:text-sm text-gray-500 mb-2 flex items-center gap-1">
+                                            <MapPin size={15} />
                                             Delivery Address
                                         </p>
 
-                                        <div className="rounded-lg border bg-white p-4 leading-7 text-gray-700">
+                                        <div className="rounded-lg border bg-white p-3 sm:p-4 leading-7 text-gray-700 text-sm">
 
-                                            <div>
-                                                {returnData.address?.addressLine1}
-                                            </div>
+                                            {returnData.address?.addressLine1 && (
+                                                <div>
+                                                    {returnData.address.addressLine1}
+                                                </div>
+                                            )}
 
-                                            {returnData.address?.addressLine2 &&
+                                            {returnData.address?.addressLine2 && (
                                                 <div>
                                                     {returnData.address.addressLine2}
                                                 </div>
-                                            }
+                                            )}
 
-                                            {returnData.address?.landmark &&
+                                            {returnData.address?.landmark && (
                                                 <div>
                                                     Landmark : {returnData.address.landmark}
                                                 </div>
-                                            }
+                                            )}
 
-                                            <div>
-                                                {returnData.address?.city},
-                                                {" "}
-                                                {returnData.address?.state}
-                                            </div>
+                                            {(returnData.address?.city ||
+                                                returnData.address?.state) && (
+                                                    <div>
+                                                        {returnData.address?.city}
+                                                        {returnData.address?.city &&
+                                                            returnData.address?.state
+                                                            ? ", "
+                                                            : ""}
+                                                        {returnData.address?.state}
+                                                    </div>
+                                                )}
 
-                                            <div>
-                                                PIN : {returnData.address?.pincode}
-                                            </div>
+                                            {returnData.address?.pincode && (
+                                                <div>
+                                                    PIN : {returnData.address.pincode}
+                                                </div>
+                                            )}
+
+                                            {!returnData.address && (
+                                                <span className="text-gray-400">
+                                                    No address available
+                                                </span>
+                                            )}
 
                                         </div>
 
@@ -261,37 +379,121 @@ export default function ReturnDetailsModal({
 
                         </div>
 
-                        {/* Return Information */}
 
-                        <div className="mt-8 grid grid-cols-1 xl:grid-cols-2 gap-6">
+                        {/* =================================================
+                            REFUND BANK DETAILS
+                        ================================================== */}
+                        <div className="mt-6 sm:mt-8">
 
-                            {/* Return Reason */}
+                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 sm:p-6">
 
-                            <div className="bg-gray-50 border rounded-xl p-5">
+                                <div className="flex items-start gap-3 mb-5 sm:mb-6">
 
-                                <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                                    Return Reason
-                                </h3>
+                                    <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
 
-                                <div className="bg-white border rounded-lg p-4 min-h-[130px] text-gray-700 leading-7">
+                                        <Landmark
+                                            size={21}
+                                            className="text-blue-600"
+                                        />
 
-                                    {returnData.reason || "No reason provided."}
+                                    </div>
+
+                                    <div className="min-w-0">
+
+                                        <h3 className="text-base sm:text-lg font-semibold text-gray-800">
+                                            Refund Bank Details
+                                        </h3>
+
+                                        <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                                            Bank account provided by the customer for refund processing.
+                                        </p>
+
+                                    </div>
 
                                 </div>
 
-                            </div>
 
-                            {/* Customer Remarks */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
-                            <div className="bg-gray-50 border rounded-xl p-5">
 
-                                <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                                    Customer Remarks
-                                </h3>
+                                    {/* ACCOUNT HOLDER */}
+                                    <div className="rounded-xl border bg-white p-4">
 
-                                <div className="bg-white border rounded-lg p-4 min-h-[130px] text-gray-700 leading-7">
+                                        <div className="flex items-center gap-2 text-gray-500 mb-2">
 
-                                    {returnData.remarks || "No remarks available."}
+                                            <User size={16} />
+
+                                            <p className="text-xs font-semibold uppercase tracking-wide">
+                                                Account Holder
+                                            </p>
+
+                                        </div>
+
+                                        <p className="font-semibold text-gray-800 break-words">
+                                            {returnData.accountHolderName || "-"}
+                                        </p>
+
+                                    </div>
+
+
+                                    {/* BANK NAME */}
+                                    <div className="rounded-xl border bg-white p-4">
+
+                                        <div className="flex items-center gap-2 text-gray-500 mb-2">
+
+                                            <Building2 size={16} />
+
+                                            <p className="text-xs font-semibold uppercase tracking-wide">
+                                                Bank Name
+                                            </p>
+
+                                        </div>
+
+                                        <p className="font-semibold text-gray-800 break-words">
+                                            {returnData.bankName || "-"}
+                                        </p>
+
+                                    </div>
+
+
+                                    {/* ACCOUNT NUMBER */}
+                                    <div className="rounded-xl border bg-white p-4">
+
+                                        <div className="flex items-center gap-2 text-gray-500 mb-2">
+
+                                            <CreditCard size={16} />
+
+                                            <p className="text-xs font-semibold uppercase tracking-wide">
+                                                Account Number
+                                            </p>
+
+                                        </div>
+
+                                        <p className="font-semibold text-gray-800 break-all">
+                                            {returnData.accountNumber || "-"}
+                                        </p>
+
+                                    </div>
+
+
+                                    {/* IFSC */}
+                                    <div className="rounded-xl border bg-white p-4">
+
+                                        <div className="flex items-center gap-2 text-gray-500 mb-2">
+
+                                            <Landmark size={16} />
+
+                                            <p className="text-xs font-semibold uppercase tracking-wide">
+                                                IFSC Code
+                                            </p>
+
+                                        </div>
+
+                                        <p className="font-semibold text-gray-800 uppercase break-all">
+                                            {returnData.ifscCode || "-"}
+                                        </p>
+
+                                    </div>
 
                                 </div>
 
@@ -299,92 +501,122 @@ export default function ReturnDetailsModal({
 
                         </div>
 
-                        {/* Uploaded Images */}
 
-                        <div className="mt-8 bg-gray-50 border rounded-xl p-5">
+                        {/* =================================================
+                            RETURN INFORMATION
+                        ================================================== */}
+                        <div className="mt-6 sm:mt-8 grid grid-cols-1 xl:grid-cols-2 gap-5 sm:gap-6">
+
+
+                            {/* RETURN REASON */}
+                            <div className="bg-gray-50 border rounded-xl p-4 sm:p-5">
+
+                                <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">
+                                    Return Reason
+                                </h3>
+
+                                <div className="bg-white border rounded-lg p-4 min-h-[120px] text-gray-700 leading-7 text-sm sm:text-base">
+
+                                    {returnData.reason ||
+                                        "No reason provided."}
+
+                                </div>
+
+                            </div>
+
+
+                            {/* CUSTOMER REMARKS */}
+                            <div className="bg-gray-50 border rounded-xl p-4 sm:p-5">
+
+                                <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">
+                                    Customer Remarks
+                                </h3>
+
+                                <div className="bg-white border rounded-lg p-4 min-h-[120px] text-gray-700 leading-7 text-sm sm:text-base">
+
+                                    {returnData.remarks ||
+                                        "No remarks available."}
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        {/* =================================================
+                            UPLOADED IMAGES
+                        ================================================== */}
+                        <div className="mt-6 sm:mt-8 bg-gray-50 border rounded-xl p-4 sm:p-5">
 
                             <div className="flex items-center justify-between mb-5">
 
-                                <h3 className="text-lg font-semibold text-gray-800">
-
+                                <h3 className="text-base sm:text-lg font-semibold text-gray-800">
                                     Uploaded Images
-
                                 </h3>
 
-                                <span className="text-sm text-gray-500">
-
-                                    {[returnData.image1, returnData.image2, returnData.image3]
-                                        .filter(Boolean).length} Image(s)
-
+                                <span className="text-xs sm:text-sm text-gray-500">
+                                    {images.length} Image(s)
                                 </span>
 
                             </div>
 
-                            {[returnData.image1, returnData.image2, returnData.image3]
-                                .filter(Boolean).length > 0 ? (
 
-                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+                            {images.length > 0 ? (
 
-                                    {[
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5">
 
-                                        returnData.image1,
+                                    {images.map((img, index) => (
 
-                                        returnData.image2,
+                                        <a
+                                            key={index}
+                                            href={img}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="group"
+                                        >
 
-                                        returnData.image3
+                                            <div className="overflow-hidden rounded-xl border bg-white">
 
-                                    ]
-                                        .filter(Boolean)
-                                        .map((img, index) => (
+                                                <img
+                                                    src={img}
+                                                    alt={`Return ${index + 1}`}
+                                                    className="w-full h-32 sm:h-44 object-cover transition duration-300 group-hover:scale-105"
+                                                />
 
-                                            <a
-                                                key={index}
-                                                href={img}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="group"
-                                            >
+                                            </div>
 
-                                                <div className="overflow-hidden rounded-xl border bg-white">
+                                        </a>
 
-                                                    <img
-                                                        src={img}
-                                                        alt={`Return ${index + 1}`}
-                                                        className="w-full h-44 object-cover transition duration-300 group-hover:scale-105"
-                                                    />
-
-                                                </div>
-
-                                            </a>
-
-                                        ))}
+                                    ))}
 
                                 </div>
 
                             ) : (
 
-                                <div className="rounded-lg border border-dashed p-10 text-center text-gray-500">
-
+                                <div className="rounded-lg border border-dashed p-8 sm:p-10 text-center text-sm sm:text-base text-gray-500">
                                     No images uploaded by the customer.
-
                                 </div>
 
                             )}
 
                         </div>
 
-                        {/* Action Section */}
 
-                        <div className="mt-8 bg-gray-50 border rounded-xl p-6">
+                        {/* =================================================
+                            RETURN ACTION
+                        ================================================== */}
+                        <div className="mt-6 sm:mt-8 bg-gray-50 border rounded-xl p-4 sm:p-6">
 
-                            <h3 className="text-lg font-semibold text-gray-800 mb-6">
+                            <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-5 sm:mb-6">
                                 Return Action
                             </h3>
 
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-                                {/* Return Status */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
 
+
+                                {/* STATUS */}
                                 <div>
 
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -393,22 +625,46 @@ export default function ReturnDetailsModal({
 
                                     <select
                                         value={status}
-                                        onChange={(e) => setStatus(e.target.value)}
+                                        onChange={(e) =>
+                                            setStatus(e.target.value)
+                                        }
                                         className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                                     >
-                                        <option value="Requested">Requested</option>
-                                        <option value="Approved">Approved</option>
-                                        <option value="Rejected">Rejected</option>
-                                        <option value="PickupScheduled">Pickup Scheduled</option>
-                                        <option value="PickedUp">Picked Up</option>
-                                        <option value="RefundInitiated">Refund Initiated</option>
-                                        <option value="RefundCompleted">Refund Completed</option>
+
+                                        <option value="Requested">
+                                            Requested
+                                        </option>
+
+                                        <option value="Approved">
+                                            Approved
+                                        </option>
+
+                                        <option value="Rejected">
+                                            Rejected
+                                        </option>
+
+                                        <option value="PickupScheduled">
+                                            Pickup Scheduled
+                                        </option>
+
+                                        <option value="PickedUp">
+                                            Picked Up
+                                        </option>
+
+                                        <option value="RefundInitiated">
+                                            Refund Initiated
+                                        </option>
+
+                                        <option value="RefundCompleted">
+                                            Refund Completed
+                                        </option>
+
                                     </select>
 
                                 </div>
 
-                                {/* Refund Amount */}
 
+                                {/* REFUND AMOUNT */}
                                 <div>
 
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -426,7 +682,11 @@ export default function ReturnDetailsModal({
                                             min="0"
                                             step="0.01"
                                             value={refundAmount}
-                                            onChange={(e) => setRefundAmount(e.target.value)}
+                                            onChange={(e) =>
+                                                setRefundAmount(
+                                                    e.target.value
+                                                )
+                                            }
                                             placeholder="Enter refund amount"
                                             className="w-full rounded-xl border border-gray-300 pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                                         />
@@ -437,18 +697,20 @@ export default function ReturnDetailsModal({
 
                             </div>
 
-                            {/* Admin Remarks */}
 
-                            <div className="mt-6">
+                            {/* ADMIN REMARKS */}
+                            <div className="mt-5 sm:mt-6">
 
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                                     Admin / Seller Remarks
                                 </label>
 
                                 <textarea
-                                    rows={5}
+                                    rows={4}
                                     value={remarks}
-                                    onChange={(e) => setRemarks(e.target.value)}
+                                    onChange={(e) =>
+                                        setRemarks(e.target.value)
+                                    }
                                     placeholder="Enter remarks..."
                                     className="w-full rounded-xl border border-gray-300 p-4 resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                                 />
@@ -460,66 +722,66 @@ export default function ReturnDetailsModal({
                     </div>
 
 
-                        {/* Footer */}
+                    {/* =====================================================
+                        FOOTER
+                    ====================================================== */}
+                    <div className="border-t bg-white px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-shrink-0">
 
-                            <div className="border-t bg-white px-6 py-4 flex justify-end gap-3 flex-shrink-0">
+                        <div className="text-xs sm:text-sm text-gray-500 text-center sm:text-left">
+                            Review the return details before updating the status.
+                        </div>
 
-                            <div className="text-sm text-gray-500">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
 
-                                Review the return details before updating the status.
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                disabled={saving}
+                                className="w-full sm:w-auto px-6 py-3 rounded-xl border border-gray-300 bg-white hover:bg-gray-100 transition font-medium disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
 
-                            </div>
+                            <button
+                                type="button"
+                                onClick={saveReturn}
+                                disabled={saving}
+                                className="w-full sm:w-auto px-8 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
 
-                        <div className="flex items-center gap-3">
-                                <button
-                                    type="button"
-                                    onClick={onClose}
-                                    disabled={saving}
-                                    className="flex-1 sm:flex-none px-6 py-3 rounded-xl border border-gray-300 bg-white hover:bg-gray-100 transition font-medium disabled:opacity-50"
-                                >
-                                    Cancel
-                                </button>
+                                {saving && (
 
-                                <button
-                                    type="button"
-                                    onClick={saveReturn}
-                                    disabled={saving}
-                                    className="flex-1 sm:flex-none px-8 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                >
+                                    <svg
+                                        className="animate-spin h-5 w-5"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                    >
 
-                                    {saving && (
+                                        <circle
+                                            className="opacity-25"
+                                            cx="12"
+                                            cy="12"
+                                            r="10"
+                                            stroke="currentColor"
+                                            strokeWidth="4"
+                                        />
 
-                                        <svg
-                                            className="animate-spin h-5 w-5"
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            fill="none"
-                                            viewBox="0 0 24 24"
-                                        >
+                                        <path
+                                            className="opacity-75"
+                                            fill="currentColor"
+                                            d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"
+                                        />
 
-                                            <circle
-                                                className="opacity-25"
-                                                cx="12"
-                                                cy="12"
-                                                r="10"
-                                                stroke="currentColor"
-                                                strokeWidth="4"
-                                            />
+                                    </svg>
 
-                                            <path
-                                                className="opacity-75"
-                                                fill="currentColor"
-                                                d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"
-                                            />
+                                )}
 
-                                        </svg>
+                                {saving
+                                    ? "Saving..."
+                                    : "Save Changes"}
 
-                                    )}
-
-                                    {saving ? "Saving..." : "Save Changes"}
-
-                                </button>
-
-                            </div>
+                            </button>
 
                         </div>
 
@@ -529,5 +791,6 @@ export default function ReturnDetailsModal({
 
             </div>
 
-            );
+        </div>
+    );
 }

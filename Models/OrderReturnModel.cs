@@ -104,11 +104,27 @@
 
             public string? RefundTransactionId { get; set; }
 
-            //--------------------------------------------------
-            // Audit
-            //--------------------------------------------------
+        //--------------------------------------------------
+        // Refund Bank Details
+        //--------------------------------------------------
 
-            public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        [MaxLength(200)]
+        public string? AccountHolderName { get; set; }
+
+        [MaxLength(200)]
+        public string? BankName { get; set; }
+
+        [MaxLength(50)]
+        public string? AccountNumber { get; set; }
+
+        [MaxLength(20)]
+        public string? IFSCCode { get; set; }
+
+        //--------------------------------------------------
+        // Audit
+        //--------------------------------------------------
+
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
             public DateTime? UpdatedAt { get; set; }
 

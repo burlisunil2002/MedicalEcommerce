@@ -1448,9 +1448,9 @@ namespace VivekMedicalProducts.Controllers
         [Authorize]
         [HttpPost("request-return/{orderItemId}")]
         public async Task<IActionResult> RequestReturn(
-            int orderItemId,
-            [FromForm] RequestReturnDto dto,
-            CancellationToken cancellationToken)
+     int orderItemId,
+     [FromForm] RequestReturnDto dto,
+     CancellationToken cancellationToken)
         {
             dto.OrderItemId = orderItemId;
 
@@ -1458,106 +1458,292 @@ namespace VivekMedicalProducts.Controllers
 
             if (string.IsNullOrWhiteSpace(userId))
             {
-                return Unauthorized(new { success = false, message = "Please login first." });
+                return Unauthorized(new
+                {
+                    success = false,
+                    message = "Please login first."
+                });
             }
 
             if (dto.OrderItemId <= 0)
             {
-                return BadRequest(new { success = false, message = "Invalid order item." });
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Invalid order item."
+                });
             }
 
             try
             {
+                // =========================================================
+                // Validate Refund Bank Details
+                // =========================================================
+
+                if (string.IsNullOrWhiteSpace(dto.AccountHolderName))
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Account holder name is required."
+                    });
+                }
+
+                if (string.IsNullOrWhiteSpace(dto.BankName))
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Bank name is required."
+                    });
+                }
+
+                if (string.IsNullOrWhiteSpace(dto.AccountNumber))
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Account number is required."
+                    });
+                }
+
+                if (string.IsNullOrWhiteSpace(dto.IFSCCode))
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "IFSC code is required."
+                    });
+                }
+
+                // =========================================================
+                // Get Order Item
+                // =========================================================
+
                 var orderItem = await _context.OrderItems
                     .Include(x => x.Order)
-                    .FirstOrDefaultAsync(x =>
-                        x.OrderItemId == dto.OrderItemId &&
-                        x.Order.UserId == userId,
-                        cancellationToken);
+                    .FirstOrDefaultAsync(
+                        x =>
+                            x.OrderItemId == dto.OrderItemId &&
+                            x.Order.UserId == userId,
+                        cancellationToken
+                    );
 
                 if (orderItem == null)
                 {
-                    return NotFound(new { success = false, message = "Order item not found." });
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "Order item not found."
+                    });
                 }
+
+                // =========================================================
+                // Validate Order Item Status
+                // =========================================================
 
                 if (orderItem.OrderItemStatus != OrderItemStatuses.Delivered)
                 {
-                    return BadRequest(new { success = false, message = "Only delivered items can be returned." });
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Only delivered items can be returned."
+                    });
                 }
+
+                // =========================================================
+                // Validate Return Eligibility
+                // =========================================================
 
                 if (!orderItem.IsReturnEligible)
                 {
-                    return BadRequest(new { success = false, message = "This item is not eligible for return." });
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "This item is not eligible for return."
+                    });
                 }
 
                 if (!orderItem.ReturnEligibleTill.HasValue)
                 {
-                    return BadRequest(new { success = false, message = "Return window information is unavailable." });
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Return window information is unavailable."
+                    });
                 }
 
                 if (DateTime.UtcNow > orderItem.ReturnEligibleTill.Value)
                 {
-                    return BadRequest(new { success = false, message = "Return period has expired." });
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Return period has expired."
+                    });
                 }
+
+                // =========================================================
+                // Check Existing Return Status
+                // =========================================================
 
                 if (!string.IsNullOrWhiteSpace(orderItem.ReturnStatus) &&
                     orderItem.ReturnStatus != ReturnStatuses.None)
                 {
-                    return BadRequest(new { success = false, message = "A return request has already been submitted for this item." });
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "A return request has already been submitted for this item."
+                    });
                 }
 
+                // =========================================================
+                // Check Existing Return Request
+                // =========================================================
+
                 bool alreadyExists = await _context.OrderReturns
-                    .AnyAsync(x =>
-                        x.OrderItemId == dto.OrderItemId &&
-                        x.Status != ReturnStatuses.Rejected,
-                        cancellationToken);
+                    .AnyAsync(
+                        x =>
+                            x.OrderItemId == dto.OrderItemId &&
+                            x.Status != ReturnStatuses.Rejected,
+                        cancellationToken
+                    );
 
                 if (alreadyExists)
                 {
-                    return BadRequest(new { success = false, message = "A return request already exists for this item." });
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "A return request already exists for this item."
+                    });
                 }
 
-                string? image1 = dto.Image1 != null ? await _fileStorageService.UploadAsync(dto.Image1, "ReturnImages") : null;
-                string? image2 = dto.Image2 != null ? await _fileStorageService.UploadAsync(dto.Image2, "ReturnImages") : null;
-                string? image3 = dto.Image3 != null ? await _fileStorageService.UploadAsync(dto.Image3, "ReturnImages") : null;
+                // =========================================================
+                // Upload Images
+                // =========================================================
+
+                string? image1 = dto.Image1 != null
+                    ? await _fileStorageService.UploadAsync(
+                        dto.Image1,
+                        "ReturnImages")
+                    : null;
+
+                string? image2 = dto.Image2 != null
+                    ? await _fileStorageService.UploadAsync(
+                        dto.Image2,
+                        "ReturnImages")
+                    : null;
+
+                string? image3 = dto.Image3 != null
+                    ? await _fileStorageService.UploadAsync(
+                        dto.Image3,
+                        "ReturnImages")
+                    : null;
+
+                // =========================================================
+                // Create Return Request
+                // =========================================================
 
                 var returnRequest = new OrderReturnModel
                 {
                     OrderId = orderItem.OrderId,
+
                     OrderItemId = orderItem.OrderItemId,
+
                     UserId = userId,
-                    Reason = dto.Reason,
-                    Remarks = dto.Remarks,
+
+                    // Return Details
+                    Reason = dto.Reason?.Trim() ?? string.Empty,
+                    Remarks = dto.Remarks?.Trim(),
+
+                    // Images
                     Image1 = image1,
                     Image2 = image2,
                     Image3 = image3,
+
+                    // Status
                     Status = ReturnStatuses.Requested,
-                    RequestedDate = DateTime.UtcNow
+
+                    // =====================================================
+                    // Refund Bank Details
+                    // =====================================================
+
+                    AccountHolderName = dto.AccountHolderName.Trim(),
+
+                    BankName = dto.BankName.Trim(),
+
+                    AccountNumber = dto.AccountNumber.Trim(),
+
+                    IFSCCode = dto.IFSCCode.Trim().ToUpper(),
+
+                    // Timeline
+                    RequestedDate = DateTime.UtcNow,
+
+                    // Audit
+                    CreatedAt = DateTime.UtcNow
                 };
+
+                // =========================================================
+                // Add Return
+                // =========================================================
 
                 _context.OrderReturns.Add(returnRequest);
 
+                // =========================================================
+                // Update Order Item
+                // =========================================================
+
                 orderItem.ReturnStatus = ReturnStatuses.Requested;
+
                 orderItem.ReturnReason = dto.Reason;
+
                 orderItem.ReturnRemarks = dto.Remarks;
+
                 orderItem.ReturnRequestedDate = DateTime.UtcNow;
+
                 orderItem.UpdatedAt = DateTime.UtcNow;
+
                 orderItem.ItemOrderModifiedDate = DateTime.UtcNow;
 
+                // =========================================================
+                // Save
+                // =========================================================
+
                 await _context.SaveChangesAsync(cancellationToken);
+
+                // =========================================================
+                // Response
+                // =========================================================
 
                 return Ok(new
                 {
                     success = true,
+
                     message = "Return request submitted successfully.",
+
                     returnId = returnRequest.ReturnId,
+
                     status = returnRequest.Status,
-                    requestedDate = returnRequest.RequestedDate
+
+                    requestedDate = returnRequest.RequestedDate,
+
+                    // Return Bank Details
+                    accountHolderName = returnRequest.AccountHolderName,
+
+                    bankName = returnRequest.BankName,
+
+                    accountNumber = returnRequest.AccountNumber,
+
+                    ifscCode = returnRequest.IFSCCode
                 });
             }
             catch (Exception ex)
             {
-                return ErrorResponse(ex, "Failed to submit return request.", StatusCodes.Status500InternalServerError, userId);
+                return ErrorResponse(
+                    ex,
+                    "Failed to submit return request.",
+                    StatusCodes.Status500InternalServerError,
+                    userId
+                );
             }
         }
 

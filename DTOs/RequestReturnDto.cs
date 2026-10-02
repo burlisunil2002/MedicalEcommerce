@@ -15,5 +15,21 @@ namespace VivekMedicalProducts.DTOs
         public IFormFile? Image2 { get; set; }
 
         public IFormFile? Image3 { get; set; }
+
+        [Required]
+        [MaxLength(200)]
+        public string AccountHolderName { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(200)]
+        public string BankName { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(50)]
+        public string AccountNumber { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(20)]
+        public string IFSCCode { get; set; } = string.Empty;
     }
 }
