@@ -70,6 +70,8 @@ import { WishlistProvider } from "./context/WishlistContext";
 
 import { Toaster } from "react-hot-toast";
 
+import NotFoundPage from "./pages/NotFoundPage";
+
 
 function App() {
 
@@ -435,23 +437,7 @@ function App() {
 
                     <Route
                         path="*"
-                        element={
-                            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-
-                                <div className="text-center">
-
-                                    <h1 className="text-5xl font-bold text-gray-800">
-                                        404
-                                    </h1>
-
-                                    <p className="mt-3 text-gray-500">
-                                        Page Not Found
-                                    </p>
-
-                                </div>
-
-                            </div>
-                        }
+                        element={<NotFoundPage />}
                     />
 
                 </Routes>

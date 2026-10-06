@@ -1,240 +1,372 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <UserSecretsId>25979922-5938-4c3b-96b3-1a8f0567100d</UserSecretsId>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<UserSecretsId>25979922-5938-4c3b-96b3-1a8f0567100d</UserSecretsId>
+	</PropertyGroup>
 
 
-  <!-- =========================================================
-       EXCLUDE REACT BUILD FILES FROM .NET COMPILATION
+	<!-- =========================================================
+       EXCLUDE REACT BUILD OUTPUT FROM .NET COMPILATION
        ========================================================= -->
 
-  <ItemGroup>
-    <Compile Remove="sunilmedical-ui\build\**" />
-    <Compile Remove="wwwroot\build\**" />
+	<ItemGroup>
 
-    <Content Remove="sunilmedical-ui\build\**" />
-    <Content Remove="wwwroot\build\**" />
+		<Compile Remove="sunilmedical-ui\build\**\*" />
+		<Compile Remove="wwwroot\build\**\*" />
 
-    <EmbeddedResource Remove="sunilmedical-ui\build\**" />
-    <EmbeddedResource Remove="wwwroot\build\**" />
+		<Content Remove="sunilmedical-ui\build\**\*" />
+		<Content Remove="wwwroot\build\**\*" />
 
-    <None Remove="sunilmedical-ui\build\**" />
-    <None Remove="wwwroot\build\**" />
-  </ItemGroup>
+		<EmbeddedResource Remove="sunilmedical-ui\build\**\*" />
+		<EmbeddedResource Remove="wwwroot\build\**\*" />
+
+		<None Remove="sunilmedical-ui\build\**\*" />
+		<None Remove="wwwroot\build\**\*" />
+
+	</ItemGroup>
 
 
-  <!-- =========================================================
+	<!-- =========================================================
        EXCLUDE OLD / DUPLICATE DTO
        ========================================================= -->
 
-  <ItemGroup>
-    <Compile Remove="DTOs\UpdateOrderItemStatusDTO.cs" />
-    <None Remove="DTOs\UpdateOrderItemStatusDTO.cs" />
-  </ItemGroup>
+	<ItemGroup>
+
+		<Compile Remove="DTOs\UpdateOrderItemStatusDTO.cs" />
+
+		<None Remove="DTOs\UpdateOrderItemStatusDTO.cs" />
+
+	</ItemGroup>
 
 
-  <!-- =========================================================
+	<!-- =========================================================
        TEMP / BACKUP FILES TO IGNORE
        ========================================================= -->
 
-  <ItemGroup>
-    <None Remove="sunilmedical-ui\src\components\productDetails\fobqzzvc.kad~" />
-    <None Remove="sunilmedical-ui\src\components\productDetails\kj3ac3bv.s0v~" />
-  </ItemGroup>
-
 	<ItemGroup>
-		<!-- =====================================================
-         EXCLUDE REACT SOURCE FILES FROM .NET COMPILATION
-         ===================================================== -->
 
-		<Compile Remove="sunilmedical-ui\src\**\*" />
-		<EmbeddedResource Remove="sunilmedical-ui\src\**\*" />
+		<None Remove="sunilmedical-ui\src\components\productDetails\fobqzzvc.kad~" />
+
+		<None Remove="sunilmedical-ui\src\components\productDetails\kj3ac3bv.s0v~" />
+
 	</ItemGroup>
 
 
-  <!-- =========================================================
+	<!-- =========================================================
+       IMPORTANT:
+       EXCLUDE ALL REACT SOURCE FILES FROM C# COMPILATION
+       
+       React files:
+       .js
+       .jsx
+       .ts
+       .tsx
+       
+       MUST be compiled by npm, NOT by MSBuild/C#.
+       ========================================================= -->
+
+	<ItemGroup>
+
+		<Compile Remove="sunilmedical-ui\src\**\*" />
+
+		<EmbeddedResource Remove="sunilmedical-ui\src\**\*" />
+
+		<Compile Remove="sunilmedical-ui\src\**\*.js" />
+
+		<Compile Remove="sunilmedical-ui\src\**\*.jsx" />
+
+		<Compile Remove="sunilmedical-ui\src\**\*.ts" />
+
+		<Compile Remove="sunilmedical-ui\src\**\*.tsx" />
+
+	</ItemGroup>
+
+
+	<!-- =========================================================
        STATIC REACT ASSETS
        ========================================================= -->
 
-  <ItemGroup>
+	<ItemGroup>
 
-    <Content Include="sunilmedical-ui\public\images\bannerMRI.png">
-      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </Content>
+		<Content Include="sunilmedical-ui\public\images\bannerMRI.png">
 
-    <Content Include="sunilmedical-ui\public\images\MadeInIndiaBanner.png">
-      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </Content>
+			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
 
-    <Content Include="sunilmedical-ui\public\images\offerbanner.png">
-      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </Content>
+			<CopyToPublishDirectory>
+				PreserveNewest
+			</CopyToPublishDirectory>
 
-    <Content Include="sunilmedical-ui\public\sunillogo.png">
-      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </Content>
-
-  </ItemGroup>
+		</Content>
 
 
-  <!-- =========================================================
+		<Content Include="sunilmedical-ui\public\images\MadeInIndiaBanner.png">
+
+			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+
+			<CopyToPublishDirectory>
+				PreserveNewest
+			</CopyToPublishDirectory>
+
+		</Content>
+
+
+		<Content Include="sunilmedical-ui\public\images\offerbanner.png">
+
+			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+
+			<CopyToPublishDirectory>
+				PreserveNewest
+			</CopyToPublishDirectory>
+
+		</Content>
+
+
+		<Content Include="sunilmedical-ui\public\sunillogo.png">
+
+			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+
+			<CopyToPublishDirectory>
+				PreserveNewest
+			</CopyToPublishDirectory>
+
+		</Content>
+
+	</ItemGroup>
+
+
+	<!-- =========================================================
        NUGET PACKAGES
-       .NET 8 COMPATIBLE VERSIONS
+       .NET 8
        ========================================================= -->
 
-  <ItemGroup>
+	<ItemGroup>
 
-    <PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />
+		<!-- Security -->
 
-    <PackageReference Include="ClosedXML" Version="0.105.0" />
-
-    <PackageReference Include="CloudinaryDotNet" Version="1.28.0" />
-
-
-    <!-- ASP.NET CORE IDENTITY -->
-
-    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.4" />
-
-    <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="8.0.0" />
+		<PackageReference
+			Include="BCrypt.Net-Next"
+			Version="4.1.0" />
 
 
-    <!-- ENTITY FRAMEWORK CORE -->
+		<!-- Excel -->
 
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.4" />
-
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.4">
-
-      <PrivateAssets>all</PrivateAssets>
-
-      <IncludeAssets>
-        runtime;
-        build;
-        native;
-        contentfiles;
-        analyzers;
-        buildtransitive
-      </IncludeAssets>
-
-    </PackageReference>
-
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.4" />
-
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.4">
-
-      <PrivateAssets>all</PrivateAssets>
-
-      <IncludeAssets>
-        runtime;
-        build;
-        native;
-        contentfiles;
-        analyzers;
-        buildtransitive
-      </IncludeAssets>
-
-    </PackageReference>
+		<PackageReference
+			Include="ClosedXML"
+			Version="0.105.0" />
 
 
-    <!-- HTTP -->
+		<!-- Cloud Storage -->
 
-    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.4" />
-
-
-    <!-- JSON -->
-
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+		<PackageReference
+			Include="CloudinaryDotNet"
+			Version="1.28.0" />
 
 
-    <!-- POSTGRESQL -->
+		<!-- =====================================================
+         ASP.NET CORE IDENTITY
+         ===================================================== -->
 
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.4" />
+		<PackageReference
+			Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore"
+			Version="8.0.4" />
 
-
-    <!-- RAZORPAY -->
-
-    <PackageReference Include="Razorpay" Version="3.3.2" />
-
-
-    <!-- PDF -->
-
-    <PackageReference Include="Rotativa.AspNetCore" Version="1.4.0" />
+		<PackageReference
+			Include="Microsoft.AspNetCore.SpaServices.Extensions"
+			Version="8.0.0" />
 
 
-    <!-- EMAIL -->
+		<!-- =====================================================
+         ENTITY FRAMEWORK CORE
+         ===================================================== -->
 
-    <PackageReference Include="SendGrid" Version="9.29.3" />
+		<PackageReference
+			Include="Microsoft.EntityFrameworkCore"
+			Version="8.0.4" />
+
+		<PackageReference
+			Include="Microsoft.EntityFrameworkCore.Design"
+			Version="8.0.4">
+
+			<PrivateAssets>
+				all
+			</PrivateAssets>
+
+			<IncludeAssets>
+				runtime;
+				build;
+				native;
+				contentfiles;
+				analyzers;
+				buildtransitive
+			</IncludeAssets>
+
+		</PackageReference>
 
 
-    <!-- SMS -->
+		<!-- SQL Server -->
 
-    <PackageReference Include="Twilio" Version="7.14.9" />
+		<PackageReference
+			Include="Microsoft.EntityFrameworkCore.SqlServer"
+			Version="8.0.4" />
 
-  </ItemGroup>
+
+		<!-- EF Tools -->
+
+		<PackageReference
+			Include="Microsoft.EntityFrameworkCore.Tools"
+			Version="8.0.4">
+
+			<PrivateAssets>
+				all
+			</PrivateAssets>
+
+			<IncludeAssets>
+				runtime;
+				build;
+				native;
+				contentfiles;
+				analyzers;
+				buildtransitive
+			</IncludeAssets>
+
+		</PackageReference>
 
 
-  <!-- =========================================================
+		<!-- =====================================================
+         HTTP
+         ===================================================== -->
+
+		<PackageReference
+			Include="Microsoft.Extensions.Http"
+			Version="8.0.4" />
+
+
+		<!-- =====================================================
+         JSON
+         ===================================================== -->
+
+		<PackageReference
+			Include="Newtonsoft.Json"
+			Version="13.0.4" />
+
+
+		<!-- =====================================================
+         POSTGRESQL
+         ===================================================== -->
+
+		<PackageReference
+			Include="Npgsql.EntityFrameworkCore.PostgreSQL"
+			Version="8.0.4" />
+
+
+		<!-- =====================================================
+         RAZORPAY
+         ===================================================== -->
+
+		<PackageReference
+			Include="Razorpay"
+			Version="3.3.2" />
+
+
+		<!-- =====================================================
+         PDF
+         ===================================================== -->
+
+		<PackageReference
+			Include="Rotativa.AspNetCore"
+			Version="1.4.0" />
+
+
+		<!-- =====================================================
+         EMAIL
+         ===================================================== -->
+
+		<PackageReference
+			Include="SendGrid"
+			Version="9.29.3" />
+
+
+		<!-- =====================================================
+         SMS
+         ===================================================== -->
+
+		<PackageReference
+			Include="Twilio"
+			Version="7.14.9" />
+
+	</ItemGroup>
+
+
+	<!-- =========================================================
        FOLDERS
        ========================================================= -->
 
-  <ItemGroup>
-
-    <Folder Include="Migrations\" />
-
-    <Folder Include="Views\Cart\" />
-
-    <Folder Include="Views\Checkout\" />
-
-    <Folder Include="wwwroot\quotations\" />
-
-  </ItemGroup>
-
-
-  <!-- =========================================================
-       BUILD REACT APPLICATION BEFORE .NET BUILD
-       ========================================================= -->
-
-	 <Target Name = "PublishReact" BeforeTargets = "Publish" >
-
-	<Message Text = "========== Building React Application ==========" Importance = "high" />
-
-	<!--Install dependencies-->
-	<Exec
-      WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
-      Command = "npm ci"
-      Condition = "Exists('$(MSBuildProjectDirectory)\sunilmedical-ui\package-lock.json')" />
-
-	<Exec
-      WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
-      Command = "npm install"
-      Condition = "!Exists('$(MSBuildProjectDirectory)\sunilmedical-ui\package-lock.json')" />
-
-	<!--Build React-->
-	<Exec
-      WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
-      Command = "npm run build" />
-
-	<!--Create publish React folder -->
-	<MakeDir Directories="$(PublishDir)wwwroot\react" />
-
-	<!-- Collect React build files -->
 	<ItemGroup>
-		<ReactBuildFiles Include="$(MSBuildProjectDirectory)\sunilmedical-ui\build\**\*" />
+
+		<Folder Include="Migrations\" />
+
+		<Folder Include="Views\Cart\" />
+
+		<Folder Include="Views\Checkout\" />
+
+		<Folder Include="wwwroot\quotations\" />
+
 	</ItemGroup>
 
-	<!-- Copy React build into publish folder -->
-	<Copy
-		SourceFiles="@(ReactBuildFiles)"
-		DestinationFiles="@(ReactBuildFiles->'$(PublishDir)wwwroot\react\%(RecursiveDir)%(Filename)%(Extension)')"
-		SkipUnchangedFiles="true" />
+
+	<!-- =========================================================
+       BUILD REACT APPLICATION BEFORE .NET BUILD
+
+       Flow:
+
+       sunilmedical-ui
+             ↓
+       npm run build
+             ↓
+       sunilmedical-ui\build
+             ↓
+       wwwroot\react
+             ↓
+       ASP.NET Core
+       ========================================================= -->
+
+	<Target Name = "PublishReact" BeforeTargets = "Publish" >
+
+		<Message Text = "========== Building React Application ==========" Importance = "high" />
+
+		<!--Install dependencies-->
+		<Exec
+		  WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
+		  Command = "npm ci"
+		  Condition = "Exists('$(MSBuildProjectDirectory)\sunilmedical-ui\package-lock.json')" />
+
+		<Exec
+		  WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
+		  Command = "npm install"
+		  Condition = "!Exists('$(MSBuildProjectDirectory)\sunilmedical-ui\package-lock.json')" />
+
+		<!--Build React-->
+		<Exec
+		  WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
+		  Command = "npm run build" />
+
+		<!--Create publish React folder -->
+		<MakeDir Directories="$(PublishDir)wwwroot\react" />
+
+		<!-- Collect React build files -->
+		<ItemGroup>
+			<ReactBuildFiles Include="$(MSBuildProjectDirectory)\sunilmedical-ui\build\**\*" />
+		</ItemGroup>
+
+		<!-- Copy React build into publish folder -->
+		<Copy
+			SourceFiles="@(ReactBuildFiles)"
+			DestinationFiles="@(ReactBuildFiles->'$(PublishDir)wwwroot\react\%(RecursiveDir)%(Filename)%(Extension)')"
+			SkipUnchangedFiles="true" />
 
 	</Target>
-
+	
 </Project>
