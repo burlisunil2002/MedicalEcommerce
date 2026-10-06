@@ -493,7 +493,7 @@ const addHeader = (doc, order) => {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(17);
     doc.text(
-        "SUNIL MEDICAL PRODUCTS PVT LTD",
+        "JEDE MEDTECH INDIA PRIVATE LIMITED",
         14,
         18
     );
@@ -502,19 +502,19 @@ const addHeader = (doc, order) => {
     doc.setFontSize(8.5);
 
     doc.text(
-        "GSTIN: 37ABCDE1234F1Z5",
+        "GSTIN: 37AKLPA6711H1ZA",
         14,
         24
     );
 
     doc.text(
-        "Visakhapatnam, Andhra Pradesh, India",
+        "480/2, AMTZ CAMPUS, Pragathi Maiden, Visakhapatnam Steel Plant, Pedagantyada, Visakhapatnam, Andhra Pradesh, India",
         14,
         29
     );
 
     doc.text(
-        "Phone: 9014060858",
+        "Phone: 6301427306, 9014060858",
         14,
         34
     );

@@ -211,7 +211,7 @@ export default function InvoicePage() {
 
                         <img
                             src={`${window.location.origin}/images/sunillogo.png`}
-                            alt="Sunil Medical Products"
+                            alt="THE MAKE IN INDIA Medical Products"
                             style={{
                                 width: "220px",
                                 height: "auto"

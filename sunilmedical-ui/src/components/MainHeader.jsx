@@ -273,11 +273,11 @@ export default function MainHeader() {
                             sm:w-[125px]
                             lg:w-[145px]
                         "
-                        aria-label="Sunil Medical Products Home"
+                        aria-label="THE MAKE IN INDIA Medical Products Home"
                     >
                         <img
                             src="/images/TheMakeInIndiaLogo.png"
-                            alt="Sunil Medical Products"
+                            alt="THE MAKE IN INDIA Medical Products"
                             className="
                                 block
                                 h-auto

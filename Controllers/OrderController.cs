@@ -2363,19 +2363,19 @@ namespace VivekMedicalProducts.Controllers
 
                 CompanyName =
                     _config["Company:Name"]
-                    ?? "Sunil Medical Products Pvt Ltd",
+                    ?? "JEDE MEDTECH INDIA PRIVATE LIMITED",
 
                 CompanyGST =
                     _config["Company:GST"]
-                    ?? "37ABCDE1234F1Z5",
+                    ?? "37AKLPA6711H1ZA",
 
                 CompanyAddress =
                     _config["Company:Address"]
-                    ?? "Visakhapatnam, Andhra Pradesh, India",
+                    ?? "480/2, AMTZ CAMPUS, Pragathi Maiden, Visakhapatnam Steel Plant, Pedagantyada, Visakhapatnam, Andhra Pradesh, India",
 
                 CompanyPhone =
                     _config["Company:Phone"]
-                    ?? "9014060858",
+                    ?? "6301427306, 9014060858",
 
 
                 // --------------------------------------------------------

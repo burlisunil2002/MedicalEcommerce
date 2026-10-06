@@ -42,7 +42,7 @@ namespace VivekMedicalProducts.Templates
 
             var sb = new StringBuilder();
 
-            sb.AppendLine("Sunil Medical Products");
+            sb.AppendLine("JEDE MEDTECH Private Limited");
             sb.AppendLine($"Hi {order.UserAddress?.FullName},");
             sb.AppendLine();
             sb.AppendLine(statusMessage);
@@ -50,9 +50,9 @@ namespace VivekMedicalProducts.Templates
             sb.AppendLine($"Order No : {order.OrderNumber}");
             sb.AppendLine($"Amount   : Rs. {order.GrandTotal:N2}");
             sb.AppendLine();
-            sb.AppendLine($"Track: https://sunilmedicalproducts.online/my-orders");
+            sb.AppendLine($"Track: https://themakeinindia.in/my-orders");
             sb.AppendLine();
-            sb.AppendLine("Support: +91 9014060858");
+            sb.AppendLine("Support: +91 6301427306, 9014060858");
 
             return sb.ToString();
         }

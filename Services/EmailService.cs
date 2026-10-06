@@ -35,7 +35,7 @@ public class EmailService
         <div style='max-width:500px; margin:auto; background:white; padding:20px; border-radius:8px;'>
             
             <h2 style='color:#2E86C1; text-align:center;'>
-                Sunil Medical Products
+                JEDE MEDTECH INDIA PRIVATE LIMITED
             </h2>
 
             <p>Hello,</p>
@@ -107,8 +107,8 @@ public class EmailService
     </div>";
 
         await SendEmailAsync(
-            "burlisunil16@gmail.com",   // ✅ ADMIN EMAIL
-            "New Enquiry - Sunil Medical",
+            "noreply@themakeinindia.in",   // ✅ ADMIN EMAIL
+            "New Enquiry - JEDE Medical",
             body
         );
     }
@@ -129,7 +129,7 @@ public class EmailService
             <hr/>
 
             <p style='font-size:12px;color:gray;text-align:center;'>
-                Thank you for choosing Sunil Medical Products.
+                Thank you for choosing JEDE Medical Products.
                 For support, reply to this email.
             </p>
 
@@ -138,7 +138,7 @@ public class EmailService
 
         await SendEmailAsync(
             toEmail,
-            "Your Invoice - Sunil Medical",
+            "Your Invoice - JEDE Medical",
             wrappedHtml
         );
     }
@@ -169,7 +169,7 @@ public class EmailService
 
         // ✅ Reply-To
         msg.ReplyTo = new EmailAddress(
-            "burlisunil16@gmail.com",
+            "noreply@themakeinindia.in",
             "Support Team"
         );
 
