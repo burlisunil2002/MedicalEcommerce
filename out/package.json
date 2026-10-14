@@ -11,16 +11,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/burlisunil2002/MedicalEcommerce.git"
+    "url": "git+https://github.com/burliJEDE2002/MedicalEcommerce.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/burlisunil2002/MedicalEcommerce/issues"
+    "url": "https://github.com/burliJEDE2002/MedicalEcommerce/issues"
   },
-  "homepage": "https://github.com/burlisunil2002/MedicalEcommerce#readme",
+  "homepage": "https://github.com/burliJEDE2002/MedicalEcommerce#readme",
   "devDependencies": {
     "autoprefixer": "^10.5.0",
     "postcss": "^8.5.10",

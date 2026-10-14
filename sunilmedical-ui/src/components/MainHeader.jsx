@@ -270,13 +270,13 @@ export default function MainHeader() {
                             shrink-0
                             items-center
                             justify-start
-                            sm:w-[125px]
+                            sm:w-[110px]
                             lg:w-[145px]
                         "
                         aria-label="THE MAKE IN INDIA Medical Products Home"
                     >
                         <img
-                            src="/images/TheMakeInIndiaLogo.png"
+                            src="/images/JEDE_Logo.jpg"
                             alt="THE MAKE IN INDIA Medical Products"
                             className="
                                 block
@@ -299,7 +299,7 @@ export default function MainHeader() {
                             hidden
                             min-w-0
                             flex-1
-                            md:block
+                            lg:block
                         "
                     >
                         <div
@@ -772,6 +772,21 @@ export default function MainHeader() {
 
                                         <button
                                             type="button"
+                                            onClick={() =>
+                                                goTo(
+                                                    "/faq"
+                                                )
+                                            }
+                                            className="menu-item"
+                                        >
+                                            <FileText
+                                                size={17}
+                                            />
+                                            FAQ
+                                        </button>
+
+                                        <button
+                                            type="button"
                                             onClick={
                                                 handleLogout
                                             }
@@ -840,7 +855,7 @@ export default function MainHeader() {
                             shrink-0
                             items-center
                             gap-1
-                            md:hidden
+                            lg:hidden
                         "
                     >
 
@@ -924,7 +939,7 @@ export default function MainHeader() {
                             <button
                                 type="button"
                                 onClick={() =>
-                                    setMenuOpen(
+                                    setMobileMenuOpen(
                                         (prev) =>
                                             !prev
                                     )
@@ -1012,7 +1027,7 @@ export default function MainHeader() {
                     className="
                         relative
                         pb-3
-                        md:hidden
+                        lg:hidden
                     "
                 >
                     <div
@@ -1197,7 +1212,7 @@ export default function MainHeader() {
                             border-t
                             border-slate-100
                             py-2
-                            md:hidden
+                            lg:hidden
                         "
                     >
 
@@ -1324,6 +1339,36 @@ export default function MainHeader() {
                                     Logout
                                 </button>
                             </>
+                        )}
+
+                        {!user && (
+                            <>
+                                <button type="button" onClick={() => goTo("/login")} className="mobile-menu-item">
+                                    <UserRound size={18} /> Login / My Account
+                                </button>
+                                <button type="button" onClick={() => goTo("/seller-home")} className="mobile-menu-item">
+                                    <Store size={18} /> Become a Seller
+                                </button>
+                                <button type="button" onClick={handleChat} className="mobile-menu-item text-emerald-600">
+                                    <MessageCircle size={18} /> Chat on WhatsApp
+                                </button>
+                                <button type="button" onClick={() => goTo("/faq")} className="mobile-menu-item">
+                                    <FileText size={18} /> Help & FAQ
+                                </button>
+                            </>
+                        )}
+                        <button type="button" onClick={() => goTo("/wishlist")} className="mobile-menu-item">
+                            <Heart size={18} className="text-pink-500" /> My Wishlist
+                            <span className="ml-auto rounded-full bg-pink-50 px-2 py-0.5 text-xs font-bold text-pink-600">{wishlistCount}</span>
+                        </button>
+                        <button type="button" onClick={() => goTo("/cart")} className="mobile-menu-item">
+                            <ShoppingCart size={18} className="text-purple-600" /> My Cart
+                            <span className="ml-auto rounded-full bg-purple-50 px-2 py-0.5 text-xs font-bold text-purple-600">{cartCount}</span>
+                        </button>
+                        {user && (
+                            <button type="button" onClick={() => goTo("/faq")} className="mobile-menu-item">
+                                <FileText size={18} /> Help & FAQ
+                            </button>
                         )}
 
                     </div>

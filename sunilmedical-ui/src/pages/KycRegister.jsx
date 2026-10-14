@@ -45,6 +45,7 @@ export default function KycRegister() {
 
     const [message, setMessage] = useState("");
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
 
     useEffect(() => {
         loadKyc();
@@ -132,16 +133,76 @@ export default function KycRegister() {
        HANDLE INPUT
     ===================================================== */
 
-    const handleChange = (
-        field,
-        value
-    ) => {
+    const handleChange = (field, value) => {
+        // Keep tax identifiers uppercase and let users enter phone numbers
+        // with spaces or hyphens; validation normalizes them before checking.
+        if (field === "GSTNo" || field === "PANNo") value = value.toUpperCase();
+        setForm(prev => ({ ...prev, [field]: value }));
 
-        setForm(prev => ({
-            ...prev,
-            [field]: value
-        }));
+        // Clear a field's error as soon as the customer edits that field.
+        setFieldErrors(prev => {
+            if (!prev[field]) return prev;
+            const next = { ...prev };
+            delete next[field];
+            return next;
+        });
+        if (error) setError("");
+    };
 
+    const validateForm = () => {
+        const errors = {};
+        const requiredFields = [
+            ["CompanyName", "Company name is required."],
+            ["CustomerName", "Customer name is required."],
+            ["IndustrySector", "Please enter your industry or sector."],
+            ["MobileNo", "Mobile number is required."],
+            ["GSTNo", "GSTIN is required."],
+            ["PANNo", "PAN number is required."],
+            ["Address", "Business address is required."]
+        ];
+
+        requiredFields.forEach(([field, message]) => {
+            if (!String(form[field] || "").trim()) errors[field] = message;
+        });
+
+        const mobile = String(form.MobileNo || "").replace(/\D/g, "");
+        if (form.MobileNo?.trim() && !/^[6-9]\d{9}$/.test(mobile)) {
+            errors.MobileNo = "Enter a valid 10-digit Indian mobile number.";
+        }
+
+        const secondaryMobile = String(form.SecondaryMobile || "").trim();
+        if (secondaryMobile && !/^[6-9]\d{9}$/.test(secondaryMobile.replace(/\D/g, ""))) {
+            errors.SecondaryMobile = "Enter a valid 10-digit Indian mobile number.";
+        }
+
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (form.SecondaryEmail?.trim() && !emailPattern.test(form.SecondaryEmail.trim())) {
+            errors.SecondaryEmail = "Enter a valid email address.";
+        }
+
+        const pan = String(form.PANNo || "").trim().toUpperCase();
+        if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
+            errors.PANNo = "Enter a valid 10-character PAN (for example, ABCDE1234F).";
+        }
+
+        const gst = String(form.GSTNo || "").trim().toUpperCase();
+        if (gst && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gst)) {
+            errors.GSTNo = "Enter a valid 15-character GSTIN format.";
+        } else if (gst && pan && gst.substring(2, 12) !== pan) {
+            errors.GSTNo = "The PAN embedded in the GSTIN does not match the PAN number above.";
+        }
+
+        setFieldErrors(errors);
+        const firstInvalid = Object.keys(errors)[0];
+        if (firstInvalid) {
+            window.setTimeout(() => {
+                const field = document.getElementById(firstInvalid);
+                field?.scrollIntoView({ behavior: "smooth", block: "center" });
+                field?.focus({ preventScroll: true });
+            }, 0);
+            return false;
+        }
+        return true;
     };
 
 
@@ -159,6 +220,11 @@ export default function KycRegister() {
 
         setError("");
         setMessage("");
+
+        if (!validateForm()) {
+            setError("Please review the highlighted fields and correct the errors.");
+            return;
+        }
 
         try {
 
@@ -509,7 +575,8 @@ export default function KycRegister() {
 
                     <form
                         onSubmit={handleSubmit}
-                        className="space-y-5"
+                        noValidate
+                        className="space-y-5 text-sm sm:text-base"
                     >
 
                         {/* BUSINESS INFORMATION */}
@@ -526,6 +593,8 @@ export default function KycRegister() {
 
                                 <KycInput
                                     label="Company Name"
+                                    field="CompanyName"
+                                    fieldError={fieldErrors.CompanyName}
                                     value={
                                         form.CompanyName
                                     }
@@ -543,6 +612,8 @@ export default function KycRegister() {
 
                                 <KycInput
                                     label="Customer Name"
+                                    field="CustomerName"
+                                    fieldError={fieldErrors.CustomerName}
                                     value={
                                         form.CustomerName
                                     }
@@ -560,6 +631,8 @@ export default function KycRegister() {
 
                                 <KycInput
                                     label="Industry / Sector"
+                                    field="IndustrySector"
+                                    fieldError={fieldErrors.IndustrySector}
                                     value={
                                         form.IndustrySector
                                     }
@@ -594,6 +667,8 @@ export default function KycRegister() {
 
                                 <KycInput
                                     label="Mobile Number"
+                                    field="MobileNo"
+                                    fieldError={fieldErrors.MobileNo}
                                     value={
                                         form.MobileNo
                                     }
@@ -611,6 +686,8 @@ export default function KycRegister() {
 
                                 <KycInput
                                     label="Primary Email"
+                                    field="Email"
+                                    fieldError={fieldErrors.Email}
                                     value={
                                         form.Email
                                     }
@@ -623,6 +700,8 @@ export default function KycRegister() {
 
                                 <KycInput
                                     label="Secondary Email"
+                                    field="SecondaryEmail"
+                                    fieldError={fieldErrors.SecondaryEmail}
                                     value={
                                         form.SecondaryEmail
                                     }
@@ -639,6 +718,8 @@ export default function KycRegister() {
 
                                 <KycInput
                                     label="Secondary Mobile"
+                                    field="SecondaryMobile"
+                                    fieldError={fieldErrors.SecondaryMobile}
                                     value={
                                         form.SecondaryMobile
                                     }
@@ -672,6 +753,8 @@ export default function KycRegister() {
 
                                 <KycInput
                                     label="GST Number"
+                                    field="GSTNo"
+                                    fieldError={fieldErrors.GSTNo}
                                     value={
                                         form.GSTNo
                                     }
@@ -689,6 +772,8 @@ export default function KycRegister() {
 
                                 <KycInput
                                     label="PAN Number"
+                                    field="PANNo"
+                                    fieldError={fieldErrors.PANNo}
                                     value={
                                         form.PANNo
                                     }
@@ -722,8 +807,7 @@ export default function KycRegister() {
                                         </p>
 
                                         <p className="text-xs text-blue-700 mt-1 leading-5">
-                                            Your GST and PAN details will be
-                                            verified during KYC submission.
+                                            GSTIN and PAN are checked locally for format and consistency. No GST verification API is called, and this does not confirm registration status.
                                         </p>
 
                                     </div>
@@ -746,6 +830,9 @@ export default function KycRegister() {
                         >
 
                             <textarea
+                                id="Address"
+                                aria-invalid={Boolean(fieldErrors.Address)}
+                                aria-describedby={fieldErrors.Address ? "Address-error" : undefined}
                                 value={
                                     form.Address
                                 }
@@ -758,8 +845,14 @@ export default function KycRegister() {
                                 rows={5}
                                 required
                                 placeholder="Enter complete registered business address"
-                                className="w-full rounded-2xl border border-slate-300 px-4 py-3.5 text-sm text-slate-800 outline-none resize-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+                                className={`w-full rounded-2xl border px-4 py-3.5 text-sm sm:text-base text-slate-800 outline-none resize-y transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50 ${fieldErrors.Address ? "border-red-400 bg-red-50" : "border-slate-300"}`}
                             />
+                            {fieldErrors.Address && (
+                                <p id="Address-error" role="alert" className="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-red-600">
+                                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                                    <span>{fieldErrors.Address}</span>
+                                </p>
+                            )}
 
                         </KycSection>
 
@@ -1234,6 +1327,8 @@ function KycSection({
 
 function KycInput({
     label,
+    field,
+    fieldError,
     value,
     onChange,
     icon,
@@ -1246,7 +1341,7 @@ function KycInput({
 
         <div>
 
-            <label className="block text-xs font-bold text-slate-600 mb-2">
+            <label htmlFor={field} className="block text-xs font-bold text-slate-600 mb-2">
 
                 {label}
 
@@ -1265,21 +1360,37 @@ function KycInput({
                 </div>
 
                 <input
+                    id={field}
                     value={value || ""}
                     disabled={disabled}
                     required={required}
+                    inputMode={field === "MobileNo" || field === "SecondaryMobile" ? "numeric" : field === "SecondaryEmail" || field === "Email" ? "email" : "text"}
+                    autoComplete={field === "MobileNo" || field === "SecondaryMobile" ? "tel-national" : field === "SecondaryEmail" || field === "Email" ? "email" : "off"}
+                    maxLength={field === "MobileNo" || field === "SecondaryMobile" ? 10 : field === "PANNo" ? 10 : field === "GSTNo" ? 15 : undefined}
+                    placeholder={field === "MobileNo" || field === "SecondaryMobile" ? "10-digit mobile number" : field === "SecondaryEmail" ? "name@example.com" : field === "PANNo" ? "ABCDE1234F" : field === "GSTNo" ? "15-character GSTIN" : undefined}
+                    aria-invalid={Boolean(fieldError)}
+                    aria-describedby={fieldError ? `${field}-error` : undefined}
                     onChange={e =>
                         onChange?.(
                             e.target.value
                         )
                     }
-                    className={`w-full pl-10 pr-4 py-3.5 rounded-xl border text-sm outline-none transition ${disabled
-                            ? "bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed"
+                    className={`w-full min-w-0 pl-10 pr-4 py-3.5 rounded-xl border text-sm sm:text-base outline-none transition ${disabled
+                        ? "bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed"
+                        : fieldError
+                            ? "bg-red-50 border-red-400 text-slate-800 focus:border-red-500 focus:ring-4 focus:ring-red-50"
                             : "bg-white border-slate-300 text-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
                         }`}
                 />
 
             </div>
+
+            {fieldError && (
+                <p id={`${field}-error`} role="alert" className="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-red-600">
+                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                    <span>{fieldError}</span>
+                </p>
+            )}
 
             {hint && (
                 <p className="text-[11px] text-slate-400 mt-1.5">
@@ -1324,8 +1435,8 @@ function ReadOnlyField({
             </div>
 
             <p className={`mt-2 text-sm font-semibold text-slate-800 break-words ${multiline
-                    ? "leading-6"
-                    : ""
+                ? "leading-6"
+                : ""
                 }`}>
                 {value || "Not provided"}
             </p>

@@ -7,6 +7,12 @@ import {
 import {
     Activity,
     Building2,
+    Download,
+    ExternalLink,
+    FileText,
+    Landmark,
+    MapPin,
+    Warehouse,
     CheckCircle2,
     ChevronRight,
     Mail,
@@ -60,6 +66,7 @@ const normalize = data => {
 
     return rows.map((s, index) => ({
         sellerId: s?.sellerId ?? s?.SellerId ?? s?.id ?? index,
+        userId: s?.userId ?? s?.UserId ?? "",
         businessName:
             s?.businessName ?? s?.BusinessName ?? s?.name ?? "Seller",
         ownerName:
@@ -68,13 +75,58 @@ const normalize = data => {
         phone: s?.phone ?? s?.Phone ?? "-",
         productType:
             s?.productType ?? s?.ProductType ?? "-",
+        brand: s?.brand ?? s?.Brand ?? "",
+        gstNumber: s?.gstNumber ?? s?.GSTNumber ?? "",
+        isGSTVerified: s?.isGSTVerified ?? s?.IsGSTVerified ?? false,
+        pan: s?.pan ?? s?.PAN ?? "",
+        isPANVerified: s?.isPANVerified ?? s?.IsPANVerified ?? false,
+        addressLine1: s?.addressLine1 ?? s?.AddressLine1 ?? s?.address ?? "",
+        city: s?.city ?? s?.City ?? "",
+        state: s?.state ?? s?.State ?? "",
+        pincode: s?.pincode ?? s?.Pincode ?? "",
+        accountHolderName: s?.accountHolderName ?? s?.AccountHolderName ?? "",
+        accountNumber: s?.accountNumber ?? s?.AccountNumber ?? "",
+        ifscCode: s?.ifscCode ?? s?.IFSCCode ?? "",
+        bankName: s?.bankName ?? s?.BankName ?? "",
+        subscriptionPlan: s?.subscriptionPlan ?? s?.SubscriptionPlan ?? "",
+        freeSubscriptionStartDate: s?.freeSubscriptionStartDate ?? s?.FreeSubscriptionStartDate ?? null,
+        freeSubscriptionEndDate: s?.freeSubscriptionEndDate ?? s?.FreeSubscriptionEndDate ?? null,
+        isLaunchFreeSubscription: s?.isLaunchFreeSubscription ?? s?.IsLaunchFreeSubscription ?? false,
+        warehouseFullAddress:
+            s?.warehouseFullAddress ?? s?.WarehouseFullAddress ?? "",
+        warehouseContactPersonName:
+            s?.warehouseContactPersonName ?? s?.WarehouseContactPersonName ?? "",
+        warehouseContactMobileNumber:
+            s?.warehouseContactMobileNumber ?? s?.WarehouseContactMobileNumber ?? "",
+        gstCertificateDocumentPath:
+            s?.gstCertificateDocumentPath ??
+            s?.GSTCertificateDocumentPath ??
+            s?.gstCertificatePath ??
+            s?.GSTCertificatePath ??
+            s?.gstCertificateUrl ??
+            s?.GSTCertificateUrl ??
+            s?.gstCertificateDocumentUrl ??
+            s?.GSTCertificateDocumentUrl ??
+            null,
+        productLicenceDocumentPath:
+            s?.productLicenceDocumentPath ??
+            s?.ProductLicenceDocumentPath ??
+            s?.productLicencePath ??
+            s?.ProductLicencePath ??
+            s?.productLicenceUrl ??
+            s?.ProductLicenceUrl ??
+            s?.productLicenceDocumentUrl ??
+            s?.ProductLicenceDocumentUrl ??
+            null,
         isActive:
-            s?.isActive ?? s?.IsActive ?? true,
+            s?.isActive ?? s?.IsActive ?? false,
         status:
             s?.status ??
             s?.Status ??
-            ((s?.isActive ?? s?.IsActive ?? true) ? "Active" : "Inactive"),
+            ((s?.isActive ?? s?.IsActive ?? false) ? "Active" : "Pending"),
         documentPath:
+            s?.gstCertificateDocumentPath ??
+            s?.GSTCertificateDocumentPath ??
             s?.documentPath ??
             s?.DocumentPath ??
             s?.documentUrl ??
@@ -165,14 +217,14 @@ export default function SellerManagement() {
                 `/api/admin/orders/sellers/${seller.sellerId}`
             );
 
-            const detail = response?.data?.seller;
+            const detail = response?.data?.seller ?? response?.data?.data?.seller;
 
-            if (detail) {
-                const normalized = normalize({
-                    sellers: [detail]
-                })[0];
-
-                setSelected(normalized);
+            if (detail && typeof detail === "object") {
+                // Keep list data as a fallback when the detail endpoint omits fields.
+                const mergedRaw = { ...seller, ...detail };
+                setSelected(normalize({ sellers: [mergedRaw] })[0]);
+            } else {
+                toast.error("Seller details endpoint returned no seller record.");
             }
         } catch (err) {
             console.error("Seller details load error:", err);
@@ -274,7 +326,9 @@ export default function SellerManagement() {
             const matchesStatus =
                 status === "all" ||
                 (status === "active" && normalizedStatus === "active") ||
-                (status === "inactive" && normalizedStatus === "inactive");
+                (status === "inactive" && normalizedStatus === "inactive") ||
+                (status === "pending" && normalizedStatus === "pending") ||
+                (status === "suspended" && normalizedStatus === "suspended");
 
             return matchesSearch && matchesStatus;
         });
@@ -414,6 +468,8 @@ export default function SellerManagement() {
                                     <option value="all">All Status</option>
                                     <option value="active">Active</option>
                                     <option value="inactive">Inactive</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="suspended">Suspended</option>
                                 </select>
 
                                 <select
@@ -658,6 +714,10 @@ function SellerDetails({
         (seller?.isActive ? "Active" : "Inactive");
 
     const [nextStatus, setNextStatus] = useState(currentStatus);
+    const [editing, setEditing] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [editForm, setEditForm] = useState({});
+    const [editError, setEditError] = useState("");
 
     useEffect(() => {
         setNextStatus(
@@ -666,7 +726,75 @@ function SellerDetails({
         );
     }, [seller]);
 
+    useEffect(() => {
+        setEditForm({
+            businessName: seller?.businessName || "",
+            ownerName: seller?.ownerName || "",
+            email: seller?.email || "",
+            phone: seller?.phone || "",
+            productType: seller?.productType || "",
+            brand: seller?.brand || "",
+            gstNumber: seller?.gstNumber || "",
+            pan: seller?.pan || "",
+            addressLine1: seller?.addressLine1 || "",
+            city: seller?.city || "",
+            state: seller?.state || "",
+            pincode: seller?.pincode || "",
+            accountHolderName: seller?.accountHolderName || "",
+            accountNumber: seller?.accountNumber || "",
+            ifscCode: seller?.ifscCode || "",
+            bankName: seller?.bankName || "",
+            warehouseFullAddress: seller?.warehouseFullAddress || "",
+            warehouseContactPersonName: seller?.warehouseContactPersonName || "",
+            warehouseContactMobileNumber: seller?.warehouseContactMobileNumber || ""
+        });
+        setEditing(false);
+        setEditError("");
+    }, [seller]);
+
     const documentUrl = seller?.documentPath || null;
+
+    const saveSellerDetails = async () => {
+        if (!seller?.sellerId) return;
+        const requiredFields = [
+            "businessName", "ownerName", "email", "phone", "productType",
+            "gstNumber", "pan", "addressLine1", "city", "state", "pincode",
+            "accountHolderName", "accountNumber", "ifscCode", "bankName",
+            "warehouseFullAddress", "warehouseContactPersonName", "warehouseContactMobileNumber"
+        ];
+        const missing = requiredFields.find(key => !String(editForm[key] || "").trim());
+        if (missing) {
+            setEditError("Please complete all required fields before saving.");
+            return;
+        }
+        if (!/^[6-9]\d{9}$/.test(String(editForm.warehouseContactMobileNumber || "").trim())) {
+            setEditError("Enter a valid 10-digit Indian warehouse contact mobile number.");
+            return;
+        }
+
+        try {
+            setSaving(true);
+            setEditError("");
+            const response = await API.put(
+                `/api/admin/orders/sellers/${seller.sellerId}`,
+                editForm
+            );
+            const updated = response?.data?.seller || response?.data;
+            setEditForm(prev => ({ ...prev, ...(updated || {}) }));
+            toast.success(response?.data?.message || "Seller details updated.");
+            setEditing(false);
+            // Reload authoritative list/detail data after the update.
+            window.location.reload();
+        } catch (err) {
+            console.error("Seller details update error:", err);
+            setEditError(
+                err?.response?.data?.message ||
+                "Unable to save seller details. Confirm the admin update endpoint is implemented."
+            );
+        } finally {
+            setSaving(false);
+        }
+    };
 
     const handleStatusUpdate = async () => {
         if (!seller?.sellerId) return;
@@ -685,7 +813,7 @@ function SellerDetails({
             onMouseDown={onClose}
         >
             <div
-                className="w-full sm:max-w-3xl max-h-[92vh] overflow-y-auto bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl"
+                className="w-full sm:max-w-5xl max-h-[94vh] overflow-y-auto bg-white rounded-t-2xl sm:rounded-3xl shadow-2xl text-sm sm:text-base"
                 onMouseDown={e => e.stopPropagation()}
             >
                 <div className="sticky top-0 z-10 bg-white border-b border-slate-100 p-4 sm:p-5 flex items-center justify-between gap-3">
@@ -702,6 +830,13 @@ function SellerDetails({
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => { setEditing(value => !value); setEditError(""); }}
+                            className="h-10 px-3 sm:px-4 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold"
+                        >
+                            {editing ? "Cancel Edit" : "Edit Details"}
+                        </button>
                         {loading && (
                             <RefreshCw
                                 size={16}
@@ -721,6 +856,96 @@ function SellerDetails({
                 </div>
 
                 <div className="p-4 sm:p-6 space-y-5">
+                    {editing ? (
+                        <section className="rounded-2xl border border-violet-200 bg-violet-50/40 p-4 sm:p-5">
+                            <h3 className="text-base sm:text-lg font-black mb-4">Edit Seller Registration Details</h3>
+                            {editError && <p role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{editError}</p>}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                {[
+                                    ["businessName", "Business Name"],
+                                    ["ownerName", "Owner Name"],
+                                    ["email", "Email Address"],
+                                    ["phone", "Phone Number"],
+                                    ["productType", "Product Type"],
+                                    ["brand", "Brand"],
+                                    ["gstNumber", "GST Number"],
+                                    ["pan", "PAN Number"],
+                                    ["addressLine1", "Address"],
+                                    ["city", "City"],
+                                    ["state", "State"],
+                                    ["pincode", "Pincode"],
+                                    ["accountHolderName", "Account Holder Name"],
+                                    ["accountNumber", "Account Number"],
+                                    ["ifscCode", "IFSC Code"],
+                                    ["bankName", "Bank Name"],
+                                    ["warehouseFullAddress", "Warehouse Full Address"],
+                                    ["warehouseContactPersonName", "Warehouse Contact Person"],
+                                    ["warehouseContactMobileNumber", "Warehouse Contact Mobile"]
+                                ].map(([key, label]) => (
+                                    <label key={key} className="block min-w-0 text-xs sm:text-sm font-bold text-slate-600">
+                                        {label}
+                                        {key === "warehouseFullAddress" ? (
+                                            <textarea
+                                                value={editForm[key] || ""}
+                                                onChange={e => setEditForm(prev => ({ ...prev, [key]: e.target.value }))}
+                                                rows={3}
+                                                required
+                                                className="mt-1.5 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
+                                            />
+                                        ) : (
+                                            <input
+                                                type={key === "email" ? "email" : "text"}
+                                                value={editForm[key] || ""}
+                                                onChange={e => setEditForm(prev => ({
+                                                    ...prev,
+                                                    [key]: key === "warehouseContactMobileNumber" ? e.target.value.replace(/\D/g, "").slice(0, 10) : e.target.value
+                                                }))}
+                                                className="mt-1.5 h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal text-slate-900 outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
+                                                maxLength={key === "pincode" ? 6 : key === "warehouseContactMobileNumber" ? 10 : undefined}
+                                                inputMode={key === "warehouseContactMobileNumber" ? "numeric" : undefined}
+                                                pattern={key === "warehouseContactMobileNumber" ? "[6-9][0-9]{9}" : undefined}
+                                                required={["warehouseContactPersonName", "warehouseContactMobileNumber"].includes(key)}
+                                            />
+                                        )}
+                                    </label>
+                                ))}
+                            </div>
+                            <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                                <button type="button" disabled={saving} onClick={saveSellerDetails} className="h-11 rounded-xl bg-violet-600 px-5 text-sm font-black text-white disabled:opacity-60">
+                                    {saving ? "Saving..." : "Save Seller Details"}
+                                </button>
+                                <button type="button" disabled={saving} onClick={() => { setEditing(false); setEditError(""); }} className="h-11 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold">
+                                    Cancel
+                                </button>
+                            </div>
+                        </section>
+                    ) : (
+                        <section className="rounded-2xl border border-slate-200 p-4 sm:p-5">
+                            <h3 className="mb-3 text-base sm:text-lg font-black">Seller Registration Details</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <Info icon={<Building2 size={16} />} label="Seller ID" value={seller.sellerId} />
+                                <Info icon={<Users size={16} />} label="User ID" value={seller.userId} />
+                                <Info icon={<Building2 size={16} />} label="Business Name" value={seller.businessName} />
+                                <Info icon={<Users size={16} />} label="Owner Name" value={seller.ownerName} />
+                                <Info icon={<Mail size={16} />} label="Email" value={seller.email} />
+                                <Info icon={<Phone size={16} />} label="Phone" value={seller.phone} />
+                                <Info icon={<Package size={16} />} label="Product Type" value={seller.productType} />
+                                <Info icon={<Store size={16} />} label="Brand" value={seller.brand} />
+                                <Info icon={<CheckCircle2 size={16} />} label="GST Number" value={seller.gstNumber} />
+                                <Info icon={<CheckCircle2 size={16} />} label="GST Verification" value={seller.isGSTVerified ? "Verified" : "Not verified"} />
+                                <Info icon={<CheckCircle2 size={16} />} label="PAN Number" value={seller.pan} />
+                                <Info icon={<CheckCircle2 size={16} />} label="PAN Verification" value={seller.isPANVerified ? "Verified" : "Not verified"} />
+                                <Info icon={<Building2 size={16} />} label="Business Address" value={[seller.addressLine1, seller.city, seller.state, seller.pincode].filter(Boolean).join(", ")} />
+                                <Info icon={<Warehouse size={16} />} label="Warehouse Full Address" value={seller.warehouseFullAddress} />
+                                <Info icon={<Users size={16} />} label="Warehouse Contact Person" value={seller.warehouseContactPersonName} />
+                                <Info icon={<Phone size={16} />} label="Warehouse Contact Mobile" value={seller.warehouseContactMobileNumber} />
+                                <Info icon={<IndianRupee size={16} />} label="Account Holder" value={seller.accountHolderName} />
+                                <Info icon={<IndianRupee size={16} />} label="Bank Account Number" value={seller.accountNumber} />
+                                <Info icon={<IndianRupee size={16} />} label="IFSC Code" value={seller.ifscCode} />
+                                <Info icon={<Building2 size={16} />} label="Bank Name" value={seller.bankName} />
+                            </div>
+                        </section>
+                    )}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <Metric label="Products" value={seller.productCount} />
                         <Metric label="Orders" value={seller.orderCount} />
@@ -754,8 +979,28 @@ function SellerDetails({
                         />
                         <Info
                             icon={<Activity size={16} />}
-                            label="Subscription"
+                            label="Subscription Plan"
+                            value={seller.subscriptionPlan || "Not assigned"}
+                        />
+                        <Info
+                            icon={<Activity size={16} />}
+                            label="Subscription Status"
                             value={subscriptionState(seller.subscriptionEndDate)}
+                        />
+                        <Info
+                            icon={<Clock3 size={16} />}
+                            label="Free Subscription Start"
+                            value={formatDate(seller.freeSubscriptionStartDate)}
+                        />
+                        <Info
+                            icon={<Clock3 size={16} />}
+                            label="Free Subscription End"
+                            value={formatDate(seller.freeSubscriptionEndDate)}
+                        />
+                        <Info
+                            icon={<CheckCircle2 size={16} />}
+                            label="Launch Free Subscription"
+                            value={seller.isLaunchFreeSubscription ? "Yes" : "No"}
                         />
                         <Info
                             icon={<Clock3 size={16} />}
@@ -822,58 +1067,22 @@ function SellerDetails({
                         </div>
                     </div>
 
-                    {/* CUSTOMER / SELLER UPLOADED DOCUMENT */}
-                    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-                        <div className="p-4 sm:p-5 border-b border-slate-100">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                <div>
-                                    <p className="text-xs font-black uppercase tracking-wide text-slate-400">
-                                        KYC / Uploaded Document
-                                    </p>
-                                    <p className="text-sm text-slate-600 mt-1">
-                                        Document uploaded by the customer/seller during registration.
-                                    </p>
-                                </div>
-
-                                {documentUrl ? (
-                                    <a
-                                        href={documentUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="h-10 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-black inline-flex items-center justify-center"
-                                    >
-                                        View Document
-                                    </a>
-                                ) : (
-                                    <span className="inline-flex items-center rounded-full px-3 py-1.5 bg-slate-100 text-slate-500 text-xs font-black">
-                                        No Document
-                                    </span>
-                                )}
-                            </div>
+                    {/* SELLER KYC DOCUMENTS */}
+                    <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+                        <h3 className="text-base sm:text-lg font-black">Uploaded Verification Documents</h3>
+                        <p className="mt-1 text-sm text-slate-500">Review the files submitted during seller registration before approving the account.</p>
+                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <DocumentCard
+                                title="GST Registration Certificate"
+                                rawPath={seller.gstCertificateDocumentPath || documentUrl}
+                            />
+                            <DocumentCard
+                                title="Make in India / Product Licence"
+                                rawPath={seller.productLicenceDocumentPath}
+                                optional
+                            />
                         </div>
-
-                        <div className="p-4 sm:p-5">
-                            {documentUrl ? (
-                                <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                                    <p className="text-xs font-bold text-slate-500 break-all">
-                                        {documentUrl}
-                                    </p>
-                                    <p className="text-[11px] text-slate-400 mt-2">
-                                        Click View Document to open the uploaded file in a new tab.
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
-                                    <p className="font-bold text-slate-600">
-                                        No uploaded document available
-                                    </p>
-                                    <p className="text-xs text-slate-400 mt-1">
-                                        No customer/seller KYC document was returned by the server.
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                    </section>
 
                     <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
                         <p className="text-xs font-black uppercase tracking-wide text-slate-400">
@@ -903,6 +1112,118 @@ function SellerDetails({
         </div>
     );
 }
+function getDocumentUrl(rawPath) {
+    if (typeof rawPath !== "string" || !rawPath.trim()) return "";
+    const value = rawPath.trim();
+
+    if (/^(https?:|blob:|data:)/i.test(value)) return value;
+
+    try {
+        const configuredBase = API?.defaults?.baseURL || window.location.origin;
+        const apiOrigin = new URL(configuredBase, window.location.origin).origin;
+        const cleanPath = value.replace(/\\/g, "/").replace(/^\/+/, "");
+        return new URL(cleanPath, `${apiOrigin}/`).toString();
+    } catch (error) {
+        console.error("Unable to resolve seller document URL:", error);
+        return "";
+    }
+}
+
+function DocumentCard({ title, rawPath, optional = false }) {
+    const [downloadError, setDownloadError] = useState("");
+    const url = useMemo(() => getDocumentUrl(rawPath), [rawPath]);
+
+    const fileName = useMemo(() => {
+        if (!rawPath) return "";
+        try {
+            const parsed = new URL(url);
+            return decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() || title);
+        } catch {
+            return String(rawPath).split(/[\\/]/).filter(Boolean).pop() || title;
+        }
+    }, [rawPath, url, title]);
+
+    const handleDownload = async () => {
+        if (!url) return;
+        setDownloadError("");
+
+        try {
+            const apiBase = new URL(API?.defaults?.baseURL || window.location.origin, window.location.origin);
+            const fileUrl = new URL(url);
+
+            if (fileUrl.origin === apiBase.origin) {
+                const response = await API.get(url, { responseType: "blob" });
+                const blobUrl = window.URL.createObjectURL(response.data);
+                const anchor = document.createElement("a");
+                anchor.href = blobUrl;
+                anchor.download = fileName || "seller-document";
+                document.body.appendChild(anchor);
+                anchor.click();
+                anchor.remove();
+                window.URL.revokeObjectURL(blobUrl);
+                return;
+            }
+        } catch (error) {
+            console.error("Authenticated document download failed:", error);
+            setDownloadError("Download failed. Try opening the document or check the file URL.");
+            return;
+        }
+
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = fileName || "seller-document";
+        anchor.target = "_blank";
+        anchor.rel = "noopener noreferrer";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+    };
+
+    return (
+        <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+                <div className="h-10 w-10 shrink-0 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center">
+                    <FileText size={19} />
+                </div>
+                <div className="min-w-0 flex-1">
+                    <p className="text-sm sm:text-base font-black text-slate-800 break-words">{title}</p>
+                    <p className="mt-1 text-xs text-slate-500 break-words">
+                        {rawPath ? fileName : optional ? "Not provided (optional)." : "No document path returned by the API."}
+                    </p>
+                </div>
+            </div>
+
+            {url ? (
+                <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                    <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-800 hover:bg-slate-100"
+                    >
+                        <ExternalLink size={15} /> View document
+                    </a>
+                    <button
+                        type="button"
+                        onClick={handleDownload}
+                        className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-bold text-white hover:bg-slate-700"
+                    >
+                        <Download size={15} /> Download
+                    </button>
+                </div>
+            ) : (
+                <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+                    {optional
+                        ? "No optional document was uploaded."
+                        : "The API did not return a GST certificate path. Include GSTCertificateDocumentPath in the seller details response."}
+                </p>
+            )}
+
+            {downloadError && <p role="alert" className="mt-2 text-xs font-semibold text-rose-600">{downloadError}</p>}
+        </div>
+    );
+}
+
 function Info({ icon, label, value }) {
     return (
         <div className="rounded-2xl border border-slate-200 p-4">

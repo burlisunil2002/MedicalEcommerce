@@ -32,10 +32,13 @@ export default function SellerLayout() {
 
     const [desktopCollapsed, setDesktopCollapsed] = useState(false);
 
-    const seller =
-        JSON.parse(
-            localStorage.getItem("seller")
-        );
+    const [seller, setSeller] = useState(() => {
+        try {
+            return JSON.parse(localStorage.getItem("seller") || "null");
+        } catch {
+            return null;
+        }
+    });
 
     const titles = {
 
@@ -238,7 +241,7 @@ lg:translate-x-0
 
                             <h1 className="text-2xl font-black text-blue-600">
 
-                                SunilMedMarket
+                                JEDEMedMarket
 
                             </h1>
 
@@ -552,7 +555,7 @@ ${desktopCollapsed ? "lg:ml-20" : "lg:ml-72"}
 
                         <p className="text-sm text-slate-400">
 
-                            Powered by Sunil Medical Products
+                            Powered by JEDE Medical Products
 
                         </p>
 

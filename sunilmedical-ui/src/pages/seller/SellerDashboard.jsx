@@ -1498,7 +1498,7 @@ export default function SellerDashboard() {
 
 
             <footer className="border-t border-slate-200 pt-6 text-center text-xs text-slate-400">
-                © {new Date().getFullYear()} SunilMedMarket Seller Portal
+                © {new Date().getFullYear()} JEDEMedMarket Seller Portal
             </footer>
         </div>
     );

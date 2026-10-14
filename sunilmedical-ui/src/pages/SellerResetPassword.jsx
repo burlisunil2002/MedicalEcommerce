@@ -71,19 +71,36 @@ export default function SellerResetPassword() {
 
         }
 
+
         catch (err) {
+            const responseData = err.response?.data;
 
-            Swal.fire(
+            console.error("Reset status:", err.response?.status);
+            console.error("Reset response:", responseData);
 
-                "Error",
+            const errors = responseData?.errors;
 
-                err.response?.data?.message ||
+            const errorDetails = Array.isArray(errors)
+                ? errors
+                    .map(e =>
+                        typeof e === "string"
+                            ? e
+                            : e.description || e.Description || e.code || e.Code
+                    )
+                    .join("\n")
+                : "";
 
-                "Unable to update password.",
-
-                "error");
-
+            Swal.fire({
+                icon: "error",
+                title: "Password Reset Failed",
+                text:
+                    errorDetails ||
+                    responseData?.message ||
+                    err.message ||
+                    "Unable to reset password."
+            });
         }
+
 
         finally {
 

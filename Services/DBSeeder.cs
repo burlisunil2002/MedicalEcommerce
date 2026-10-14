@@ -10,7 +10,7 @@ namespace VivekMedicalProducts.Services
             var userManager = serviceProvider.GetRequiredService<UserManager<ApplicationUser>>();
             var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
 
-            string adminEmail = "burlisunil357@gmail.com";
+            string adminEmail = "burliJEDE357@gmail.com";
             string adminPassword = "Admin@123";
 
             // Role

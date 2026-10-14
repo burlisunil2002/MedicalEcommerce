@@ -109,7 +109,7 @@ export default function OrderSuccessPage() {
 
                             <b>
 
-                                Sunil Medical Products
+                                JEDE Medical Products
 
                             </b>
 

@@ -1459,6 +1459,15 @@ namespace VivekMedicalProducts.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("FreeSubscriptionEndDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("FreeSubscriptionStartDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("GSTCertificateDocumentPath")
+                        .HasColumnType("text");
+
                     b.Property<string>("GSTNumber")
                         .IsRequired()
                         .HasColumnType("text");
@@ -1471,6 +1480,9 @@ namespace VivekMedicalProducts.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<bool>("IsGSTVerified")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsLaunchFreeSubscription")
                         .HasColumnType("boolean");
 
                     b.Property<bool>("IsPANVerified")
@@ -1492,6 +1504,9 @@ namespace VivekMedicalProducts.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("ProductLicenceDocumentPath")
+                        .HasColumnType("text");
+
                     b.Property<string>("ProductType")
                         .IsRequired()
                         .HasColumnType("text");
@@ -1507,6 +1522,12 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<DateTime?>("SubscriptionEndDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("SubscriptionPlan")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("SubscriptionStartDate")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1514,7 +1535,23 @@ namespace VivekMedicalProducts.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("WarehouseContactMobileNumber")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("WarehouseContactPersonName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("WarehouseFullAddress")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.HasKey("SellerId");
+
+                    b.HasIndex("GSTNumber")
+                        .IsUnique()
+                        .HasFilter("\"GSTNumber\" IS NOT NULL");
 
                     b.ToTable("Sellers");
                 });

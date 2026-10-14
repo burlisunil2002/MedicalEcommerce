@@ -17,6 +17,8 @@ import ReviewPage from "./pages/ReviewPage";
 import MyOrdersPage from "./pages/MyOrdersPage";
 import InvoicePage from "./pages/InvoicePage";
 import OrderSuccessPage from "./pages/OrderSuccessPage";
+import FAQ from "./pages/FAQ";
+
 
 
 // =====================================================
@@ -160,6 +162,9 @@ function App() {
                             path="profile"
                             element={<Profile />}
                         />
+
+
+                        <Route path="/faq" element={<FAQ />} />
 
 
                         {/* KYC */}

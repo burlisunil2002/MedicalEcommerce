@@ -1,4 +1,4 @@
 ﻿User-agent: *
 Allow: /
 
-Sitemap: https://sunilmedicalproducts.online/sitemap.xml
+Sitemap: https://JEDEmedicalproducts.online/sitemap.xml

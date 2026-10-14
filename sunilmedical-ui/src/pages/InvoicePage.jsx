@@ -210,7 +210,7 @@ export default function InvoicePage() {
                     <div className="text-right">
 
                         <img
-                            src={`${window.location.origin}/images/sunillogo.png`}
+                            src={`${window.location.origin}/images/JEDElogo.png`}
                             alt="THE MAKE IN INDIA Medical Products"
                             style={{
                                 width: "220px",

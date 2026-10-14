@@ -215,9 +215,9 @@ builder.Services.AddCors(options =>
         {
             policy
                 .WithOrigins(
-                    "https://sunilmedicalproducts.online"
+                    "https://JEDEmedicalproducts.online"
                 // Add this only if you actually use www:
-                // "https://www.sunilmedicalproducts.online"
+                // "https://www.JEDEmedicalproducts.online"
                 )
                 .AllowAnyHeader()
                 .AllowAnyMethod()

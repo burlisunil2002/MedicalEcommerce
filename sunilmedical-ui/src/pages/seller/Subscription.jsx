@@ -315,7 +315,7 @@ export default function Subscription() {
                     data.razorpayOrderId,
 
                 name:
-                    "SunilMedMarket",
+                    "JEDE MEDTECH",
 
                 description:
                     "Seller Subscription",
@@ -1651,7 +1651,7 @@ disabled:cursor-not-allowed
 
                                     onClick={() =>
                                         window.location.href =
-                                        "mailto:support@sunilmedicalproducts.online"
+                                        "mailto:themakeinindia.in@gmail.com"
                                     }
 
                                     className="rounded-2xl border border-white px-8 py-4 font-bold hover:bg-white hover:text-blue-700 transition"
@@ -1721,7 +1721,7 @@ disabled:cursor-not-allowed
 
                                 <button
 
-                                    onClick={() => window.location.href = "mailto:support@sunilmedicalproducts.online"}
+                                    onClick={() => window.location.href = "mailto:themakeinindia.in@gmail.com"}
 
                                     className="px-8 py-4 rounded-2xl border border-white hover:bg-white hover:text-blue-700 transition font-bold"
 
@@ -1855,7 +1855,7 @@ disabled:cursor-not-allowed
 
                             <h3 className="text-2xl font-black text-slate-800">
 
-                                SunilMedMarket
+                                JEDE MEDTECH
 
                             </h3>
 
@@ -1923,7 +1923,7 @@ disabled:cursor-not-allowed
 
                     <div className="mt-10 text-center text-gray-400 text-sm">
 
-                        © {new Date().getFullYear()} SunilMedMarket.
+                        © {new Date().getFullYear()} JEDE MEDTECH.
 
                         All Rights Reserved.
 

@@ -134,7 +134,7 @@ export default function AdminLayout() {
 
                         <div>
                             <h1 className="text-base font-bold text-slate-900">
-                                SunilMedMarket
+                                JEDEMedMarket
                             </h1>
 
                             <p className="text-[11px] text-slate-500">
@@ -231,7 +231,7 @@ export default function AdminLayout() {
                         <div className="ml-3">
 
                             <h1 className="text-lg font-bold text-slate-900">
-                                SunilMedMarket
+                                JEDEMedMarket
                             </h1>
 
                             <p className="text-xs text-slate-500">

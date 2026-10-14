@@ -19,8 +19,8 @@ appsettings.Development.json
 secrets.json
 
 # React
-sunilmedical-ui/node_modules/
-sunilmedical-ui/build/
+JEDEmedical-ui/node_modules/
+JEDEmedical-ui/build/
 
 # Runtime uploads (keep this if uploads are generated at runtime)
 wwwroot/uploads/

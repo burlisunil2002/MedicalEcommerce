@@ -1,13 +1,22 @@
-﻿namespace VivekMedicalProducts.Models
+﻿
+using System.ComponentModel.DataAnnotations;
+
+namespace VivekMedicalProducts.Models
 {
     public class SellerResetPasswordDto
     {
-        public string Email { get; set; }
+        [Required]
+        [EmailAddress]
+        public string Email { get; set; } = string.Empty;
 
-        public string Token { get; set; }
+        [Required]
+        public string Token { get; set; } = string.Empty;
 
-        public string NewPassword { get; set; }
+        [Required]
+        [MinLength(8)]
+        public string NewPassword { get; set; } = string.Empty;
 
-        public string ConfirmPassword { get; set; }
+        [Required]
+        public string ConfirmPassword { get; set; } = string.Empty;
     }
 }

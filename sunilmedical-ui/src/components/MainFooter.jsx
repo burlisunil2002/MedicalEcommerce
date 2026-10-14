@@ -18,8 +18,7 @@ export default function MainFooter() {
             links: [
                 { label: "Products", to: "/" },
                 { label: "Wishlist", to: "/wishlist" },
-                { label: "Cart", to: "/cart" },
-                { label: "Checkout", to: "/checkout" }
+                { label: "Cart", to: "/cart" }
             ]
         },
 
@@ -27,8 +26,7 @@ export default function MainFooter() {
             title: "Orders & Account",
             links: [
                 { label: "My Orders", to: "/my-orders" },
-                { label: "Profile", to: "/profile" },
-                { label: "KYC Registration", to: "/kyc/register" }
+                { label: "FAQ", to: "/faq" },
             ]
         },
 
@@ -286,8 +284,8 @@ export default function MainFooter() {
                             />
 
                             <PhoneCard
-                                number="+91 90140 60858"
-                                href="tel:+919014060858"
+                                number="+91 93906 30297"
+                                href="tel:+919390630297"
                             />
                         </div>
                     </div>

@@ -74,6 +74,11 @@ public class ApplicationDbContext
         modelBuilder.Entity<SellerModel>()
             .HasQueryFilter(s => s.Status == "Active");
 
+        modelBuilder.Entity<SellerModel>()
+    .HasIndex(s => s.GSTNumber)
+    .IsUnique()
+    .HasFilter("\"GSTNumber\" IS NOT NULL");
+
         modelBuilder.Entity<ApplicationUser>()
             .HasQueryFilter(u => u.Status == "Active");
 

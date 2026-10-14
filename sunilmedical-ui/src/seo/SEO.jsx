@@ -1,7 +1,7 @@
 ﻿import { Helmet } from "react-helmet-async";
 
 const SITE_NAME = "The Make In India";
-const SITE_URL = "https://sunilmedicalproducts.online";
+const SITE_URL = "https://JEDEmedicalproducts.online";
 
 export default function SEO({
     title,
