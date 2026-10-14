@@ -351,50 +351,7 @@ export default function FAQPage() {
                     </div>
                 </section>
             </main>
-
-            <footer className="mt-4 bg-[#131a22] text-slate-300">
-                <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} className="flex w-full items-center justify-center gap-2 bg-[#232f3e] px-4 py-3.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-[#2d3d50]">
-                    <ArrowUp size={15} /> Back to top
-                </button>
-                <div className="mx-auto grid max-w-7xl gap-8 px-5 py-9 sm:px-6 md:grid-cols-2 lg:grid-cols-4 lg:px-8 lg:py-11">
-                    <div>
-                        <Link to="/" className="text-xl font-bold tracking-tight text-white">JEDE MEDTECH</Link>
-                        <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-400">India Private Limited</p>
-                        <p className="mt-4 max-w-sm text-sm leading-6 text-slate-400">
-                            Medical equipment, consumables and disposables for healthcare professionals, institutions and customers across India.
-                        </p>
-                    </div>
-                    <FooterLinks title="Shop" links={[["Products", "/"], ["Wishlist", "/wishlist"], ["Cart", "/cart"]]} />
-                    <FooterLinks title="For Sellers" links={[["Seller Home", "/seller-home"], ["Become a Seller", "/seller-register"], ["Seller Login", "/seller-login"]]} />
-                    <div>
-                        <h3 className="text-sm font-bold text-white">Contact Us</h3>
-                        <p className="mt-3 text-xs leading-5 text-slate-400">For product, order and customer service enquiries.</p>
-                        <a href="tel:+919384804209" className="mt-4 flex items-center gap-2 text-sm text-slate-300 hover:text-white"><Phone size={15} className="text-cyan-400" /> +91 93848 04209</a>
-                        <a href="tel:+919390630297" className="mt-3 flex items-center gap-2 text-sm text-slate-300 hover:text-white"><Phone size={15} className="text-cyan-400" /> +91 93906 30297</a>
-                    </div>
-                </div>
-                <div className="border-t border-slate-800 bg-[#0f151c]">
-                    <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-5 py-5 text-center sm:px-6 md:flex-row md:text-left lg:px-8">
-                        <p className="text-[11px] leading-5 text-slate-500 sm:text-xs">© {new Date().getFullYear()} JEDE MEDTECH INDIA PRIVATE LIMITED. All rights reserved.</p>
-                        <p className="text-[11px] text-slate-600 sm:text-xs">Medical Equipment • Consumables • Disposables</p>
-                    </div>
-                </div>
-            </footer>
         </div>
     );
 }
 
-function FooterLinks({ title, links }) {
-    return (
-        <div>
-            <h3 className="text-sm font-bold text-white">{title}</h3>
-            <ul className="mt-4 space-y-3">
-                {links.map(([label, to]) => (
-                    <li key={label}>
-                        <Link to={to} className="text-sm text-slate-400 transition hover:text-white hover:underline hover:underline-offset-4">{label}</Link>
-                    </li>
-                ))}
-            </ul>
-        </div>
-    );
-}

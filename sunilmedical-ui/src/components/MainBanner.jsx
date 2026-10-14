@@ -6,7 +6,6 @@ import "swiper/css/pagination";
 const banners = [
     { image: "/images/MadeInIndiaBanner.png", alt: "Made in India medical products" },
     { image: "/images/bannerMRI.png", alt: "MRI medical equipment" },
-    { image: "/images/offerbanner.png", alt: "Special medical product offers" },
 ];
 
 export default function Banner() {
