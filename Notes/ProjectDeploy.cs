@@ -8,9 +8,9 @@ using Org.BouncyCastle.Asn1.X509;
 
       <Message Text = "Building React..." Importance="high" />
 
-      <Exec WorkingDirectory = "$(MSBuildProjectDirectory)\JEDEmedical-ui" Command="npm install" Condition="!Exists('$(MSBuildProjectDirectory)\JEDEmedical-ui\node_modules')" />
+      <Exec WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui" Command="npm install" Condition="!Exists('$(MSBuildProjectDirectory)\sunilmedical-ui\node_modules')" />
 
-      <Exec WorkingDirectory = "$(MSBuildProjectDirectory)\JEDEmedical-ui" Command="npm run build" />
+      <Exec WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui" Command="npm run build" />
 
       <RemoveDir Directories = "$(ProjectDir)wwwroot\react" ContinueOnError="true" />
 
@@ -19,7 +19,7 @@ using Org.BouncyCastle.Asn1.X509;
 
       < ItemGroup >
 
-          < ReactFiles Include="$(ProjectDir)JEDEmedical-ui\build\**\*" />
+          < ReactFiles Include="$(ProjectDir)sunilmedical-ui\build\**\*" />
 
       </ItemGroup>
 
@@ -34,18 +34,18 @@ using Org.BouncyCastle.Asn1.X509;
 
 	<!--Install dependencies-->
 	<Exec
-      WorkingDirectory = "$(MSBuildProjectDirectory)\JEDEmedical-ui"
+      WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
       Command = "npm ci"
-      Condition = "Exists('$(MSBuildProjectDirectory)\JEDEmedical-ui\package-lock.json')" />
+      Condition = "Exists('$(MSBuildProjectDirectory)\sunilmedical-ui\package-lock.json')" />
 
 	<Exec
-      WorkingDirectory = "$(MSBuildProjectDirectory)\JEDEmedical-ui"
+      WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
       Command = "npm install"
-      Condition = "!Exists('$(MSBuildProjectDirectory)\JEDEmedical-ui\package-lock.json')" />
+      Condition = "!Exists('$(MSBuildProjectDirectory)\sunilmedical-ui\package-lock.json')" />
 
 	<!--Build React-->
 	<Exec
-      WorkingDirectory = "$(MSBuildProjectDirectory)\JEDEmedical-ui"
+      WorkingDirectory = "$(MSBuildProjectDirectory)\sunilmedical-ui"
       Command = "npm run build" />
 
 	<!--Create publish React folder -->
@@ -53,7 +53,7 @@ using Org.BouncyCastle.Asn1.X509;
 
 	<!-- Collect React build files -->
 	<ItemGroup>
-		<ReactBuildFiles Include="$(MSBuildProjectDirectory)\JEDEmedical-ui\build\**\*" />
+		<ReactBuildFiles Include="$(MSBuildProjectDirectory)\sunilmedical-ui\build\**\*" />
 	</ItemGroup>
 
 	<!-- Copy React build into publish folder -->
