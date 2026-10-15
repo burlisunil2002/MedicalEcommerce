@@ -157,7 +157,7 @@ export default function ProductImageSection({
 
                     <label className="block font-semibold mb-3 text-gray-700">
 
-                        Quotation File
+                        Specification File
 
                     </label>
 

@@ -362,7 +362,7 @@ function FooterContact() {
                 For product, order and customer service enquiries.
             </p>
             <div className="mt-4 space-y-3">
-                <FooterPhone number="+91 93848 04209" href="tel:+919384804209" />
+                <FooterPhone number="+91 63014 27306" href="tel:+916301427306" />
                 <FooterPhone number="+91 93906 30297" href="tel:+919390630297" />
             </div>
         </div>

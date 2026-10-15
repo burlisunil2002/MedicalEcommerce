@@ -512,29 +512,44 @@ namespace VivekMedicalProducts.Controllers
         }
 
         // ================= PRODUCT MANAGEMENT =================
+
         [Authorize]
         [HttpGet("/api/product-management")]
         public async Task<IActionResult> ProductManagement(
-            string search = "",
-            int page = 1,
-            int pageSize = 20,
+            [FromQuery] string search = "",
+            [FromQuery] string? status = "All",
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20,
             CancellationToken cancellationToken = default)
         {
             try
             {
-                page = page <= 0 ? 1 : page;
-                pageSize = pageSize <= 0 ? 20 : Math.Clamp(pageSize, 1, 100);
+                page = page < 1 ? 1 : page;
+                pageSize = pageSize < 1 ? 20 : Math.Clamp(pageSize, 1, 100);
 
                 var userId = _userContext.GetUserId();
+
+                if (string.IsNullOrWhiteSpace(userId))
+                {
+                    return Unauthorized(new
+                    {
+                        success = false,
+                        message = "Please sign in to manage products."
+                    });
+                }
+
                 var user = await _userManager.FindByIdAsync(userId);
 
                 if (user == null)
                 {
-                    return Unauthorized(new { success = false, message = "User not found." });
+                    return Unauthorized(new
+                    {
+                        success = false,
+                        message = "User not found."
+                    });
                 }
 
                 bool isAdmin = await _userManager.IsInRoleAsync(user, "Admin");
-
                 SellerModel? seller = null;
 
                 if (!isAdmin)
@@ -543,40 +558,86 @@ namespace VivekMedicalProducts.Controllers
 
                     if (seller == null)
                     {
-                        return BadRequest(new { success = false, message = "Seller not found." });
+                        return Unauthorized(new
+                        {
+                            success = false,
+                            message = "Seller not found."
+                        });
                     }
 
                     if (!HasActiveSubscription(seller))
                     {
-                        return StatusCode(403, new { success = false, message = "Subscription expired." });
+                        return StatusCode(StatusCodes.Status403Forbidden, new
+                        {
+                            success = false,
+                            message = "Your subscription has expired."
+                        });
                     }
                 }
 
-                var query = _context.Products
-                    .AsNoTracking()
-                    .Include(p => p.Variants).ThenInclude(v => v.Images)
-                    .Include(p => p.Variants).ThenInclude(v => v.Specifications)
-                    .AsQueryable();
+                IQueryable<ProductModel> query = _context.Products
+                    .AsNoTracking();
 
+                // Sellers can only see their own products.
+                // Admins can see products from all sellers.
                 if (!isAdmin)
                 {
-                    query = query.Where(x => x.SellerId == seller!.SellerId);
+                    int currentSellerId = seller!.SellerId;
+
+                    query = query.Where(p => p.SellerId == currentSellerId);
                 }
 
-                if (!string.IsNullOrWhiteSpace(search))
+                string term = (search ?? string.Empty).Trim().ToLowerInvariant();
+
+                if (!string.IsNullOrWhiteSpace(term))
                 {
-                    var term = search.Trim().ToLower();
+                    bool isNumericSellerId = int.TryParse(term, out int searchedSellerId);
 
-                    query = query.Where(x =>
-                        x.Name.ToLower().Contains(term) ||
-                        x.Brand.ToLower().Contains(term) ||
-                        x.Category.ToLower().Contains(term));
+                    query = query.Where(p =>
+                        (p.Name ?? "").ToLower().Contains(term) ||
+                        (p.Brand ?? "").ToLower().Contains(term) ||
+                        (p.Category ?? "").ToLower().Contains(term) ||
+                        (p.Description ?? "").ToLower().Contains(term) ||
+                        (p.HSNCode ?? "").ToLower().Contains(term) ||
+
+                        // Search variant models.
+                        p.Variants.Any(v =>
+                            (v.Model ?? "").ToLower().Contains(term)) ||
+
+                        // Search seller business name.
+                        _context.Sellers.Any(s =>
+                            s.SellerId == p.SellerId &&
+                            (s.BusinessName ?? "").ToLower().Contains(term)) ||
+
+                        // Search exact numeric seller ID when the query is numeric.
+                        (isNumericSellerId && p.SellerId == searchedSellerId)
+                    );
                 }
 
-                var totalCount = await query.CountAsync(cancellationToken);
+                // All statuses are returned by default.
+                // Supported explicit filters: Active, Inactive, Pending.
+                if (!string.IsNullOrWhiteSpace(status) &&
+                    !status.Equals("All", StringComparison.OrdinalIgnoreCase))
+                {
+                    string normalizedStatus = status.Trim().ToLowerInvariant();
+
+                    query = query.Where(p =>
+                        (p.Status ?? "").ToLower() == normalizedStatus);
+                }
+
+                int totalCount = await query.CountAsync(cancellationToken);
+
+                int totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+                // Avoid an invalid page after records are deleted or filtered.
+                if (totalPages > 0 && page > totalPages)
+                {
+                    page = totalPages;
+                }
 
                 var products = await query
-                    .OrderByDescending(x => x.CreatedDate)
+                    .OrderByDescending(p => p.CreatedDate)
+                    .ThenByDescending(p => p.Id)
                     .Skip((page - 1) * pageSize)
                     .Take(pageSize)
                     .Select(p => new
@@ -595,8 +656,15 @@ namespace VivekMedicalProducts.Controllers
                         p.DealEndDate,
                         p.Status,
                         p.CreatedDate,
+                        p.SellerId,
 
-                        VariantCount = p.Variants.Count,
+                        // Resolve seller name from the Sellers table.
+                        SellerName = _context.Sellers
+                            .Where(s => s.SellerId == p.SellerId)
+                            .Select(s => s.BusinessName)
+                            .FirstOrDefault(),
+
+                        VariantCount = p.Variants.Count(),
 
                         Variants = p.Variants
                             .OrderBy(v => v.ProductVariantId)
@@ -616,10 +684,20 @@ namespace VivekMedicalProducts.Controllers
 
                                 Images = v.Images
                                     .OrderBy(i => i.DisplayOrder)
-                                    .Select(i => new { i.Id, i.ImageUrl, i.DisplayOrder }),
+                                    .Select(i => new
+                                    {
+                                        i.Id,
+                                        i.ImageUrl,
+                                        i.DisplayOrder
+                                    }),
 
                                 Specifications = v.Specifications
-                                    .Select(s => new { s.Id, s.Key, s.Value })
+                                    .Select(s => new
+                                    {
+                                        s.Id,
+                                        s.Key,
+                                        s.Value
+                                    })
                             })
                     })
                     .ToListAsync(cancellationToken);
@@ -629,19 +707,26 @@ namespace VivekMedicalProducts.Controllers
                     success = true,
                     message = "Products loaded successfully.",
                     sellerName = isAdmin ? "Admin" : seller!.BusinessName,
-                    isSubscribed = true,
+                    isAdmin,
+                    isSubscribed = isAdmin || HasActiveSubscription(seller!),
+                    selectedStatus = string.IsNullOrWhiteSpace(status) ? "All" : status,
+                    search = term,
                     page,
                     pageSize,
                     totalCount,
-                    totalPages = (int)Math.Ceiling(totalCount / (double)pageSize),
+                    totalPages,
                     products
                 });
             }
             catch (Exception ex)
             {
-                return ErrorResponse(ex, "Failed to load product management list.", "An error occurred while loading products.");
+                return ErrorResponse(
+                    ex,
+                    "Failed to load product management list.",
+                    "An error occurred while loading products.");
             }
         }
+
 
         // ================= EDIT (GET) =================
         [Authorize]

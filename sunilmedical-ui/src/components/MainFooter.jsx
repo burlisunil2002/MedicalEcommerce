@@ -148,8 +148,8 @@ export default function MainFooter() {
                         <div className="mt-5 space-y-3">
 
                             <PhoneLink
-                                number="+91 93848 04209"
-                                href="tel:+919384804209"
+                                number="+91 63014 27306"
+                                href="tel:+916301427306"
                             />
 
                             <PhoneLink
@@ -279,8 +279,8 @@ export default function MainFooter() {
                             mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2
                         ">
                             <PhoneCard
-                                number="+91 93848 04209"
-                                href="tel:+919384804209"
+                                number="+91 63014 27306"
+                                href="tel:+916301427306"
                             />
 
                             <PhoneCard

@@ -251,45 +251,21 @@ export default function ProductDetails() {
     // GALLERY IMAGES
     // ============================================================
 
+
     const galleryImages = useMemo(() => {
-        const images = [];
+        const variantImages = Array.isArray(selectedVariant?.images)
+            ? selectedVariant.images
+                .map(image => image?.imageUrl)
+                .filter(Boolean)
+            : [];
 
-        if (
-            Array.isArray(
-                selectedVariant?.images
-            )
-        ) {
-            selectedVariant.images.forEach(
-                (image) => {
-                    if (image?.imageUrl) {
-                        images.push(
-                            image.imageUrl
-                        );
-                    }
-                }
-            );
-        }
+        return [...new Set(variantImages)];
+    }, [selectedVariant]);
 
-        [
-            product?.imageUrl,
-            product?.imageUrl2,
-            product?.imageUrl3,
-            product?.imageUrl4,
-        ].forEach((image) => {
-            if (image) {
-                images.push(image);
-            }
-        });
+    useEffect(() => {
+        setSelectedImage(galleryImages[0] || "");
+    }, [galleryImages, setSelectedImage]);
 
-        return [
-            ...new Set(
-                images.filter(Boolean)
-            ),
-        ];
-    }, [
-        product,
-        selectedVariant,
-    ]);
 
     // ============================================================
     // DEFAULT SELECTED IMAGE
@@ -430,55 +406,29 @@ export default function ProductDetails() {
     // CHANGE VARIANT
     // ============================================================
 
-    const changeVariant =
-        useCallback(
-            (variant) => {
-                if (
-                    !variant ||
-                    !product
-                ) {
-                    return;
-                }
 
-                setSelectedVariant(
-                    variant
-                );
+    const changeVariant = useCallback((variant) => {
+        if (!variant || !product) return;
 
-                const variantImage =
-                    variant?.images?.find(
-                        (item) =>
-                            item?.imageUrl
-                    )?.imageUrl;
+        setSelectedVariant(variant);
 
-                setSelectedImage(
-                    variantImage ||
-                    product?.imageUrl ||
-                    product?.imageUrl2 ||
-                    ""
-                );
+        const firstImage = Array.isArray(variant.images)
+            ? variant.images.find(image => image?.imageUrl)?.imageUrl
+            : "";
 
-                const variantId =
-                    variant?.productVariantId ??
-                    variant?.id;
+        setSelectedImage(firstImage || "");
 
-                if (!variantId) {
-                    return;
-                }
+        const variantId =
+            variant.productVariantId ?? variant.id;
 
-                navigate(
-                    `/product/${product.id}?variant=${variantId}`,
-                    {
-                        replace: true,
-                        preventScrollReset:
-                            true,
-                    }
-                );
-            },
-            [
-                product,
-                navigate,
-            ]
-        );
+        if (variantId) {
+            navigate(`/product/${product.id}?variant=${variantId}`, {
+                replace: true,
+                preventScrollReset: true,
+            });
+        }
+    }, [product, navigate]);
+
 
     // ============================================================
     // BUY NOW

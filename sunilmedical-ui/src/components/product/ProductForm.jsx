@@ -737,65 +737,111 @@ export default function ProductForm({
 
     }, [errorMessage]);
 
-    const validate = () => {
 
+
+    const validate = () => {
         const e = {};
 
-        // ================= BASIC =================
-
-        if (!product.name?.trim())
+        // Product fields
+        if (!product.name?.trim()) {
             e.name = "Product Name is required.";
+        }
 
-        if (!product.brand?.trim())
+        if (!product.brand?.trim()) {
             e.brand = "Brand is required.";
+        }
 
-        if (!product.category?.trim())
+        if (!product.category?.trim()) {
             e.category = "Category is required.";
+        }
 
-        if (!product.description?.trim())
+        if (!product.description?.trim()) {
             e.description = "Description is required.";
+        }
 
-        if (!product.priceType)
+        if (!product.priceType) {
             e.priceType = "Select Price Type.";
+        }
 
-        // ================= VARIANTS =================
+        // Required when adding a new product
+        if (mode === "add" && !product.imageFile) {
+            e.imageFile = "Please upload a product image.";
+        }
 
-        const activeVariants =
-            product.variants.filter(
-                x => x.status !== "Inactive"
-            );
+        const activeVariants = product.variants.filter(
+            v => v.status !== "Inactive"
+        );
 
-        if (activeVariants.length === 0)
-            e.variants =
-                "At least one variant is required.";
+        if (activeVariants.length === 0) {
+            e.variants = "At least one active variant is required.";
+        }
 
         activeVariants.forEach((variant, index) => {
-
-            if (!variant.model?.trim())
-                e[`model_${index}`] =
-                    "Model is required.";
+            if (!variant.model?.trim()) {
+                e[`model_${index}`] = "Variant model is required.";
+            }
 
             if (
                 variant.price === "" ||
+                !Number.isFinite(Number(variant.price)) ||
                 Number(variant.price) <= 0
-            )
-                e[`price_${index}`] =
-                    "Enter valid price.";
+            ) {
+                e[`price_${index}`] = "Enter a valid price.";
+            }
 
             if (
                 variant.stockQuantity === "" ||
+                variant.stockQuantity === null ||
+                variant.stockQuantity === undefined ||
+                !Number.isFinite(Number(variant.stockQuantity)) ||
                 Number(variant.stockQuantity) < 0
-            )
-                e[`stock_${index}`] =
-                    "Enter stock quantity.";
+            ) {
+                e[`stock_${index}`] = "Enter a valid stock quantity.";
+            }
 
+            // Add Product requires new variant images.
+            // During editing, existing images can be retained.
+            const hasExistingImages =
+                (variant.images?.length ?? 0) > 0 ||
+                (variant.imagePreviews?.length ?? 0) > 0;
+
+            const hasNewImages =
+                (variant.imageFiles?.length ?? 0) > 0;
+
+            if (
+                mode === "add" &&
+                !hasNewImages
+            ) {
+                e[`images_${index}`] =
+                    `Upload at least one image for "${variant.model || "this variant"}".`;
+            }
+
+            if (
+                mode === "edit" &&
+                !hasExistingImages &&
+                !hasNewImages
+            ) {
+                e[`images_${index}`] =
+                    `Upload at least one image for "${variant.model || "this variant"}".`;
+            }
+
+            const validSpecifications =
+                (variant.specifications || []).filter(
+                    s => s.key?.trim() && s.value?.trim()
+                );
+
+            if (validSpecifications.length === 0) {
+                e[`specifications_${index}`] =
+                    `Add at least one complete specification for "${variant.model || "this variant"}".`;
+            }
         });
 
         setErrors(e);
-
         return Object.keys(e).length === 0;
-
     };
+
+
+
     const scrollToError = () => {
 
         setTimeout(() => {
@@ -1094,40 +1140,40 @@ export default function ProductForm({
 
             }
 
+
+
             catch (err) {
+                const data = err.response?.data;
 
-                console.log(err);
+                console.error("ADD/EDIT PRODUCT ERROR", {
+                    status: err.response?.status,
+                    response: data,
+                    requestUrl: err.config?.url,
+                    method: err.config?.method
+                });
 
-                if (
-                    err.response?.data?.errors
-                ) {
+                const validationErrors = data?.errors;
 
-                    setErrors(
-
-                        err.response.data.errors
-
-                    );
-
-                    scrollToError();
-
-                    return;
-
-                }
+                const validationMessage = validationErrors
+                    ? Object.values(validationErrors).flat().join(" ")
+                    : "";
 
                 setErrorMessage(
-
-                    err.response?.data?.message ||
-
-                    "Unable to save product."
-
+                    data?.message ||
+                    validationMessage ||
+                    data?.title ||
+                    (err.response?.status === 400
+                        ? "The server rejected the submitted product data. Check the Network response."
+                        : "Unable to save product.")
                 );
 
+                if (validationErrors) {
+                    setErrors(validationErrors);
+                    scrollToError();
+                }
             }
-
             finally {
-
                 setLoading(false);
-
             }
 
         };
@@ -1152,6 +1198,16 @@ export default function ProductForm({
 
 
         <>
+
+            <div className="mb-4">
+                <button
+                    type="button"
+                    onClick={() => navigate(-1)}
+                    className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 transition"
+                >
+                    ← Back
+                </button>
+            </div>
 
         { successMessage && (
 

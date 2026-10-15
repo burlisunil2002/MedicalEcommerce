@@ -62,9 +62,6 @@ public class ApplicationDbContext
             .IsRequired()
             .HasMaxLength(100);
 
-        modelBuilder.Entity<ProductModel>()
-     .HasQueryFilter(p => p.Status == "Active");
-
         modelBuilder.Entity<ProductVariant>()
         .HasOne(v => v.Product)
         .WithMany(p => p.Variants)
