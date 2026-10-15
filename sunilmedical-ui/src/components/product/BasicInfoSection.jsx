@@ -75,6 +75,7 @@ export default function BasicInfoSection({
                 <div>
 
                     <label
+                        htmlFor="name"
                         className="
                         block
                         mb-2
@@ -88,7 +89,10 @@ export default function BasicInfoSection({
 
                     <input
                         type="text"
+                        id="name"
                         name="name"
+                        aria-invalid={Boolean(errors.name)}
+                        aria-describedby={errors.name ? "name-error" : undefined}
                         value={product.name}
                         onChange={handleChange}
                         placeholder="Enter Product Name"
@@ -98,6 +102,8 @@ export default function BasicInfoSection({
                     {errors.name && (
 
                         <p
+                            id="name-error"
+                            role="alert"
                             className="
                             mt-2
                             text-sm
@@ -116,6 +122,7 @@ export default function BasicInfoSection({
                 <div>
 
                     <label
+                        htmlFor="brand"
                         className="
                         block
                         mb-2
@@ -129,7 +136,10 @@ export default function BasicInfoSection({
 
                     <input
                         type="text"
+                        id="brand"
                         name="brand"
+                        aria-invalid={Boolean(errors.brand)}
+                        aria-describedby={errors.brand ? "brand-error" : undefined}
                         value={product.brand}
                         onChange={handleChange}
                         placeholder="Enter Brand"
@@ -138,7 +148,7 @@ export default function BasicInfoSection({
 
                     {errors.brand && (
 
-                        <p
+                        <p id="brand-error" role="alert"
                             className="
                             mt-2
                             text-sm
@@ -156,6 +166,7 @@ export default function BasicInfoSection({
 
                 <div>
                     <label
+                        htmlFor="category"
                         className="
             block
             mb-2
@@ -170,7 +181,10 @@ export default function BasicInfoSection({
 
                     <div className="relative">
                         <select
+                            id="category"
                             name="category"
+                            aria-invalid={Boolean(errors.category)}
+                            aria-describedby={errors.category ? "category-error" : undefined}
                             value={product.category || ""}
                             onChange={handleChange}
                             className={`
@@ -515,7 +529,7 @@ export default function BasicInfoSection({
                     </div>
 
                     {errors.category && (
-                        <p className="mt-2 text-sm font-medium text-red-600">
+                        <p id="category-error" role="alert" className="mt-2 text-sm font-medium text-red-600">
                             {errors.category}
                         </p>
                     )}
@@ -526,6 +540,7 @@ export default function BasicInfoSection({
                 <div>
 
                     <label
+                        htmlFor="priceType"
                         className="
                         block
                         mb-2
@@ -538,7 +553,10 @@ export default function BasicInfoSection({
                     </label>
 
                     <select
+                        id="priceType"
                         name="priceType"
+                        aria-invalid={Boolean(errors.priceType)}
+                        aria-describedby={errors.priceType ? "priceType-error" : undefined}
                         value={product.priceType}
                         onChange={handleChange}
                         className={inputClass("priceType")}
@@ -556,7 +574,7 @@ export default function BasicInfoSection({
 
                     {errors.priceType && (
 
-                        <p
+                        <p id="priceType-error" role="alert"
                             className="
                             mt-2
                             text-sm
@@ -577,6 +595,7 @@ export default function BasicInfoSection({
             <div className="mt-6">
 
                 <label
+                    htmlFor="description"
                     className="
                     block
                     mb-2
@@ -590,7 +609,10 @@ export default function BasicInfoSection({
 
                 <textarea
                     rows={6}
+                    id="description"
                     name="description"
+                    aria-invalid={Boolean(errors.description)}
+                    aria-describedby={errors.description ? "description-error" : undefined}
                     value={product.description}
                     onChange={handleChange}
                     placeholder="Enter Product Description..."
@@ -599,7 +621,7 @@ export default function BasicInfoSection({
 
                 {errors.description && (
 
-                    <p
+                    <p id="description-error" role="alert"
                         className="
                         mt-2
                         text-sm

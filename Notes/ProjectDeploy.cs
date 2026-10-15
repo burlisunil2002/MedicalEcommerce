@@ -1,7 +1,4 @@
-﻿using DocumentFormat.OpenXml.Bibliography;
-using DocumentFormat.OpenXml.Wordprocessing;
-using Microsoft.AspNetCore.Http.HttpResults;
-using Org.BouncyCastle.Asn1.X509;
+﻿
 
 
 /* <Target Name = "ReactBuild" BeforeTargets="Build">

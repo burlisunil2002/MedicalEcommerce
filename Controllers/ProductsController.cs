@@ -117,78 +117,151 @@ namespace VivekMedicalProducts.Controllers
         private sealed record ProductListCacheEntry(object Products, int TotalCount);
 
         [HttpGet("/api/products/search")]
-        public async Task<IActionResult> Search(string term, CancellationToken cancellationToken)
+        public async Task<IActionResult> Search(
+      [FromQuery] string? term,
+      CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(term))
+                return Ok(new List<object>());
+
+            var normalized = term.Trim().ToLower();
+
+            var query = _context.Products
+                .AsNoTracking()
+                .Where(p =>
+                    p.Status == "Active" &&
+                    (
+                        (p.Name != null && p.Name.ToLower().Contains(normalized)) ||
+                        (p.Brand != null && p.Brand.ToLower().Contains(normalized)) ||
+                        (p.Category != null && p.Category.ToLower().Contains(normalized)) ||
+                        (p.Seller != null &&
+                         p.Seller.BusinessName != null &&
+                         p.Seller.BusinessName.ToLower().Contains(normalized)) ||
+                        p.Variants.Any(v =>
+                            v.Model != null && v.Model.ToLower().Contains(normalized))
+                    ));
+
+            var results = await query
+                .OrderBy(p => p.Name)
+                .Select(p => new
+                {
+                    id = p.Id,
+                    name = p.Name,
+                    brand = p.Brand,
+                    category = p.Category,
+                    sellerName = p.Seller != null ? p.Seller.BusinessName : null,
+                    imageUrl = p.ImageUrl,
+                    priceType = p.PriceType,
+                    isHotDeal = p.IsHotDeal,
+                    discount = p.DiscountPercentage ?? 0,
+                    dealEndDate = p.DealEndDate,
+
+                    // Use active variants consistently for price range and default variant.
+                    minPrice = p.Variants
+                        .Where(v => v.Status == "Active")
+                        .Select(v => (decimal?)v.Price)
+                        .Min() ?? 0m,
+
+                    maxPrice = p.Variants
+                        .Where(v => v.Status == "Active")
+                        .Select(v => (decimal?)v.Price)
+                        .Max() ?? 0m,
+
+                    defaultVariant = p.Variants
+                        .Where(v => v.Status == "Active")
+                        .OrderBy(v => v.ProductVariantId)
+                        .Select(v => new
+                        {
+                            productVariantId = v.ProductVariantId,
+                            model = v.Model,
+                            price = v.Price,
+                            stockQuantity = v.StockQuantity,
+                            minQuantity = v.MinQuantity,
+                            maxQuantity = v.MaxQuantity,
+                            stepQuantity = v.StepQuantity,
+                            imageUrl = v.Images
+                                .OrderBy(i => i.DisplayOrder)
+                                .Select(i => i.ImageUrl)
+                                .FirstOrDefault()
+                        })
+                        .FirstOrDefault()
+                })
+                .Take(100)
+                .ToListAsync(cancellationToken);
+
+            return Ok(results);
+        }
+
+        [HttpGet("/api/products/suggestions")]
+        public async Task<IActionResult> GetSuggestions(
+            [FromQuery] string? term,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(term) || term.Trim().Length < 2)
                 return Ok(new List<object>());
 
             var normalized = term.Trim().ToLower();
 
             var results = await _context.Products
                 .AsNoTracking()
-                .Include(p => p.Variants)
                 .Where(p =>
-                    p.Name.ToLower().Contains(normalized) ||
-                    p.Brand.ToLower().Contains(normalized) ||
-                    p.Variants.Any(v => v.Model.ToLower().Contains(normalized)))
+                    p.Status == "Active" &&
+                    (
+                        (p.Name != null && p.Name.ToLower().Contains(normalized)) ||
+                        (p.Brand != null && p.Brand.ToLower().Contains(normalized)) ||
+                        (p.Category != null && p.Category.ToLower().Contains(normalized)) ||
+                        (p.Seller != null &&
+                         p.Seller.BusinessName != null &&
+                         p.Seller.BusinessName.ToLower().Contains(normalized)) ||
+                        p.Variants.Any(v =>
+                            v.Model != null && v.Model.ToLower().Contains(normalized))
+                    ))
+                .OrderBy(p => p.Name)
+                .Take(10)
                 .Select(p => new
                 {
                     id = p.Id,
-                    brand = p.Brand,
                     name = p.Name,
+                    brand = p.Brand,
                     category = p.Category,
+                    sellerName = p.Seller != null ? p.Seller.BusinessName : null,
                     imageUrl = p.ImageUrl,
                     priceType = p.PriceType,
-
-                    minPrice = p.Variants.Any() ? p.Variants.Min(v => v.Price) : 0,
-                    maxPrice = p.Variants.Any() ? p.Variants.Max(v => v.Price) : 0,
-
                     isHotDeal = p.IsHotDeal,
                     discount = p.DiscountPercentage ?? 0,
-                    dealEndDate = p.DealEndDate
+
+                    minPrice = p.Variants
+                        .Where(v => v.Status == "Active")
+                        .Select(v => (decimal?)v.Price)
+                        .Min() ?? 0m,
+
+                    maxPrice = p.Variants
+                        .Where(v => v.Status == "Active")
+                        .Select(v => (decimal?)v.Price)
+                        .Max() ?? 0m,
+
+                    defaultVariant = p.Variants
+                        .Where(v => v.Status == "Active")
+                        .OrderBy(v => v.ProductVariantId)
+                        .Select(v => new
+                        {
+                            productVariantId = v.ProductVariantId,
+                            model = v.Model,
+                            price = v.Price,
+                            stockQuantity = v.StockQuantity,
+                            minQuantity = v.MinQuantity,
+                            maxQuantity = v.MaxQuantity,
+                            stepQuantity = v.StepQuantity,
+                            imageUrl = v.Images
+                                .OrderBy(i => i.DisplayOrder)
+                                .Select(i => i.ImageUrl)
+                                .FirstOrDefault()
+                        })
+                        .FirstOrDefault()
                 })
-                .Take(10)
                 .ToListAsync(cancellationToken);
 
             return Ok(results);
-        }
-
-        // NOTE: previously this endpoint had no explicit route and relied on
-        // MVC convention routing (/Products/GetSuggestions). Made it explicit
-        // and consistent with the rest of the API. If your frontend currently
-        // calls a different URL for autocomplete suggestions, point it here.
-        [HttpGet("/api/products/suggestions")]
-        public async Task<IActionResult> GetSuggestions(string term, CancellationToken cancellationToken)
-        {
-            if (string.IsNullOrWhiteSpace(term))
-                return Ok(new List<object>());
-
-            // Previously this loaded the ENTIRE Products table into app
-            // memory (.AsEnumerable() before filtering) just to strip
-            // punctuation before comparing. That's an unbounded, ever-slower
-            // full table scan on every keystroke as the catalog grows.
-            // Filtering directly in SQL loses the punctuation-stripping
-            // trick, but Contains()+ToLower() is translatable to SQL and
-            // covers the overwhelming majority of real searches.
-            var normalized = term.Trim().ToLower();
-
-            var data = await _context.Products
-                .AsNoTracking()
-                .Where(p =>
-                    p.Status == "Active" &&
-                    (p.Name.ToLower().Contains(normalized) ||
-                     p.Category.ToLower().Contains(normalized)))
-                .OrderBy(p => p.Name)
-                .Take(8)
-                .Select(p => new
-                {
-                    id = p.Id,
-                    name = p.Name,
-                    category = p.Category
-                })
-                .ToListAsync(cancellationToken);
-
-            return Ok(data);
         }
 
         //  Helpers //
@@ -1203,7 +1276,6 @@ namespace VivekMedicalProducts.Controllers
                 var totalCount = await baseQuery.CountAsync(cancellationToken);
 
                 var products = await baseQuery
-                    .Include(p => p.Variants).ThenInclude(v => v.Images)
                     .OrderByDescending(p => p.CreatedDate)
                     .Skip((page - 1) * pageSize)
                     .Take(pageSize)

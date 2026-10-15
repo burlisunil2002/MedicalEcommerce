@@ -130,7 +130,7 @@ export default function MainHeader() {
                 try {
                     const res =
                         await API.get(
-                            `/api/products/search?term=${encodeURIComponent(
+                            `/api/products/suggestions?term=${encodeURIComponent(
                                 search.trim()
                             )}`,
                             {
@@ -460,18 +460,14 @@ export default function MainHeader() {
                                                     }
                                                 </p>
 
-                                                {item.brand && (
-                                                    <p
-                                                        className="
-                                                            mt-0.5
-                                                            truncate
-                                                            text-xs
-                                                            text-slate-500
-                                                        "
-                                                    >
-                                                        {
-                                                            item.brand
-                                                        }
+                                                <p className="mt-0.5 truncate text-xs text-slate-500">
+                                                    {[item.brand, item.category, item.sellerName].filter(Boolean).join(" • ")}
+                                                </p>
+                                                {Number(item.minPrice ?? item.price) > 0 && (
+                                                    <p className="mt-1 text-sm font-bold text-emerald-700">
+                                                        {Number(item.minPrice ?? item.price).toLocaleString("en-IN", { style: "currency", currency: "INR" })}
+                                                        {Number(item.maxPrice) > Number(item.minPrice ?? item.price) &&
+                                                            ` – ${Number(item.maxPrice).toLocaleString("en-IN", { style: "currency", currency: "INR" })}`}
                                                     </p>
                                                 )}
                                             </div>
@@ -1180,17 +1176,14 @@ export default function MainHeader() {
                                                 }
                                             </p>
 
-                                            {item.brand && (
-                                                <p
-                                                    className="
-                                                        truncate
-                                                        text-xs
-                                                        text-slate-500
-                                                    "
-                                                >
-                                                    {
-                                                        item.brand
-                                                    }
+                                            <p className="mt-0.5 truncate text-xs text-slate-500">
+                                                {[item.brand, item.category, item.sellerName].filter(Boolean).join(" • ")}
+                                            </p>
+                                            {Number(item.minPrice ?? item.price) > 0 && (
+                                                <p className="mt-1 text-sm font-bold text-emerald-700">
+                                                    {Number(item.minPrice ?? item.price).toLocaleString("en-IN", { style: "currency", currency: "INR" })}
+                                                    {Number(item.maxPrice) > Number(item.minPrice ?? item.price) &&
+                                                        ` – ${Number(item.maxPrice).toLocaleString("en-IN", { style: "currency", currency: "INR" })}`}
                                                 </p>
                                             )}
                                         </div>

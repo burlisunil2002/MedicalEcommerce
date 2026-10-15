@@ -1,7 +1,5 @@
-﻿import React, {
-    useEffect,
-    useState
-} from "react";
+﻿import React, { useEffect, useState } from "react";
+import { toast } from "react-hot-toast";
 
 import {
     useNavigate
@@ -15,7 +13,6 @@ import PricingSection from "./PricingSection";
 import MedicalInfoSection from "./MedicalInfoSection";
 import DealSection from "./DealSection";
 import VariantSection from "./VariantSection";
-import ValidationSummary from "./ValidationSummary";
 import SaveSection from "./SaveSection";
 
 
@@ -25,6 +22,72 @@ export default function ProductForm({
 }) {
     const navigate =
         useNavigate();
+
+
+    const showValidationToast = (errorObject, duration = 9000) => {
+        const fieldLabels = {
+            name: "Product name",
+            brand: "Brand",
+            category: "Category",
+            description: "Description",
+            priceType: "Price type",
+            imageFile: "Product image",
+            quotationFile: "Quotation file",
+            gstPercentage: "GST percentage",
+            hsnCode: "HSN code",
+            variants: "Variants"
+        };
+
+        const entries = Object.entries(errorObject || {})
+            .map(([key, value]) => ({
+                key,
+                message: Array.isArray(value)
+                    ? value.filter(Boolean).join(" ")
+                    : String(value ?? "").trim()
+            }))
+            .filter(item => item.message);
+
+        if (entries.length === 0) {
+            toast.error("Please review the product information and try again.", {
+                duration,
+                style: { maxWidth: "min(620px, calc(100vw - 28px))", zIndex: 99999 }
+            });
+            return;
+        }
+
+        const getLabel = (key) => {
+            if (fieldLabels[key]) return fieldLabels[key];
+
+            const match = String(key).match(/^(model|price|stock|images|specifications)_(\d+)$/i);
+            if (match) {
+                const labels = {
+                    model: "Model",
+                    price: "Price",
+                    stock: "Stock quantity",
+                    images: "Variant images",
+                    specifications: "Specifications"
+                };
+                return `Variant ${Number(match[2]) + 1} — ${labels[match[1].toLowerCase()]}`;
+            }
+
+            return String(key).replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_\.]+/g, " ");
+        };
+
+        const message = entries
+            .map(({ key, message }) => `${getLabel(key)}: ${message}`)
+            .join("  •  ");
+
+        // Plain-string toast is reliable across react-hot-toast versions and styling.
+        toast.error(message, {
+            duration,
+            style: {
+                maxWidth: "min(620px, calc(100vw - 28px))",
+                whiteSpace: "normal",
+                overflowWrap: "anywhere",
+                zIndex: 99999
+            }
+        });
+    };
 
     const defaultProduct = {
 
@@ -146,24 +209,6 @@ export default function ProductForm({
         setErrors
 
     ] = useState({});
-
-    const [
-
-        successMessage,
-
-        setSuccessMessage
-
-    ] = useState("");
-
-    const [
-
-        errorMessage,
-
-        setErrorMessage
-
-    ] = useState("");
-
-
     const loadProduct = async () => {
 
         try {
@@ -212,10 +257,7 @@ export default function ProductForm({
 
             console.error(err);
 
-            setErrorMessage(
-                err.response?.data?.message ||
-                "Unable to load product."
-            );
+            toast.error(err.response?.data?.message || "Unable to load product.");
 
         }
         finally {
@@ -706,39 +748,6 @@ export default function ProductForm({
         }));
 
     };
-
-    useEffect(() => {
-
-        if (!successMessage)
-            return;
-
-        const timer = setTimeout(() => {
-
-            setSuccessMessage("");
-
-        }, 3000);
-
-        return () => clearTimeout(timer);
-
-    }, [successMessage]);
-
-    useEffect(() => {
-
-        if (!errorMessage)
-            return;
-
-        const timer = setTimeout(() => {
-
-            setErrorMessage("");
-
-        }, 4000);
-
-        return () => clearTimeout(timer);
-
-    }, [errorMessage]);
-
-
-
     const validate = () => {
         const e = {};
 
@@ -768,15 +777,15 @@ export default function ProductForm({
             e.imageFile = "Please upload a product image.";
         }
 
-        const activeVariants = product.variants.filter(
-            v => v.status !== "Inactive"
-        );
+        const activeVariants = product.variants
+            .map((variant, index) => ({ variant, index }))
+            .filter(({ variant }) => variant.status !== "Inactive");
 
         if (activeVariants.length === 0) {
             e.variants = "At least one active variant is required.";
         }
 
-        activeVariants.forEach((variant, index) => {
+        activeVariants.forEach(({ variant, index }) => {
             if (!variant.model?.trim()) {
                 e[`model_${index}`] = "Variant model is required.";
             }
@@ -836,37 +845,160 @@ export default function ProductForm({
             }
         });
 
-        setErrors(e);
-        return Object.keys(e).length === 0;
+        return e;
     };
 
 
 
-    const scrollToError = () => {
+    // Convert ASP.NET Core ModelState keys into the same field keys used by
+    // client-side validation so inline field errors and scrolling work together.
+    const normalizeServerErrors = (serverErrors) => {
+        const mapped = {};
 
-        setTimeout(() => {
+        if (!serverErrors || typeof serverErrors !== "object") {
+            return mapped;
+        }
 
-            const firstError =
-                document.querySelector(
-                    ".border-red-500"
-                );
+        const toMessage = (value) =>
+            Array.isArray(value) ? value.filter(Boolean).join(" ") : String(value ?? "");
 
-            if (firstError) {
+        Object.entries(serverErrors).forEach(([serverKey, value]) => {
+            const message = toMessage(value);
+            if (!message) return;
 
-                firstError.scrollIntoView({
+            const key = String(serverKey);
+            const lower = key.toLowerCase();
+            let fieldKey = key;
 
-                    behavior: "smooth",
+            if (lower.includes("variants[") || lower.includes("variants.")) {
+                const indexMatch = lower.match(/variants\[(\d+)\]/) ||
+                    lower.match(/variants\.(\d+)/);
+                const index = indexMatch?.[1];
 
-                    block: "center"
+                if (index !== undefined) {
+                    if (/\.model$/i.test(key)) fieldKey = `model_${index}`;
+                    else if (/\.price$/i.test(key)) fieldKey = `price_${index}`;
+                    else if (/\.stockquantity$/i.test(key)) fieldKey = `stock_${index}`;
+                    else if (/\.imagefiles?$/i.test(key) || /\.images?$/i.test(key)) fieldKey = `images_${index}`;
+                    else if (/\.specifications?/i.test(key)) fieldKey = `specifications_${index}`;
+                    else fieldKey = `variant_${index}`;
+                }
+            } else if (/^(name|product\.name)$/i.test(key)) fieldKey = "name";
+            else if (/^brand$/i.test(key)) fieldKey = "brand";
+            else if (/^category$/i.test(key)) fieldKey = "category";
+            else if (/^description$/i.test(key)) fieldKey = "description";
+            else if (/^pricetype$/i.test(key)) fieldKey = "priceType";
+            else if (/^(imagefile|imageurl)$/i.test(key)) fieldKey = "imageFile";
+            else if (/^quotation(file|url)$/i.test(key)) fieldKey = "quotationFile";
 
-                });
+            mapped[fieldKey] = mapped[fieldKey]
+                ? `${mapped[fieldKey]} ${message}`
+                : message;
+        });
 
-                firstError.focus();
+        return mapped;
+    };
 
+    const scrollToError = (errorObject = errors) => {
+        window.setTimeout(() => {
+            const keys = Object.keys(errorObject || {});
+            const selectorsForKey = (key) => {
+                const lower = key.toLowerCase();
+                const candidates = [];
+
+                const add = (selector) => {
+                    if (selector && !candidates.includes(selector)) candidates.push(selector);
+                };
+
+                if (lower === "name") {
+                    add('[name="name"]'); add('#name'); add('[name="Name"]');
+                } else if (lower === "brand") {
+                    add('[name="brand"]'); add('#brand'); add('[name="Brand"]');
+                } else if (lower === "category") {
+                    add('[name="category"]'); add('#category'); add('[name="Category"]');
+                } else if (lower === "description") {
+                    add('[name="description"]'); add('#description'); add('[name="Description"]');
+                } else if (lower === "pricetype") {
+                    add('[name="priceType"]'); add('#priceType'); add('[name="PriceType"]');
+                } else if (lower === "imagefile") {
+                    add('[name="imageFile"]'); add('#imageFile'); add('#imageFile-input'); add('#imageFile-section');
+                    add('input[type="file"]:not([name="quotationFile"])');
+                } else if (lower === "quotationfile") {
+                    add('[name="quotationFile"]'); add('#quotationFile');
+                } else {
+                    const variantMatch = lower.match(/^(model|price|stock|images|specifications)_(\d+)$/);
+                    if (variantMatch) {
+                        const [, field, index] = variantMatch;
+                        const serverField = {
+                            model: "Model",
+                            price: "Price",
+                            stock: "StockQuantity",
+                            images: "ImageFiles",
+                            specifications: "Specifications"
+                        }[field];
+                        add(`[name="Variants[${index}].${serverField}"]`);
+                        add(`[name="variants[${index}].${serverField}"]`);
+                        add(`[name="${field}_${index}"]`);
+                        add(`#${field}_${index}`);
+                        add(`#variant-${index}`);
+                        if (field === "images") add('label#imageFile');
+                        if (field === "images") add(`input[type="file"][name*="Variants[${index}]"]`);
+                    }
+                }
+
+                add(`[name="${key.replace(/"/g, '\\"')}"]`);
+                add(`#${key.replace(/"/g, '\\"')}`);
+                return candidates;
+            };
+
+            let target = null;
+
+            for (const key of keys) {
+                for (const selector of selectorsForKey(key)) {
+                    try {
+                        target = document.querySelector(selector);
+                    } catch {
+                        target = null;
+                    }
+                    if (target) break;
+                }
+                if (target) break;
             }
 
-        }, 100);
+            // Fallback to common invalid-field styles if the section uses
+            // generated ids/names rather than the expected field keys.
+            if (!target) {
+                target = document.querySelector(
+                    '[aria-invalid="true"], input.border-red-500, select.border-red-500, textarea.border-red-500, .border-red-500'
+                );
+            }
 
+            if (!target) {
+                const form = document.querySelector("form");
+                if (form) {
+                    form.scrollIntoView({ behavior: "smooth", block: "start" });
+                }
+                return;
+            }
+
+            const focusable = target.matches?.("input, textarea, select, button, [tabindex]") ||
+                target.matches?.('[contenteditable="true"]')
+                ? target
+                : target.querySelector?.('input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])');
+
+            const scrollTarget = target.closest?.(
+                ".form-field, .mb-4, .mb-6, section, fieldset, label"
+            ) || target;
+
+            scrollTarget.scrollIntoView({
+                behavior: "smooth",
+                block: "center"
+            });
+
+            if (focusable && typeof focusable.focus === "function") {
+                window.setTimeout(() => focusable.focus({ preventScroll: true }), 250);
+            }
+        }, 120);
     };
 
     const buildFormData = () => {
@@ -1061,122 +1193,104 @@ export default function ProductForm({
         return formData;
 
     };
-    const handleSubmit =
-        async (e) => {
+    const handleSubmit = async (e) => {
+        e.preventDefault();
 
-            e.preventDefault();
+        if (loading) return;
 
-            if (loading)
-                return;
+        const validationErrors = validate();
 
-            if (!validate()) {
+        if (Object.keys(validationErrors).length > 0) {
+            setErrors(validationErrors);
+            showValidationToast(validationErrors);
+            scrollToError(validationErrors);
+            return;
+        }
 
-                scrollToError();
+        try {
+            setLoading(true);
+            setErrors({});
 
-                return;
+            const formData = buildFormData();
+            const isAdd = mode === "add";
 
+            if (isAdd) {
+                await API.post("/api/products", formData);
+            } else {
+                await API.put(`/api/products/${productId}`, formData);
             }
 
-            try {
+            toast.success(
+                isAdd
+                    ? "Product added successfully."
+                    : "Product updated successfully."
+            );
 
-                setLoading(true);
+            // The app-level Toaster stays mounted across route changes.
+            window.setTimeout(() => {
+                navigate("/product-management");
+            }, 1200);
+        } catch (err) {
+            const data = err.response?.data;
 
-                setErrors({});
+            console.error("ADD/EDIT PRODUCT ERROR", {
+                status: err.response?.status,
+                response: data,
+                requestUrl: err.config?.url,
+                method: err.config?.method
+            });
 
-                setErrorMessage("");
+            const normalizedErrors = normalizeServerErrors(data?.errors);
+            const validationMessage = Object.values(normalizedErrors).join(" ");
 
-                setSuccessMessage("");
+            const message =
+                validationMessage ||
+                data?.message ||
+                data?.title ||
+                (err.response?.status === 400
+                    ? "The submitted product information was rejected. Please check the highlighted fields."
+                    : err.response?.status === 401
+                        ? "Your session may have expired. Please sign in again."
+                        : err.response?.status === 403
+                            ? "You are not allowed to perform this action. Check your subscription or permissions."
+                            : "Unable to save the product. Please try again.");
 
-                const formData =
-                    buildFormData();
+            if (Object.keys(normalizedErrors).length > 0) {
+                setErrors(normalizedErrors);
+                showValidationToast(normalizedErrors, 8000);
+                scrollToError(normalizedErrors);
+            } else {
+                toast.error(message, { duration: 6000 });
+                // When the server sends a known field-level message but not
+                // a ModelState dictionary, infer its field for a useful jump.
+                const lower = String(data?.message || data?.title || "").toLowerCase();
+                const inferred = {};
 
-                if (
-                    mode === "add"
-                ) {
-
-                    await API.post(
-
-                        "/api/products",
-
-                        formData
-
-                    );
-
-                    setSuccessMessage(
-
-                        "Product added successfully."
-
-                    );
-
+                if (lower.includes("product name") || lower.includes("name is required")) {
+                    inferred.name = message;
+                } else if (lower.includes("brand")) {
+                    inferred.brand = message;
+                } else if (lower.includes("category")) {
+                    inferred.category = message;
+                } else if (lower.includes("description")) {
+                    inferred.description = message;
+                } else if (lower.includes("product image") || lower.includes("upload an image")) {
+                    inferred.imageFile = message;
+                } else if (lower.includes("variant") && lower.includes("model")) {
+                    inferred.model_0 = message;
+                } else if (lower.includes("price")) {
+                    inferred.price_0 = message;
                 }
 
-                else {
-
-                    await API.put(
-
-                        `/api/products/${productId}`,
-
-                        formData
-
-                    );
-
-                    setSuccessMessage(
-
-                        "Product updated successfully."
-
-                    );
-
-                }
-
-                setTimeout(() => {
-
-                    navigate(
-
-                        "/product-management"
-
-                    );
-
-                }, 1000);
-
-            }
-
-
-
-            catch (err) {
-                const data = err.response?.data;
-
-                console.error("ADD/EDIT PRODUCT ERROR", {
-                    status: err.response?.status,
-                    response: data,
-                    requestUrl: err.config?.url,
-                    method: err.config?.method
-                });
-
-                const validationErrors = data?.errors;
-
-                const validationMessage = validationErrors
-                    ? Object.values(validationErrors).flat().join(" ")
-                    : "";
-
-                setErrorMessage(
-                    data?.message ||
-                    validationMessage ||
-                    data?.title ||
-                    (err.response?.status === 400
-                        ? "The server rejected the submitted product data. Check the Network response."
-                        : "Unable to save product.")
-                );
-
-                if (validationErrors) {
-                    setErrors(validationErrors);
-                    scrollToError();
+                if (Object.keys(inferred).length > 0) {
+                    setErrors(inferred);
+                    scrollToError(inferred);
                 }
             }
-            finally {
-                setLoading(false);
-            }
-
-        };
+        } finally {
+            setLoading(false);
+        }
+    };
 
     if (pageLoading) {
 
@@ -1209,69 +1323,40 @@ export default function ProductForm({
                 </button>
             </div>
 
-        { successMessage && (
+            <form onSubmit={handleSubmit}>
+                <BasicInfoSection
+                    product={product}
+                    setProduct={setProduct}
+                    errors={errors}
+                    handleChange={handleChange}
+                />
 
-            <div
-                className="mb-5 rounded-xl bg-green-100 p-4 text-green-700"
-            >
+                <ProductImageSection
+                    product={product}
+                    setProduct={setProduct}
+                    errors={errors}
+                    handleImage={handleImage}
+                    handleQuotation={handleQuotation}
+                    removeProductImage={removeProductImage}
+                />
 
-                {successMessage}
-
-            </div>
-
-        )}
-
-{
-    errorMessage && (
-
-        <div
-            className="mb-5 rounded-xl bg-red-100 p-4 text-red-700"
-        >
-
-            {errorMessage}
-
-        </div>
-
-    )
-}
-        <form onSubmit={handleSubmit}>
-
-            <ValidationSummary
-                errors={errors}
-            />
-
-            <BasicInfoSection
-                product={product}
-                setProduct={setProduct}
-                errors={errors}
-                handleChange={handleChange}
-            />
-
-            <ProductImageSection
-                product={product}
-                setProduct={setProduct}
-                handleImage={handleImage}
-                handleQuotation={handleQuotation}
-                removeProductImage={removeProductImage}
-            />
-
-            <PricingSection
-                product={product}
-                handleChange={handleChange}
-                errors={errors}
-            />
-
-            <MedicalInfoSection
-                product={product}
+                <PricingSection
+                    product={product}
                     handleChange={handleChange}
                     errors={errors}
-            />
+                />
 
-            <DealSection
-                product={product}
+                <MedicalInfoSection
+                    product={product}
                     handleChange={handleChange}
                     errors={errors}
-            />
+                />
+
+                <DealSection
+                    product={product}
+                    handleChange={handleChange}
+                    errors={errors}
+                />
 
 
                 <VariantSection
@@ -1298,12 +1383,12 @@ export default function ProductForm({
 
                 />
 
-            <SaveSection
-                loading={loading}
-                mode={mode}
-            />
+                <SaveSection
+                    loading={loading}
+                    mode={mode}
+                />
 
-</form>
+            </form>
         </>
     );
 }

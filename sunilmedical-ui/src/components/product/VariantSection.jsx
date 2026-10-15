@@ -2,8 +2,8 @@
 import VariantCard from "./VariantCard";
 
 export default function VariantSection({
-    variants,
-    errors,
+    variants = [],
+    errors = {},
     addVariant,
     removeVariant,
     updateVariant,
@@ -13,173 +13,61 @@ export default function VariantSection({
     removeSpecification,
     updateSpecification
 }) {
-
-    const activeVariants =
-        variants.filter(
-            x => x.status !== "Inactive"
-        );
+    // Preserve original indices because validation errors use keys such as price_1.
+    const activeVariants = variants
+        .map((variant, originalIndex) => ({ variant, originalIndex }))
+        .filter(({ variant }) => variant.status !== "Inactive");
 
     return (
-
-        <div
-            className="
-                bg-white
-                rounded-3xl
-                shadow-lg
-                p-8
-                mb-8
-            "
+        <section
+            id="variant-section"
+            className="mb-8 scroll-mt-24 rounded-3xl bg-white p-5 shadow-lg sm:p-8"
+            aria-labelledby="variants-heading"
         >
-
-            {/* Header */}
-
-            <div
-                className="
-                    flex
-                    justify-between
-                    items-center
-                    mb-8
-                "
-            >
-
+            <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-
-                    <h2
-                        className="
-                            text-2xl
-                            font-bold
-                            text-gray-800
-                        "
-                    >
+                    <h2 id="variants-heading" className="text-2xl font-bold text-gray-800">
                         Product Variants
                     </h2>
-
-                    <p
-                        className="
-                            text-gray-500
-                            mt-1
-                        "
-                    >
+                    <p className="mt-1 text-gray-500">
                         Add different models, sizes and prices.
                     </p>
-
                 </div>
 
                 <button
-
                     type="button"
-
                     onClick={addVariant}
-
-                    className="
-                        px-5
-                        py-3
-                        rounded-xl
-                        bg-blue-600
-                        hover:bg-blue-700
-                        text-white
-                        font-semibold
-                        shadow-lg
-                    "
-
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
                 >
-
                     + Add Variant
-
                 </button>
-
             </div>
 
-            {/* Validation */}
-
-            {
-                errors.variants &&
-
-                <div
-                    className="
-                        mb-6
-                        rounded-xl
-                        bg-red-50
-                        border
-                        border-red-200
-                        p-4
-                        text-red-600
-                    "
-                >
-
-                    {errors.variants}
-
-                </div>
-
-            }
-
-            {/* Variant List */}
-
-            <div
-                className="
-                    space-y-8
-                "
-            >
-
-                {
-
-                    activeVariants.map(
-
-                        (variant, index) => (
-
-                            <VariantCard
-
-                                key={
-                                    variant.productVariantId ||
-                                    index
-                                }
-
-                                variant={variant}
-
-                                index={index}
-
-                                errors={errors}
-
-                                updateVariant={
-                                    updateVariant
-                                }
-
-                                updateVariantImages={
-                                    updateVariantImages
-                                }
-
-                                removeVariantImages={
-                                    removeVariantImages
-                                }
-
-                                removeVariant={
-                                    removeVariant
-                                }
-
-                                addSpecification={
-                                    addSpecification
-                                }
-
-                                removeSpecification={
-                                    removeSpecification
-                                }
-
-                                updateSpecification={
-                                    updateSpecification
-                                }
-
-                            />
-
-                        )
-
-                    )
-
-                }
-
+            {/* Validation messages are handled by ProductForm's toast.
+                Keep field-level error styling but no summary banner here. */}
+            <div className="space-y-6 sm:space-y-8">
+                {activeVariants.map(({ variant, originalIndex }) => (
+                    <div
+                        key={variant.productVariantId || `variant-${originalIndex}`}
+                        id={`variant-${originalIndex}`}
+                        className="min-w-0 scroll-mt-24"
+                        data-variant-index={originalIndex}
+                    >
+                        <VariantCard
+                            variant={variant}
+                            index={originalIndex}
+                            errors={errors}
+                            updateVariant={updateVariant}
+                            updateVariantImages={updateVariantImages}
+                            removeVariantImages={removeVariantImages}
+                            removeVariant={removeVariant}
+                            addSpecification={addSpecification}
+                            removeSpecification={removeSpecification}
+                            updateSpecification={updateSpecification}
+                        />
+                    </div>
+                ))}
             </div>
-
-        </div>
-
+        </section>
     );
-
 }

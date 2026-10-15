@@ -1,87 +1,89 @@
-﻿import React from "react";
+﻿import React, { useEffect, useMemo } from "react";
+import { toast } from "react-hot-toast";
 
-export default function ValidationSummary({ errors = {} }) {
+const FIELD_LABELS = {
+    name: "Product name",
+    brand: "Brand",
+    category: "Category",
+    description: "Description",
+    priceType: "Price type",
+    imageFile: "Product image",
+    quotationFile: "Quotation file",
+    gstPercentage: "GST percentage",
+    hsnCode: "HSN code",
+    variants: "Variants",
+};
 
-    const errorList = Object.values(errors).filter(
-        error => error && error.trim() !== ""
-    );
+const getLabel = (key) => {
+    if (FIELD_LABELS[key]) return FIELD_LABELS[key];
 
-    if (errorList.length === 0) {
-        return null;
+    const match = String(key).match(/^(model|price|stock|images|specifications)_(\d+)$/i);
+    if (match) {
+        const [, field, rawIndex] = match;
+        const fieldLabels = {
+            model: "Model",
+            price: "Price",
+            stock: "Stock quantity",
+            images: "Variant images",
+            specifications: "Specifications",
+        };
+        return `Variant ${Number(rawIndex) + 1} — ${fieldLabels[field.toLowerCase()] || field}`;
     }
 
-    return (
+    return String(key)
+        .replace(/([a-z])([A-Z])/g, "$1 $2")
+        .replace(/[_\.]+/g, " ")
+        .replace(/\b\w/g, (character) => character.toUpperCase());
+};
 
-        <div
-            className="
-                mb-8
-                rounded-2xl
-                border
-                border-red-200
-                bg-red-50
-                p-6
-                shadow-sm
-            "
-        >
-
-            <div className="flex items-center gap-3 mb-4">
-
-                <div className="text-3xl">
-                    ⚠️
-                </div>
-
-                <div>
-
-                    <h2
-                        className="
-                            text-xl
-                            font-bold
-                            text-red-700
-                        "
-                    >
-                        Please fix the following errors
-                    </h2>
-
-                    <p
-                        className="
-                            text-red-500
-                            text-sm
-                        "
-                    >
-                        Complete all required fields before saving the product.
-                    </p>
-
-                </div>
-
-            </div>
-
-            <ul
-                className="
-                    list-disc
-                    ml-6
-                    space-y-2
-                    text-red-700
-                "
-            >
-
-                {
-
-                    errorList.map((error, index) => (
-
-                        <li key={index}>
-
-                            {error}
-
-                        </li>
-
-                    ))
-
-                }
-
-            </ul>
-
-        </div>
-
+export default function ValidationSummary({ errors = {} }) {
+    const errorList = useMemo(
+        () =>
+            Object.entries(errors || {})
+                .map(([key, value]) => ({
+                    key,
+                    label: getLabel(key),
+                    message: Array.isArray(value)
+                        ? value.filter(Boolean).join(" ")
+                        : String(value ?? "").trim(),
+                }))
+                .filter((item) => item.message),
+        [errors]
     );
 
+    useEffect(() => {
+        if (errorList.length === 0) {
+            toast.dismiss("product-form-validation");
+            return;
+        }
+
+        // Put every validation message in one toast so users can read them
+        // together without a stack of separate notifications covering the form.
+        toast.error(
+            <div className="w-full">
+                <p className="mb-2 font-bold">
+                    Please correct {errorList.length === 1 ? "this field" : "these fields"}
+                </p>
+                <ul className="max-h-64 list-disc space-y-1 overflow-y-auto pl-5 text-sm">
+                    {errorList.map(({ key, label, message }) => (
+                        <li key={key}>
+                            <span className="font-semibold">{label}:</span>{" "}
+                            {message}
+                        </li>
+                    ))}
+                </ul>
+            </div>,
+            {
+                id: "product-form-validation",
+                duration: 8000,
+                style: {
+                    maxWidth: "min(560px, calc(100vw - 32px))",
+                    alignItems: "flex-start",
+                },
+            }
+        );
+    }, [errorList]);
+
+    // Do not render the old validation box at the top of the form.
+    return null;
 }

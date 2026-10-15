@@ -30,17 +30,17 @@ export default function VariantCard({
         }
     `;
 
-    console.log("Current Variant", variant);
 
     return (
 
         <div
             className="
+                scroll-mt-24
                 rounded-3xl
                 border
                 border-gray-200
                 bg-gray-50
-                p-6
+                p-4 sm:p-6
                 shadow-sm
             "
         >
@@ -116,7 +116,7 @@ export default function VariantCard({
             >
                 <div>
 
-                    <label className="font-semibold mb-2 block">
+                    <label htmlFor={`model_${index}`} className="font-semibold mb-2 block">
 
                         Model
 
@@ -125,7 +125,9 @@ export default function VariantCard({
                     </label>
 
                     <input
-
+                        id={`model_${index}`}
+                        name={`Variants[${index}].Model`}
+                        aria-invalid={Boolean(errors[`model_${index}`])}
                         value={variant.model}
 
                         onChange={(e) =>
@@ -146,15 +148,6 @@ export default function VariantCard({
 
                     />
 
-                    {
-                        errors[`model_${index}`] &&
-
-                        <p className="text-red-600 text-sm mt-2">
-
-                            {errors[`model_${index}`]}
-
-                        </p>
-                    }
 
                 </div>
                 <div>
@@ -263,7 +256,7 @@ export default function VariantCard({
 
                 <div>
 
-                    <label className="font-semibold mb-2 block">
+                    <label htmlFor={`price_${index}`} className="font-semibold mb-2 block">
 
                         Price
 
@@ -272,9 +265,12 @@ export default function VariantCard({
                     </label>
 
                     <input
-
+                        id={`price_${index}`}
+                        name={`Variants[${index}].Price`}
+                        aria-invalid={Boolean(errors[`price_${index}`])}
                         type="number"
-
+                        min="0.01"
+                        step="0.01"
                         value={variant.price}
 
                         onChange={(e) =>
@@ -293,15 +289,6 @@ export default function VariantCard({
 
                     />
 
-                    {
-                        errors[`price_${index}`] &&
-
-                        <p className="text-red-600 text-sm mt-2">
-
-                                {errors[`price_${index}`]}
-                        </p>
-
-                    }
 
                 </div>
 
@@ -309,7 +296,7 @@ export default function VariantCard({
 
                 <div>
 
-                    <label className="font-semibold mb-2 block">
+                    <label htmlFor={`stock_${index}`} className="font-semibold mb-2 block">
 
                         Stock
 
@@ -318,9 +305,12 @@ export default function VariantCard({
                     </label>
 
                     <input
-
+                        id={`stock_${index}`}
+                        name={`Variants[${index}].StockQuantity`}
+                        aria-invalid={Boolean(errors[`stock_${index}`])}
                         type="number"
-
+                        min="0"
+                        step="1"
                         value={variant.stockQuantity}
 
                         onChange={(e) =>
@@ -339,15 +329,6 @@ export default function VariantCard({
 
                     />
 
-                    {
-                        errors[`stock_${index}`] &&
-
-                        <p className="text-red-600 text-sm mt-2">
-
-                                {errors[`stock_${index}`]}
-                        </p>
-
-                    }
 
                 </div>
 
@@ -362,9 +343,9 @@ export default function VariantCard({
                     </label>
 
                     <input
-
+                        id={`minQuantity_${index}`}
+                        name={`Variants[${index}].MinQuantity`}
                         type="number"
-
                         value={variant.minQuantity}
 
                         onChange={(e) =>
@@ -392,9 +373,9 @@ export default function VariantCard({
                     </label>
 
                     <input
-
+                        id={`maxQuantity_${index}`}
+                        name={`Variants[${index}].MaxQuantity`}
                         type="number"
-
                         value={variant.maxQuantity}
 
                         onChange={(e) =>
@@ -422,9 +403,9 @@ export default function VariantCard({
                     </label>
 
                     <input
-
+                        id={`stepQuantity_${index}`}
+                        name={`Variants[${index}].StepQuantity`}
                         type="number"
-
                         value={variant.stepQuantity}
 
                         onChange={(e) =>
@@ -591,7 +572,8 @@ export default function VariantCard({
                 {/* Upload */}
 
                 <label
-                    className="
+                    htmlFor={`images_${index}`}
+                    className={`
             flex
             flex-col
             items-center
@@ -603,7 +585,8 @@ export default function VariantCard({
             rounded-2xl
             cursor-pointer
             hover:bg-blue-50
-        "
+            ${errors[`images_${index}`] ? "border-red-500 bg-red-50 ring-2 ring-red-100" : ""}
+        `}
                 >
 
                     <div className="text-5xl">
@@ -619,28 +602,24 @@ export default function VariantCard({
                     </p>
 
                     <input
-                        hidden
+                        id={`images_${index}`}
+                        name={`Variants[${index}].ImageFiles`}
                         multiple
                         type="file"
                         accept="image/*"
+                        aria-invalid={Boolean(errors[`images_${index}`])}
+                        className="sr-only"
                         onChange={(e) => {
 
                             const files = Array.from(e.target.files);
-
-                            console.log("typeof updateVariantImages =", typeof updateVariantImages);
-                            console.log(updateVariantImages);
-
-                            if (typeof updateVariantImages !== "function") {
-                                alert("updateVariantImages is NOT a function");
-                                return;
-                            }
-
+                            if (typeof updateVariantImages !== "function") return;
                             updateVariantImages(index, files);
 
                         }}
                     />
 
                 </label>
+
 
             </div>
             {/* Image Information */}
@@ -715,13 +694,22 @@ export default function VariantCard({
 
             {/* Specifications */}
 
-            <SpecificationSection
-                variant={variant}
-                index={index}
-                addSpecification={addSpecification}
-                removeSpecification={removeSpecification}
-                updateSpecification={updateSpecification}
-            />
+            <div
+                id={`specifications_${index}`}
+                tabIndex={-1}
+                className="scroll-mt-24 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-200"
+            >
+
+
+                <SpecificationSection
+                    variant={variant}
+                    index={index}
+                    errors={errors}
+                    addSpecification={addSpecification}
+                    removeSpecification={removeSpecification}
+                    updateSpecification={updateSpecification}
+                />
+            </div>
 
         </div>
 
