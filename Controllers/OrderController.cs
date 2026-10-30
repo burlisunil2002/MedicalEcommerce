@@ -78,6 +78,7 @@ namespace VivekMedicalProducts.Controllers
         private readonly ISmsService _sms;
         private readonly ILogger<OrderController> _logger;
         private readonly IWebHostEnvironment _env;
+        private readonly IAuditService _auditService;
 
         public OrderController(
             IConfiguration config,
@@ -90,7 +91,8 @@ namespace VivekMedicalProducts.Controllers
             ICartCalculationService calc,
             ISmsService sms,
             ILogger<OrderController> logger,
-            IWebHostEnvironment env)
+            IWebHostEnvironment env,
+            IAuditService auditService)
         {
             _config = config;
             _context = context;
@@ -103,11 +105,49 @@ namespace VivekMedicalProducts.Controllers
             _sms = sms;
             _logger = logger;
             _env = env;
+            _auditService = auditService;
         }
 
         // ============================================================
         // SHARED HELPERS
         // ============================================================
+
+        /// <summary>
+        /// Writes an audit event without allowing an audit-store failure
+        /// to interrupt the customer's order/payment workflow.
+        /// Never pass payment signatures, bank details, addresses or secrets.
+        /// </summary>
+        private async Task LogAuditAsync(
+            string action,
+            string status,
+            string entityType,
+            string? entityId,
+            string description,
+            object? oldValues = null,
+            object? newValues = null,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                await _auditService.LogAsync(
+                    action: action,
+                    module: "Orders",
+                    status: status,
+                    entityType: entityType,
+                    entityId: entityId,
+                    description: description,
+                    oldValues: oldValues,
+                    newValues: newValues,
+                    cancellationToken: cancellationToken);
+            }
+            catch (Exception auditException)
+            {
+                _logger.LogError(
+                    auditException,
+                    "Failed to write order audit event {Action}.",
+                    action);
+            }
+        }
 
         /// <summary>
         /// Standard error response. Logs the full exception server-side with
@@ -688,6 +728,21 @@ namespace VivekMedicalProducts.Controllers
 
                 await transaction.CommitAsync(cancellationToken);
 
+                await LogAuditAsync(
+                    action: "PlaceCODOrder",
+                    status: "Success",
+                    entityType: "Order",
+                    entityId: order.OrderId.ToString(),
+                    description: "Customer placed a cash-on-delivery order.",
+                    newValues: new
+                    {
+                        order.OrderNumber,
+                        order.GrandTotal,
+                        order.PaymentStatus,
+                        ItemCount = orderItems.Count
+                    },
+                    cancellationToken: cancellationToken);
+
                 // Send invoice email in-line (post-commit) rather than via
                 // Task.Run: the previous fire-and-forget task could outlive
                 // the request's scoped DbContext / ControllerContext (which
@@ -721,6 +776,13 @@ namespace VivekMedicalProducts.Controllers
             catch (Exception ex)
             {
                 await transaction.RollbackAsync(cancellationToken);
+                await LogAuditAsync(
+                    action: "PlaceCODOrder",
+                    status: "Failed",
+                    entityType: "Order",
+                    entityId: null,
+                    description: "Cash-on-delivery order placement failed.",
+                    cancellationToken: cancellationToken);
                 return ErrorResponse(ex, "Failed to place COD order.", userId: userId);
             }
         }
@@ -837,6 +899,21 @@ namespace VivekMedicalProducts.Controllers
                 _context.PaymentSessions.Add(session);
                 await _context.SaveChangesAsync(cancellationToken);
 
+                await LogAuditAsync(
+                    action: "CreatePaymentSession",
+                    status: "Success",
+                    entityType: "PaymentSession",
+                    entityId: session.Id.ToString(),
+                    description: "Razorpay payment session created for checkout.",
+                    newValues: new
+                    {
+                        session.Amount,
+                        session.Currency,
+                        session.PaymentStatus,
+                        session.ExpiryDate
+                    },
+                    cancellationToken: cancellationToken);
+
                 return Ok(new
                 {
                     success = true,
@@ -850,6 +927,13 @@ namespace VivekMedicalProducts.Controllers
             }
             catch (Exception ex)
             {
+                await LogAuditAsync(
+                    action: "CreatePaymentSession",
+                    status: "Failed",
+                    entityType: "PaymentSession",
+                    entityId: null,
+                    description: "Razorpay payment session creation failed.",
+                    cancellationToken: cancellationToken);
                 return ErrorResponse(ex, "Failed to create Razorpay order.", userId: userId);
             }
         }
@@ -1001,6 +1085,22 @@ namespace VivekMedicalProducts.Controllers
 
                 await transaction.CommitAsync(cancellationToken);
 
+                await LogAuditAsync(
+                    action: "VerifyPaymentAndPlaceOrder",
+                    status: "Success",
+                    entityType: "Order",
+                    entityId: order.OrderId.ToString(),
+                    description: "Razorpay payment was verified and the order was placed.",
+                    newValues: new
+                    {
+                        order.OrderNumber,
+                        order.GrandTotal,
+                        order.PaymentStatus,
+                        order.IsPaymentVerified,
+                        ItemCount = orderItems.Count
+                    },
+                    cancellationToken: cancellationToken);
+
                 try
                 {
                     await SendInvoiceEmailAsync(order.OrderId);
@@ -1020,6 +1120,13 @@ namespace VivekMedicalProducts.Controllers
             catch (Exception ex)
             {
                 await transaction.RollbackAsync(cancellationToken);
+                await LogAuditAsync(
+                    action: "VerifyPaymentAndPlaceOrder",
+                    status: "Failed",
+                    entityType: "PaymentSession",
+                    entityId: null,
+                    description: "Payment verification or order creation failed.",
+                    cancellationToken: cancellationToken);
                 return ErrorResponse(ex, "Payment verification failed unexpectedly.", userId: userId);
             }
         }
@@ -1050,10 +1157,32 @@ namespace VivekMedicalProducts.Controllers
 
             if (session != null)
             {
+                var previousPaymentStatus = session.PaymentStatus;
+
                 session.IsCompleted = false;
                 session.PaymentStatus = PaymentStatuses.Failed;
 
                 await _context.SaveChangesAsync(cancellationToken);
+
+                await LogAuditAsync(
+                    action: "PaymentFailed",
+                    status: "Success",
+                    entityType: "PaymentSession",
+                    entityId: session.Id.ToString(),
+                    description: "Payment session was marked as failed.",
+                    oldValues: new { PaymentStatus = previousPaymentStatus },
+                    newValues: new { PaymentStatus = session.PaymentStatus },
+                    cancellationToken: cancellationToken);
+            }
+            else
+            {
+                await LogAuditAsync(
+                    action: "PaymentFailed",
+                    status: "Failed",
+                    entityType: "PaymentSession",
+                    entityId: null,
+                    description: "Payment failure callback did not match an active customer payment session.",
+                    cancellationToken: cancellationToken);
             }
 
             return Ok(new { success = true });
@@ -1148,6 +1277,21 @@ namespace VivekMedicalProducts.Controllers
 
                 await _context.SaveChangesAsync(cancellationToken);
 
+                await LogAuditAsync(
+                    action: eventType == "payment.captured"
+                        ? "PaymentCapturedWebhook"
+                        : "PaymentFailedWebhook",
+                    status: "Success",
+                    entityType: "PaymentSession",
+                    entityId: session.Id.ToString(),
+                    description: "Verified Razorpay webhook event processed.",
+                    newValues: new
+                    {
+                        session.PaymentStatus,
+                        session.IsCompleted
+                    },
+                    cancellationToken: cancellationToken);
+
                 return Ok();
             }
             catch (Exception ex)
@@ -1156,6 +1300,13 @@ namespace VivekMedicalProducts.Controllers
                 // retries, but the previous version swallowed this
                 // completely — now it's at least logged for visibility.
                 _logger.LogError(ex, "Unhandled error while processing Razorpay webhook.");
+                await LogAuditAsync(
+                    action: "ProcessRazorpayWebhook",
+                    status: "Failed",
+                    entityType: "PaymentSession",
+                    entityId: null,
+                    description: "Razorpay webhook processing failed.",
+                    cancellationToken: cancellationToken);
                 return Ok();
             }
         }
@@ -1217,6 +1368,9 @@ namespace VivekMedicalProducts.Controllers
                     });
                 }
 
+                var oldItemStatus = orderItem.OrderItemStatus;
+                var oldPaymentStatus = orderItem.Order.PaymentStatus;
+
                 orderItem.OrderItemStatus = OrderItemStatuses.Cancelled;
                 orderItem.CancelledAt = DateTime.UtcNow;
                 orderItem.CancelledBy = userId;
@@ -1250,6 +1404,26 @@ namespace VivekMedicalProducts.Controllers
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
 
+                await LogAuditAsync(
+                    action: "CancelOrderItem",
+                    status: "Success",
+                    entityType: "OrderItem",
+                    entityId: orderItem.OrderItemId.ToString(),
+                    description: "Customer cancelled an order item.",
+                    oldValues: new
+                    {
+                        OrderItemStatus = oldItemStatus,
+                        PaymentStatus = oldPaymentStatus
+                    },
+                    newValues: new
+                    {
+                        OrderItemStatus = orderItem.OrderItemStatus,
+                        PaymentStatus = orderItem.Order.PaymentStatus,
+                        orderItem.RefundStatus,
+                        orderItem.RefundAmount
+                    },
+                    cancellationToken: cancellationToken);
+
                 return Ok(new
                 {
                     success = true,
@@ -1262,6 +1436,13 @@ namespace VivekMedicalProducts.Controllers
             catch (Exception ex)
             {
                 await transaction.RollbackAsync(cancellationToken);
+                await LogAuditAsync(
+                    action: "CancelOrderItem",
+                    status: "Failed",
+                    entityType: "OrderItem",
+                    entityId: orderItemId.ToString(),
+                    description: "Order item cancellation failed.",
+                    cancellationToken: cancellationToken);
                 return ErrorResponse(ex, "Failed to cancel order item.", userId: userId);
             }
         }
@@ -1374,6 +1555,15 @@ namespace VivekMedicalProducts.Controllers
                 }
 
                 var orderStatus = DeriveOrderStatus(order.OrderItems.Select(x => x.OrderItemStatus));
+
+                await LogAuditAsync(
+                    action: "ViewOrderSuccess",
+                    status: "Success",
+                    entityType: "Order",
+                    entityId: order.OrderId.ToString(),
+                    description: "Customer viewed the order confirmation/details page.",
+                    newValues: new { order.OrderNumber, order.PaymentStatus },
+                    cancellationToken: cancellationToken);
 
                 return Ok(new
                 {
@@ -1710,6 +1900,22 @@ namespace VivekMedicalProducts.Controllers
 
                 await _context.SaveChangesAsync(cancellationToken);
 
+                await LogAuditAsync(
+                    action: "RequestReturn",
+                    status: "Success",
+                    entityType: "OrderReturn",
+                    entityId: returnRequest.ReturnId.ToString(),
+                    description: "Customer submitted a return request.",
+                    oldValues: new { ReturnStatus = ReturnStatuses.None },
+                    newValues: new
+                    {
+                        ReturnStatus = returnRequest.Status,
+                        returnRequest.OrderId,
+                        returnRequest.OrderItemId,
+                        returnRequest.RequestedDate
+                    },
+                    cancellationToken: cancellationToken);
+
                 // =========================================================
                 // Response
                 // =========================================================
@@ -1738,6 +1944,14 @@ namespace VivekMedicalProducts.Controllers
             }
             catch (Exception ex)
             {
+                await LogAuditAsync(
+                    action: "RequestReturn",
+                    status: "Failed",
+                    entityType: "OrderReturn",
+                    entityId: orderItemId.ToString(),
+                    description: "Customer return request submission failed.",
+                    cancellationToken: cancellationToken);
+
                 return ErrorResponse(
                     ex,
                     "Failed to submit return request.",
@@ -1825,6 +2039,15 @@ namespace VivekMedicalProducts.Controllers
                 })
                 .ToListAsync(cancellationToken);
 
+            await LogAuditAsync(
+                action: "ViewReturns",
+                status: "Success",
+                entityType: "OrderReturn",
+                entityId: null,
+                description: "Admin or seller viewed the return management list.",
+                newValues: new { Page = page, PageSize = pageSize, TotalRecords = totalRecords },
+                cancellationToken: cancellationToken);
+
             return Ok(new
             {
                 currentPage = page,
@@ -1873,6 +2096,11 @@ namespace VivekMedicalProducts.Controllers
                     return NotFound(new { success = false, message = "Return request not found." });
                 }
 
+                var oldReturnStatus = item.Status;
+                var oldItemReturnStatus = item.OrderItem.ReturnStatus;
+                var oldRefundStatus = item.OrderItem.RefundStatus;
+                var oldRefundAmount = item.OrderItem.RefundAmount;
+
                 item.Status = dto.Status;
                 item.Remarks = dto.Remarks;
                 item.OrderItem.ReturnStatus = dto.Status;
@@ -1893,10 +2121,40 @@ namespace VivekMedicalProducts.Controllers
 
                 await _context.SaveChangesAsync(cancellationToken);
 
+                await LogAuditAsync(
+                    action: "UpdateReturnStatus",
+                    status: "Success",
+                    entityType: "OrderReturn",
+                    entityId: item.ReturnId.ToString(),
+                    description: "Admin or seller updated a return request status.",
+                    oldValues: new
+                    {
+                        ReturnStatus = oldReturnStatus,
+                        OrderItemReturnStatus = oldItemReturnStatus,
+                        RefundStatus = oldRefundStatus,
+                        RefundAmount = oldRefundAmount
+                    },
+                    newValues: new
+                    {
+                        ReturnStatus = item.Status,
+                        OrderItemReturnStatus = item.OrderItem.ReturnStatus,
+                        RefundStatus = item.OrderItem.RefundStatus,
+                        RefundAmount = item.OrderItem.RefundAmount
+                    },
+                    cancellationToken: cancellationToken);
+
                 return Ok(new { success = true, message = "Return status updated successfully." });
             }
             catch (Exception ex)
             {
+                await LogAuditAsync(
+                    action: "UpdateReturnStatus",
+                    status: "Failed",
+                    entityType: "OrderReturn",
+                    entityId: returnId.ToString(),
+                    description: "Admin or seller return status update failed.",
+                    cancellationToken: cancellationToken);
+
                 return ErrorResponse(ex, "Failed to update return status.", StatusCodes.Status500InternalServerError);
             }
         }
@@ -2039,6 +2297,15 @@ namespace VivekMedicalProducts.Controllers
                     };
                 }).ToList();
 
+                await LogAuditAsync(
+                    action: "ViewMyOrders",
+                    status: "Success",
+                    entityType: "Order",
+                    entityId: null,
+                    description: "Customer viewed their order history.",
+                    newValues: new { Page = page, PageSize = pageSize, ReturnedCount = response.Count },
+                    cancellationToken: cancellationToken);
+
                 return Ok(new
                 {
                     success = true,
@@ -2100,6 +2367,15 @@ namespace VivekMedicalProducts.Controllers
                 {
                     return StatusCode(500, new { success = false, message = "Invoice PDF generation failed." });
                 }
+
+                await LogAuditAsync(
+                    action: "DownloadInvoice",
+                    status: "Success",
+                    entityType: "Order",
+                    entityId: order.OrderId.ToString(),
+                    description: "Customer downloaded an order invoice.",
+                    newValues: new { order.OrderNumber },
+                    cancellationToken: cancellationToken);
 
                 return File(pdfBytes, "application/pdf", $"Invoice-{order.OrderNumber}.pdf");
             }
@@ -2577,6 +2853,17 @@ namespace VivekMedicalProducts.Controllers
                 {
                     return NotFound(new { success = false, message = "Order not found" });
                 }
+
+                await LogAuditAsync(
+                    action: "ViewOrderDetails",
+                    status: "Success",
+                    entityType: "Order",
+                    entityId: order.OrderId.ToString(),
+                    description: isAdmin
+                        ? "Admin viewed order details."
+                        : "Seller viewed authorized order details.",
+                    newValues: new { order.OrderNumber, order.PaymentStatus },
+                    cancellationToken: cancellationToken);
 
                 return Ok(new
                 {

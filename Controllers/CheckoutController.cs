@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿
+using Microsoft.AspNetCore.Mvc;
 using VivekMedicalProducts.Interfaces;
 using VivekMedicalProducts.Models;
 
@@ -9,13 +10,16 @@ namespace VivekMedicalProducts.Controllers
     public class CheckoutController : ControllerBase
     {
         private readonly ICheckoutService _checkoutService;
+        private readonly IAuditService _auditService;
         private readonly ILogger<CheckoutController> _logger;
 
         public CheckoutController(
             ICheckoutService checkoutService,
+            IAuditService auditService,
             ILogger<CheckoutController> logger)
         {
             _checkoutService = checkoutService;
+            _auditService = auditService;
             _logger = logger;
         }
 
@@ -27,11 +31,21 @@ namespace VivekMedicalProducts.Controllers
             try
             {
                 var result = await _checkoutService.GetCheckoutAsync();
+
+                await LogAuditAsync(
+                    "ViewCheckout",
+                    "Checkout",
+                    "Success",
+                    "Checkout",
+                    null,
+                    "Customer accessed the checkout page.",
+                    ct);
+
                 return Ok(result);
             }
             catch (Exception ex)
             {
-                return HandleError(ex, "GetCheckout");
+                return await HandleErrorAsync(ex, "GetCheckout", ct);
             }
         }
 
@@ -42,9 +56,27 @@ namespace VivekMedicalProducts.Controllers
             [FromBody] UserAddress model,
             CancellationToken ct)
         {
+            if (model == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Invalid address information."
+                });
+            }
+
             try
             {
                 var result = await _checkoutService.AddAddressAsync(model);
+
+                await LogAuditAsync(
+                    "AddAddress",
+                    "Checkout",
+                    "Success",
+                    "UserAddress",
+                    null,
+                    "Customer added a new delivery address.",
+                    ct);
 
                 return Ok(new
                 {
@@ -54,7 +86,7 @@ namespace VivekMedicalProducts.Controllers
             }
             catch (Exception ex)
             {
-                return HandleError(ex, "AddAddress");
+                return await HandleErrorAsync(ex, "AddAddress", ct);
             }
         }
 
@@ -66,9 +98,27 @@ namespace VivekMedicalProducts.Controllers
             [FromBody] UserAddress model,
             CancellationToken ct)
         {
+            if (model == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Invalid address information."
+                });
+            }
+
             try
             {
                 var result = await _checkoutService.UpdateAddressAsync(id, model);
+
+                await LogAuditAsync(
+                    "UpdateAddress",
+                    "Checkout",
+                    "Success",
+                    "UserAddress",
+                    id.ToString(),
+                    "Customer updated a delivery address.",
+                    ct);
 
                 return Ok(new
                 {
@@ -78,24 +128,35 @@ namespace VivekMedicalProducts.Controllers
             }
             catch (Exception ex)
             {
-                return HandleError(ex, "UpdateAddress");
+                return await HandleErrorAsync(ex, "UpdateAddress", ct, id.ToString());
             }
         }
 
         // ================= SELECT ADDRESS =================
 
         [HttpPost("select-address/{id}")]
-        public async Task<IActionResult> SelectAddress(int id, CancellationToken ct)
+        public async Task<IActionResult> SelectAddress(
+            int id,
+            CancellationToken ct)
         {
             try
             {
                 await _checkoutService.SaveSelectedAddressAsync(id);
 
+                await LogAuditAsync(
+                    "SelectAddress",
+                    "Checkout",
+                    "Success",
+                    "UserAddress",
+                    id.ToString(),
+                    "Customer selected a delivery address for checkout.",
+                    ct);
+
                 return Ok(new { success = true });
             }
             catch (Exception ex)
             {
-                return HandleError(ex, "SelectAddress");
+                return await HandleErrorAsync(ex, "SelectAddress", ct, id.ToString());
             }
         }
 
@@ -106,8 +167,18 @@ namespace VivekMedicalProducts.Controllers
             [FromBody] ApplyCouponRequest request,
             CancellationToken ct)
         {
-            if (string.IsNullOrWhiteSpace(request.CouponCode))
+            if (request == null ||
+                string.IsNullOrWhiteSpace(request.CouponCode))
             {
+                await LogAuditAsync(
+                    "ApplyCoupon",
+                    "Checkout",
+                    "Failed",
+                    "Coupon",
+                    null,
+                    "Coupon application failed because the coupon code was empty.",
+                    ct);
+
                 return BadRequest(new
                 {
                     success = false,
@@ -118,13 +189,22 @@ namespace VivekMedicalProducts.Controllers
             try
             {
                 await _checkoutService.ApplyCouponAsync(
-                    request.CouponCode.Trim().ToUpper());
+                    request.CouponCode.Trim().ToUpperInvariant());
+
+                await LogAuditAsync(
+                    "ApplyCoupon",
+                    "Checkout",
+                    "Success",
+                    "Coupon",
+                    null,
+                    "Customer successfully applied a coupon.",
+                    ct);
 
                 return Ok(new { success = true });
             }
             catch (Exception ex)
             {
-                return HandleError(ex, "ApplyCoupon");
+                return await HandleErrorAsync(ex, "ApplyCoupon", ct);
             }
         }
 
@@ -137,37 +217,76 @@ namespace VivekMedicalProducts.Controllers
             {
                 await _checkoutService.RemoveCouponAsync();
 
+                await LogAuditAsync(
+                    "RemoveCoupon",
+                    "Checkout",
+                    "Success",
+                    "Coupon",
+                    null,
+                    "Customer removed the applied coupon.",
+                    ct);
+
                 return Ok(new { success = true });
             }
             catch (Exception ex)
             {
-                return HandleError(ex, "RemoveCoupon");
+                return await HandleErrorAsync(ex, "RemoveCoupon", ct);
             }
         }
 
-        // ---------------------------------------------------------------
-        // Centralized error handling.
-        //
-        // The original code caught every exception the same way and
-        // echoed ex.Message straight to the client as a 400. That means
-        // a genuine bug (null ref, DB timeout, unhandled edge case)
-        // comes back to the browser as "Bad Request" with an internal
-        // error string attached — wrong status code, and a potential
-        // information leak. Here:
-        //   - expected, "the request itself was invalid" failures
-        //     (ArgumentException / InvalidOperationException — throw
-        //     these from the service layer for business-rule violations
-        //     like "address not found" or "coupon expired") come back
-        //     as 400 with their message, since the service already
-        //     wrote a message safe to show a user.
-        //   - anything else is logged with the full exception and
-        //     returned as a generic 500, so stack traces / SQL errors
-        //     never reach the client.
-        // ---------------------------------------------------------------
-        private IActionResult HandleError(Exception ex, string action)
+        // ================= AUDIT LOGGING =================
+
+        private async Task LogAuditAsync(
+            string action,
+            string module,
+            string status,
+            string entityType,
+            string? entityId,
+            string description,
+            CancellationToken ct)
         {
-            if (ex is ArgumentException or InvalidOperationException or KeyNotFoundException)
+            try
             {
+                await _auditService.LogAsync(
+                    action: action,
+                    module: module,
+                    status: status,
+                    entityType: entityType,
+                    entityId: entityId,
+                    description: description,
+                    cancellationToken: ct);
+            }
+            catch (Exception auditException)
+            {
+                // Audit failures should not interrupt checkout operations.
+                _logger.LogError(
+                    auditException,
+                    "Failed to write checkout audit log for action {Action}.",
+                    action);
+            }
+        }
+
+        // ================= CENTRALIZED ERROR HANDLING =================
+
+        private async Task<IActionResult> HandleErrorAsync(
+            Exception ex,
+            string action,
+            CancellationToken ct,
+            string? entityId = null)
+        {
+            if (ex is ArgumentException or
+                InvalidOperationException or
+                KeyNotFoundException)
+            {
+                await LogAuditAsync(
+                    action,
+                    "Checkout",
+                    "Failed",
+                    "Checkout",
+                    entityId,
+                    $"Checkout operation failed: {action}.",
+                    ct);
+
                 return BadRequest(new
                 {
                     success = false,
@@ -175,13 +294,27 @@ namespace VivekMedicalProducts.Controllers
                 });
             }
 
-            _logger.LogError(ex, "Checkout.{Action} failed", action);
+            _logger.LogError(
+                ex,
+                "Checkout.{Action} failed.",
+                action);
 
-            return StatusCode(500, new
-            {
-                success = false,
-                message = "Something went wrong, please try again."
-            });
+            await LogAuditAsync(
+                action,
+                "Checkout",
+                "Failed",
+                "Checkout",
+                entityId,
+                $"An unexpected error occurred during checkout operation: {action}.",
+                ct);
+
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new
+                {
+                    success = false,
+                    message = "Something went wrong, please try again."
+                });
         }
     }
 

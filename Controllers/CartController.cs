@@ -1,9 +1,9 @@
-﻿using DocumentFormat.OpenXml.Spreadsheet;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using VivekMedicalProducts.Data;
 using VivekMedicalProducts.DTOs;
+using VivekMedicalProducts.Interfaces;
 using VivekMedicalProducts.Models;
 using VivekMedicalProducts.Services;
 
@@ -17,16 +17,19 @@ namespace VivekMedicalProducts.Controllers
         private readonly ICartCalculationService _cartCalculation;
         private readonly ICouponService _couponService;
         private readonly ILogger<CartController> _logger;
+        private readonly IAuditService _auditService;
 
         public CartController(
             ApplicationDbContext context,
             ICartCalculationService cartCalculation,
             ICouponService couponService,
+            IAuditService auditService,
             ILogger<CartController> logger)
         {
             _context = context;
             _cartCalculation = cartCalculation;
             _couponService = couponService;
+            _auditService = auditService;
             _logger = logger;
         }
 
@@ -95,15 +98,20 @@ namespace VivekMedicalProducts.Controllers
             [FromBody] AddCartItemDto dto,
             CancellationToken ct)
         {
-            var (userId, guestId) = GetOrCreateIdentity();
+            if (dto == null || dto.ProductId <= 0 || dto.VariantId <= 0 || dto.Quantity <= 0)
+            {
+                await LogCartAuditAsync(
+                    "AddToCart", "Failed", "CartItem", null,
+                    "Invalid cart item details were submitted.", ct);
 
-            // Retry a couple of times in case two rapid "add" clicks race
-            // each other (both see "no existing row" and both insert).
-            // This assumes a unique index in the DB on
-            // (UserId, ProductId, ProductVariantId) and
-            // (GuestId, ProductId, ProductVariantId) — add one if it
-            // doesn't exist yet; without it, this fix only reduces the
-            // race window, it doesn't close it.
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Please provide valid product, variant and quantity details."
+                });
+            }
+
+            var (userId, guestId) = GetOrCreateIdentity();
             const int maxAttempts = 3;
 
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
@@ -114,10 +122,10 @@ namespace VivekMedicalProducts.Controllers
                         .FirstOrDefaultAsync(x =>
                             x.ProductId == dto.ProductId &&
                             x.ProductVariantId == dto.VariantId &&
-                            (
-                                (!string.IsNullOrEmpty(userId) && x.UserId == userId) ||
-                                (string.IsNullOrEmpty(userId) && x.GuestId == guestId)
-                            ), ct);
+                            ((!string.IsNullOrEmpty(userId) && x.UserId == userId) ||
+                             (string.IsNullOrEmpty(userId) && x.GuestId == guestId)), ct);
+
+                    var previousQuantity = cartItem?.Quantity ?? 0;
 
                     if (cartItem != null)
                     {
@@ -125,7 +133,6 @@ namespace VivekMedicalProducts.Controllers
                     }
                     else
                     {
-                        // Only need SellerId, so project instead of loading the full product.
                         var sellerId = await _context.Products
                             .Where(x => x.Id == dto.ProductId)
                             .Select(x => (int?)x.SellerId)
@@ -144,31 +151,55 @@ namespace VivekMedicalProducts.Controllers
                     }
 
                     await _context.SaveChangesAsync(ct);
-
                     var cartCount = await GetCartCountAsync(userId, guestId, ct);
+
+                    await LogCartAuditAsync(
+                        "AddToCart", "Success", "CartItem", dto.VariantId.ToString(),
+                        "Product added to cart.", ct,
+                        oldValues: new { quantity = previousQuantity },
+                        newValues: new { productId = dto.ProductId, variantId = dto.VariantId, quantity = previousQuantity + dto.Quantity });
 
                     return Ok(new { success = true, cartCount });
                 }
-                catch (DbUpdateException) when (attempt < maxAttempts)
+                catch (DbUpdateException ex)
                 {
-                    // Lost the race to a concurrent insert for the same
-                    // (identity, product, variant). Detach the failed
-                    // entity and retry — the next pass will find the row
-                    // the other request just created and update it instead.
                     foreach (var entry in _context.ChangeTracker.Entries().ToList())
                         entry.State = EntityState.Detached;
+
+                    if (attempt < maxAttempts)
+                        continue;
+
+                    _logger.LogWarning(ex,
+                        "AddToCart failed after {Attempts} attempts for product {ProductId}/{VariantId}",
+                        maxAttempts, dto.ProductId, dto.VariantId);
+
+                    await LogCartAuditAsync(
+                        "AddToCart", "Failed", "CartItem", dto.VariantId.ToString(),
+                        "Could not add product to cart after retry attempts.", ct);
+
+                    return Conflict(new
+                    {
+                        success = false,
+                        message = "Could not add item to cart, please try again."
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "AddToCart failed for product {ProductId}/{VariantId}", dto.ProductId, dto.VariantId);
+
+                    await LogCartAuditAsync(
+                        "AddToCart", "Failed", "CartItem", dto.VariantId.ToString(),
+                        "An unexpected error occurred while adding a product to the cart.", ct);
+
+                    return StatusCode(500, new
+                    {
+                        success = false,
+                        message = "Could not add item to cart. Please try again."
+                    });
                 }
             }
 
-            _logger.LogWarning(
-                "AddToCart failed after {Attempts} attempts for product {ProductId}/{VariantId}",
-                maxAttempts, dto.ProductId, dto.VariantId);
-
-            return Conflict(new
-            {
-                success = false,
-                message = "Could not add item to cart, please try again."
-            });
+            return Conflict(new { success = false, message = "Could not add item to cart, please try again." });
         }
 
         // ---------------------------------------------------------------
@@ -180,28 +211,45 @@ namespace VivekMedicalProducts.Controllers
             [FromBody] AddCartItemDto dto,
             CancellationToken ct)
         {
+            if (dto == null || dto.VariantId <= 0)
+                return BadRequest(new { success = false, message = "Invalid cart item." });
+
             var (userId, guestId) = GetOrCreateIdentity();
 
             var item = await _context.Carts
                 .FirstOrDefaultAsync(x =>
                     x.ProductVariantId == dto.VariantId &&
-                    (
-                        (!string.IsNullOrEmpty(userId) && x.UserId == userId) ||
-                        (string.IsNullOrEmpty(userId) && x.GuestId == guestId)
-                    ), ct);
+                    ((!string.IsNullOrEmpty(userId) && x.UserId == userId) ||
+                     (string.IsNullOrEmpty(userId) && x.GuestId == guestId)), ct);
 
             if (item == null)
-                return NotFound();
+            {
+                await LogCartAuditAsync(
+                    "UpdateCartQuantity", "Failed", "CartItem", dto.VariantId.ToString(),
+                    "Cart item was not found for quantity update.", ct);
 
-            if (dto.Quantity <= 0)
+                return NotFound(new { success = false, message = "Cart item not found." });
+            }
+
+            var oldQuantity = item.Quantity;
+            var removed = dto.Quantity <= 0;
+
+            if (removed)
                 _context.Carts.Remove(item);
             else
                 item.Quantity = dto.Quantity;
 
             await _context.SaveChangesAsync(ct);
 
-            var (summary, cartCount) = await GetSummaryAndCountAsync(userId, guestId, ct);
+            await LogCartAuditAsync(
+                removed ? "RemoveCartItem" : "UpdateCartQuantity",
+                "Success", "CartItem", dto.VariantId.ToString(),
+                removed ? "Cart item removed through quantity update." : "Cart item quantity updated.",
+                ct,
+                oldValues: new { quantity = oldQuantity },
+                newValues: removed ? null : new { quantity = dto.Quantity });
 
+            var (summary, cartCount) = await GetSummaryAndCountAsync(userId, guestId, ct);
             return Ok(new { success = true, cartCount, summary });
         }
 
@@ -275,15 +323,23 @@ namespace VivekMedicalProducts.Controllers
         {
             var (userId, guestId) = GetOrCreateIdentity();
 
-            if (string.IsNullOrWhiteSpace(dto.Code))
+            if (dto == null || string.IsNullOrWhiteSpace(dto.Code))
             {
+                await LogCartAuditAsync(
+                    "ApplyCoupon", "Failed", "Coupon", null,
+                    "Coupon application failed because no coupon code was provided.", ct);
+
                 return BadRequest(new { success = false, message = "Please enter coupon code" });
             }
 
-            var code = dto.Code.Trim().ToUpper();
+            var code = dto.Code.Trim().ToUpperInvariant();
 
             if (!_couponService.IsValidCoupon(code))
             {
+                await LogCartAuditAsync(
+                    "ApplyCoupon", "Failed", "Coupon", null,
+                    "Customer attempted to apply an invalid coupon.", ct);
+
                 return Ok(new { success = false, message = "Invalid coupon code", couponDiscount = 0 });
             }
 
@@ -303,16 +359,18 @@ namespace VivekMedicalProducts.Controllers
                     ModifiedDate = DateTime.UtcNow,
                     IsActive = true
                 };
-
                 _context.CheckoutSessions.Add(checkoutSession);
             }
 
             checkoutSession.CouponCode = code;
             checkoutSession.ModifiedDate = DateTime.UtcNow;
-
             await _context.SaveChangesAsync(ct);
 
             var totals = await _cartCalculation.CalculateAsync(userId, guestId, code);
+
+            await LogCartAuditAsync(
+                "ApplyCoupon", "Success", "Coupon", null,
+                "Customer successfully applied a coupon.", ct);
 
             return Ok(new
             {
@@ -328,7 +386,6 @@ namespace VivekMedicalProducts.Controllers
         {
             var (userId, guestId) = GetOrCreateIdentity();
 
-            // ExecuteUpdate avoids loading the entity just to null one column.
             await _context.CheckoutSessions
                 .Where(x =>
                     x.IsActive &&
@@ -339,6 +396,10 @@ namespace VivekMedicalProducts.Controllers
                     .SetProperty(x => x.ModifiedDate, DateTime.UtcNow), ct);
 
             var totals = await _cartCalculation.CalculateAsync(userId, guestId, null);
+
+            await LogCartAuditAsync(
+                "RemoveCoupon", "Success", "Coupon", null,
+                "Customer removed the applied coupon.", ct);
 
             return Ok(new { success = true, summary = totals });
         }
@@ -355,17 +416,24 @@ namespace VivekMedicalProducts.Controllers
             var deleted = await _context.Carts
                 .Where(x =>
                     x.ProductVariantId == variantId &&
-                    (
-                        (!string.IsNullOrEmpty(userId) && x.UserId == userId) ||
-                        (string.IsNullOrEmpty(userId) && x.GuestId == guestId)
-                    ))
+                    ((!string.IsNullOrEmpty(userId) && x.UserId == userId) ||
+                     (string.IsNullOrEmpty(userId) && x.GuestId == guestId)))
                 .ExecuteDeleteAsync(ct);
 
             if (deleted == 0)
-                return NotFound(new { success = false });
+            {
+                await LogCartAuditAsync(
+                    "RemoveCartItem", "Failed", "CartItem", variantId.ToString(),
+                    "Cart item was not found for removal.", ct);
+
+                return NotFound(new { success = false, message = "Cart item not found." });
+            }
+
+            await LogCartAuditAsync(
+                "RemoveCartItem", "Success", "CartItem", variantId.ToString(),
+                "Customer removed an item from the cart.", ct);
 
             var (summary, cartCount) = await GetSummaryAndCountAsync(userId, guestId, ct);
-
             return Ok(new { success = true, cartCount, summary });
         }
 
@@ -430,6 +498,11 @@ namespace VivekMedicalProducts.Controllers
             await _context.SaveChangesAsync(ct);
 
             Response.Cookies.Delete("guest_id");
+
+            await LogCartAuditAsync(
+                "SyncGuestCart", "Success", "Cart", null,
+                $"Guest cart synchronized with the customer account. Items processed: {guestItems.Count}.", ct,
+                newValues: new { itemsProcessed = guestItems.Count });
 
             return Ok(new { success = true });
         }
@@ -533,6 +606,36 @@ namespace VivekMedicalProducts.Controllers
         // in one place instead of duplicating the identity predicate
         // and re-querying separately in every action.
         // ---------------------------------------------------------------
+
+        private async Task LogCartAuditAsync(
+            string action,
+            string status,
+            string entityType,
+            string? entityId,
+            string description,
+            CancellationToken ct,
+            object? oldValues = null,
+            object? newValues = null)
+        {
+            try
+            {
+                await _auditService.LogAsync(
+                    action: action,
+                    module: "Cart",
+                    status: status,
+                    entityType: entityType,
+                    entityId: entityId,
+                    description: description,
+                    oldValues: oldValues,
+                    newValues: newValues,
+                    cancellationToken: ct);
+            }
+            catch (Exception ex)
+            {
+                // Cart operations should continue even if audit persistence fails.
+                _logger.LogError(ex, "Failed to write cart audit log for action {Action}.", action);
+            }
+        }
 
         private async Task<int> GetCartCountAsync(string? userId, string? guestId, CancellationToken ct)
         {

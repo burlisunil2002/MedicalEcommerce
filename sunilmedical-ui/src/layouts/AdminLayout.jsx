@@ -62,10 +62,15 @@ export default function AdminLayout() {
             icon: Users
         },
         {
+            label: "Audit Log Report",
+            path: "/admin/audit-logs",
+            icon: Users
+        },
+       /* {
             label: "Enquiries",
             path: "/admin/enquiries",
             icon: MessageSquare
-        }
+        }*/
     ];
 
 

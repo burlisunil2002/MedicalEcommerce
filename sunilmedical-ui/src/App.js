@@ -33,6 +33,8 @@ import AddProduct from "./pages/AddProduct";
 import EditProduct from "./pages/EditProduct";
 import ReturnOrdersPage from "./pages/ReturnOrdersPage";
 import SellerManagement from "./pages/SellerManagement";
+import AuditLogReport from "./pages/AuditLogReport";
+
 
 
 
@@ -372,6 +374,11 @@ function App() {
                         <Route
                             path="returns"
                             element={<ReturnOrdersPage />}
+                        />
+
+                        <Route
+                            path="audit-logs"
+                            element={<AuditLogReport />}
                         />
 
                     </Route>

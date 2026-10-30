@@ -4,6 +4,7 @@ using System.Security.Claims;
 using VivekMedicalProducts.Data;
 using VivekMedicalProducts.Models;
 using VivekMedicalProducts.DTOs;
+using VivekMedicalProducts.Interfaces;
 
 
 [ApiController]
@@ -13,11 +14,48 @@ public class WishlistController : Controller
     private readonly ApplicationDbContext _context;
 
     private readonly IWebHostEnvironment _env;
+    private readonly IAuditService _auditService;
+    private readonly ILogger<WishlistController> _logger;
 
-    public WishlistController(ApplicationDbContext context, IWebHostEnvironment env)
+    public WishlistController(
+        ApplicationDbContext context,
+        IWebHostEnvironment env,
+        IAuditService auditService,
+        ILogger<WishlistController> logger)
     {
         _context = context;
         _env = env;
+        _auditService = auditService;
+        _logger = logger;
+    }
+
+    // Audit failures must never interrupt wishlist operations.
+    private async Task LogAuditAsync(
+        string action,
+        string status = "Success",
+        string? entityType = null,
+        string? entityId = null,
+        string? description = null,
+        object? oldValues = null,
+        object? newValues = null)
+    {
+        try
+        {
+            await _auditService.LogAsync(
+                action: action,
+                module: "Wishlist",
+                status: status,
+                entityType: entityType,
+                entityId: entityId,
+                description: description,
+                oldValues: oldValues,
+                newValues: newValues,
+                cancellationToken: HttpContext.RequestAborted);
+        }
+        catch (Exception auditEx)
+        {
+            _logger.LogError(auditEx, "Failed to write wishlist audit log for {Action}", action);
+        }
     }
 
     // 🔥 GET USER / GUEST IDENTIFIER
@@ -203,6 +241,11 @@ public class WishlistController : Controller
                 })
                 .ToListAsync();
 
+            await LogAuditAsync(
+                action: "WishlistViewed",
+                entityType: "Wishlist",
+                description: $"Wishlist viewed; {items.Count} item(s) returned.");
+
             return Ok(new
             {
                 success = true,
@@ -211,6 +254,12 @@ public class WishlistController : Controller
         }
         catch (Exception ex)
         {
+            await LogAuditAsync(
+                action: "WishlistViewed",
+                status: "Failed",
+                entityType: "Wishlist",
+                description: "Failed to load wishlist.");
+
             return StatusCode(500,
                 new
                 {
@@ -248,6 +297,15 @@ public class WishlistController : Controller
             {
                 _context.Wishlists.Remove(item);
                 await _context.SaveChangesAsync();
+
+                await LogAuditAsync(
+                    action: "WishlistItemRemoved",
+                    entityType: "WishlistItem",
+                    entityId: $"{productId}:{req.VariantId}",
+                    description: "Product removed from wishlist.",
+                    oldValues: new { productId, variantId = req.VariantId },
+                    newValues: new { added = false });
+
                 return Ok(new { added = false });
             }
 
@@ -261,11 +319,25 @@ public class WishlistController : Controller
 
             await _context.SaveChangesAsync();
 
+            await LogAuditAsync(
+                action: "WishlistItemAdded",
+                entityType: "WishlistItem",
+                entityId: $"{productId}:{req.VariantId}",
+                description: "Product added to wishlist.",
+                newValues: new { productId, variantId = req.VariantId, added = true });
+
             return Ok(new { added = true });
         }
         catch (Exception ex)
         {
             Console.WriteLine(ex.ToString());
+
+            await LogAuditAsync(
+                action: "WishlistItemToggle",
+                status: "Failed",
+                entityType: "WishlistItem",
+                description: "Failed to add or remove a wishlist item.");
+
             return StatusCode(500, ex.Message);
         }
     }
@@ -283,6 +355,11 @@ public class WishlistController : Controller
             )
             .CountAsync();
 
+        await LogAuditAsync(
+            action: "WishlistCountViewed",
+            entityType: "Wishlist",
+            description: $"Wishlist item count viewed; count={count}.");
+
         return Ok(count);
     }
 
@@ -292,7 +369,15 @@ public class WishlistController : Controller
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(userId))
+        {
+            await LogAuditAsync(
+                action: "GuestWishlistSync",
+                status: "Failed",
+                entityType: "Wishlist",
+                description: "Wishlist sync denied because the user was not authenticated.");
+
             return Unauthorized();
+        }
 
         var (_, guestId) = GetIdentity();
 
@@ -301,8 +386,12 @@ public class WishlistController : Controller
             .Select(x => x.ProductId)
             .ToListAsync();
 
-        var newItems = productIds
+        var newProductIds = productIds
             .Where(pid => !existing.Contains(pid))
+            .Distinct()
+            .ToList();
+
+        var newItems = newProductIds
             .Select(pid => new WishlistModel
             {
                 ProductId = pid,
@@ -316,6 +405,12 @@ public class WishlistController : Controller
         _context.Wishlists.RemoveRange(guestItems);
 
         await _context.SaveChangesAsync();
+
+        await LogAuditAsync(
+            action: "GuestWishlistSynced",
+            entityType: "Wishlist",
+            description: $"Guest wishlist synced to authenticated account; {newProductIds.Count} new product(s) added.",
+            newValues: new { newProductCount = newProductIds.Count });
 
         return Ok(new { success = true });
     }

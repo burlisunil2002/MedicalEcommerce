@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using System.Text.RegularExpressions;
 using VivekMedicalProducts.Data;
+using VivekMedicalProducts.Interfaces;
 using VivekMedicalProducts.DTOs;
 using VivekMedicalProducts.Models;
 using VivekMedicalProducts.Services.Storage;
@@ -23,6 +24,7 @@ public class SellerController : ControllerBase
     private readonly EmailService _emailService;
     private readonly IFileStorageService _fileStorage;
     private readonly ILogger<SellerController> _logger;
+    private readonly IAuditService _auditService;
 
     public SellerController(
         ApplicationDbContext context,
@@ -31,7 +33,8 @@ public class SellerController : ControllerBase
         IConfiguration configuration,
         EmailService emailService,
         IFileStorageService filestorage,
-        ILogger<SellerController> logger)
+        ILogger<SellerController> logger,
+        IAuditService auditService)
     {
         _context = context;
         _userManager = userManager;
@@ -40,6 +43,47 @@ public class SellerController : ControllerBase
         _emailService = emailService;
         _fileStorage = filestorage;
         _logger = logger;
+        _auditService = auditService;
+    }
+
+
+    // =========================================================
+    // AUDIT LOGGING
+    // =========================================================
+
+    // Audit failures must not interrupt seller operations.
+    // Never pass passwords, reset tokens, GST/PAN, bank details,
+    // document contents, or full addresses to this helper.
+    private async Task LogAuditAsync(
+        string action,
+        string status,
+        string entityType,
+        string? entityId,
+        string description,
+        object? oldValues = null,
+        object? newValues = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _auditService.LogAsync(
+                action: action,
+                module: "Sellers",
+                status: status,
+                entityType: entityType,
+                entityId: entityId,
+                description: description,
+                oldValues: oldValues,
+                newValues: newValues,
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception auditException)
+        {
+            _logger.LogError(
+                auditException,
+                "Failed to write seller audit event {Action}.",
+                action);
+        }
     }
 
     // =========================================================
@@ -367,6 +411,24 @@ public class SellerController : ControllerBase
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
 
+            await LogAuditAsync(
+                action: "SellerRegistration",
+                status: "Success",
+                entityType: "Seller",
+                entityId: seller.SellerId.ToString(),
+                description: "Seller registration completed and is pending admin approval.",
+                newValues: new
+                {
+                    seller.SellerId,
+                    seller.UserId,
+                    seller.BusinessName,
+                    seller.Status,
+                    seller.IsActive,
+                    seller.SubscriptionPlan,
+                    FreeSubscriptionStartDate = freeStartDate,
+                    FreeSubscriptionEndDate = freeEndDate
+                });
+
             return Ok(new
             {
                 success = true,
@@ -384,6 +446,13 @@ public class SellerController : ControllerBase
         catch (Exception ex)
         {
             await transaction.RollbackAsync();
+
+            await LogAuditAsync(
+                action: "SellerRegistration",
+                status: "Failed",
+                entityType: "Seller",
+                entityId: null,
+                description: "Seller registration failed.");
 
             _logger.LogError(
                 ex,
@@ -457,6 +526,13 @@ public class SellerController : ControllerBase
 
         if (!passwordValid)
         {
+            await LogAuditAsync(
+                action: "SellerLogin",
+                status: "Failed",
+                entityType: "Seller",
+                entityId: seller.SellerId.ToString(),
+                description: "Seller login failed due to invalid credentials.");
+
             return Unauthorized(new
             {
                 success = false,
@@ -520,6 +596,13 @@ public class SellerController : ControllerBase
 
         if (!signInResult.Succeeded)
         {
+            await LogAuditAsync(
+                action: "SellerLogin",
+                status: "Failed",
+                entityType: "Seller",
+                entityId: seller.SellerId.ToString(),
+                description: "Seller authentication failed.");
+
             return Unauthorized(new
             {
                 success = false,
@@ -527,6 +610,19 @@ public class SellerController : ControllerBase
                     "Seller sign-in failed. Check your authentication configuration."
             });
         }
+
+        await LogAuditAsync(
+            action: "SellerLogin",
+            status: "Success",
+            entityType: "Seller",
+            entityId: seller.SellerId.ToString(),
+            description: "Seller authenticated successfully.",
+            newValues: new
+            {
+                seller.SellerId,
+                SubscriptionType = freeSubscriptionActive ? "Free" : paidSubscriptionActive ? "Paid" : "None",
+                HasValidSubscription = hasValidSubscription
+            });
 
         // 9. No active free or paid subscription.
         if (!hasValidSubscription)
@@ -645,6 +741,13 @@ public class SellerController : ControllerBase
                 seller.BusinessName,
                 resetLink);
 
+            await LogAuditAsync(
+                action: "SellerPasswordResetLinkRequested",
+                status: "Success",
+                entityType: "Seller",
+                entityId: seller.SellerId.ToString(),
+                description: "Seller password reset email was sent.");
+
             return Ok(new
             {
                 success = true,
@@ -653,6 +756,13 @@ public class SellerController : ControllerBase
         }
         catch (Exception ex)
         {
+            await LogAuditAsync(
+                action: "SellerPasswordResetLinkRequested",
+                status: "Failed",
+                entityType: "Seller",
+                entityId: null,
+                description: "Seller password reset email request failed.");
+
             _logger.LogError(ex, "Seller forgot-password request failed.");
 
             return StatusCode(500, new
@@ -723,6 +833,13 @@ public class SellerController : ControllerBase
 
             if (!result.Succeeded)
             {
+                await LogAuditAsync(
+                    action: "SellerPasswordReset",
+                    status: "Failed",
+                    entityType: "Seller",
+                    entityId: seller.SellerId.ToString(),
+                    description: "Seller password reset was rejected.");
+
                 _logger.LogWarning(
                     "Password reset failed: {Errors}",
                     string.Join(
@@ -740,6 +857,13 @@ public class SellerController : ControllerBase
                     })
                 });
             }
+
+            await LogAuditAsync(
+                action: "SellerPasswordReset",
+                status: "Success",
+                entityType: "Seller",
+                entityId: seller.SellerId.ToString(),
+                description: "Seller password was reset.");
 
             return Ok(new
             {
@@ -778,6 +902,13 @@ public class SellerController : ControllerBase
                 allowed = false,
                 reason = "Seller profile not found."
             });
+
+        await LogAuditAsync(
+            action: "CheckSellerAccessStatus",
+            status: "Success",
+            entityType: "Seller",
+            entityId: seller.SellerId.ToString(),
+            description: "Seller access and subscription eligibility were checked.");
 
         // Step 1: Admin approval is mandatory.
         if (!seller.IsActive ||
@@ -1163,6 +1294,13 @@ public class SellerController : ControllerBase
         // RESPONSE
         // -----------------------------------------------------
 
+        await LogAuditAsync(
+            action: "ViewSellerDashboard",
+            status: "Success",
+            entityType: "Seller",
+            entityId: sellerId.ToString(),
+            description: "Seller viewed dashboard metrics.");
+
         return Ok(new
         {
             success = true,
@@ -1248,6 +1386,13 @@ public class SellerController : ControllerBase
             });
         }
 
+        await LogAuditAsync(
+            action: "ViewSellerProfile",
+            status: "Success",
+            entityType: "Seller",
+            entityId: seller.SellerId.ToString(),
+            description: "Seller viewed their profile.");
+
         return Ok(new
         {
             success = true,
@@ -1307,6 +1452,13 @@ public class SellerController : ControllerBase
                 .SumAsync(x =>
                     (decimal?)x.FinalPaidAmount) ?? 0m;
 
+        await LogAuditAsync(
+            action: "ViewSellerStatistics",
+            status: "Success",
+            entityType: "Seller",
+            entityId: seller.SellerId.ToString(),
+            description: "Seller viewed statistics.");
+
         return Ok(new
         {
             success = true,
@@ -1350,6 +1502,13 @@ public class SellerController : ControllerBase
         {
             return NotFound();
         }
+
+        await LogAuditAsync(
+            action: "ViewSellerSubscription",
+            status: "Success",
+            entityType: "Seller",
+            entityId: seller.SellerId.ToString(),
+            description: "Seller viewed subscription status.");
 
         return Ok(new
         {
@@ -1408,6 +1567,13 @@ public class SellerController : ControllerBase
                 .CountAsync(x =>
                     x.SellerId == seller.SellerId);
 
+        await LogAuditAsync(
+            action: "ViewSellerProductLimit",
+            status: "Success",
+            entityType: "Seller",
+            entityId: seller.SellerId.ToString(),
+            description: "Seller viewed product limit.");
+
         return Ok(new
         {
             success = true,
@@ -1425,6 +1591,13 @@ public class SellerController : ControllerBase
     public async Task<IActionResult> Logout()
     {
         await _signInManager.SignOutAsync();
+
+        await LogAuditAsync(
+            action: "SellerLogout",
+            status: "Success",
+            entityType: "Seller",
+            entityId: _userManager.GetUserId(User),
+            description: "Seller logged out.");
 
         return Ok(new
         {
@@ -1458,6 +1631,17 @@ public class SellerController : ControllerBase
             });
         }
 
+        var oldProfile = new
+        {
+            seller.BusinessName,
+            seller.OwnerName,
+            seller.Brand,
+            seller.Phone,
+            seller.City,
+            seller.State,
+            seller.Pincode
+        };
+
         seller.BusinessName = model.BusinessName;
         seller.OwnerName = model.OwnerName;
         seller.Brand = model.Brand;
@@ -1488,6 +1672,24 @@ public class SellerController : ControllerBase
             model.IFSCCode;
 
         await _context.SaveChangesAsync();
+
+        await LogAuditAsync(
+            action: "UpdateSellerProfile",
+            status: "Success",
+            entityType: "Seller",
+            entityId: seller.SellerId.ToString(),
+            description: "Seller profile was updated.",
+            oldValues: oldProfile,
+            newValues: new
+            {
+                seller.BusinessName,
+                seller.OwnerName,
+                seller.Brand,
+                seller.Phone,
+                seller.City,
+                seller.State,
+                seller.Pincode
+            });
 
         return Ok(new
         {
@@ -1521,6 +1723,13 @@ public class SellerController : ControllerBase
 
         if (!result.Succeeded)
         {
+            await LogAuditAsync(
+                action: "ChangeSellerPassword",
+                status: "Failed",
+                entityType: "Seller",
+                entityId: user.Id,
+                description: "Seller password change failed.");
+
             return BadRequest(new
             {
                 success = false,
@@ -1528,6 +1737,13 @@ public class SellerController : ControllerBase
                     .Select(x => x.Description)
             });
         }
+
+        await LogAuditAsync(
+            action: "ChangeSellerPassword",
+            status: "Success",
+            entityType: "Seller",
+            entityId: user.Id,
+            description: "Seller password changed successfully.");
 
         return Ok(new
         {
@@ -1562,8 +1778,19 @@ public class SellerController : ControllerBase
             _context.Sellers.Remove(seller);
         }
 
+        var deletedSellerId = seller?.SellerId;
+        var deletedBusinessName = seller?.BusinessName;
+
         await _userManager.DeleteAsync(user);
         await _context.SaveChangesAsync();
+
+        await LogAuditAsync(
+            action: "DeleteSellerAccount",
+            status: "Success",
+            entityType: "Seller",
+            entityId: deletedSellerId?.ToString() ?? user.Id,
+            description: "Seller account was deleted.",
+            oldValues: new { SellerId = deletedSellerId, BusinessName = deletedBusinessName });
 
         return Ok(new
         {
@@ -1599,6 +1826,14 @@ public class SellerController : ControllerBase
                 .OrderByDescending(
                     x => x.CreatedDate)
                 .ToListAsync();
+
+        await LogAuditAsync(
+            action: "ViewSellerProducts",
+            status: "Success",
+            entityType: "Seller",
+            entityId: seller.SellerId.ToString(),
+            description: "Seller viewed their product list.",
+            newValues: new { ProductCount = products.Count });
 
         return Ok(products);
     }
@@ -1970,6 +2205,25 @@ public class SellerController : ControllerBase
         // RESPONSE
         // =====================================================
 
+        await LogAuditAsync(
+            action: "ViewSellerOrders",
+            status: "Success",
+            entityType: "Seller",
+            entityId: seller.SellerId.ToString(),
+            description: "Seller viewed and filtered their order list.",
+            newValues: new
+            {
+                Page = page,
+                PageSize = pageSize,
+                TotalOrders = totalOrders,
+                TotalOrderItems = totalOrderItems,
+                HasSearch = !string.IsNullOrWhiteSpace(search),
+                PaymentStatus = paymentStatus,
+                OrderStatus = orderStatus,
+                FromDate = fromDate,
+                ToDate = toDate
+            });
+
         return Ok(new
         {
             success = true,
@@ -2232,6 +2486,10 @@ public class SellerController : ControllerBase
         // UPDATE
         // -----------------------------------------------------
 
+        var oldItemStatus = item.OrderItemStatus;
+        var oldReturnEligible = item.IsReturnEligible;
+        var oldReturnEligibleTill = item.ReturnEligibleTill;
+
         var now = DateTime.UtcNow;
 
         item.OrderItemStatus = status;
@@ -2269,6 +2527,30 @@ public class SellerController : ControllerBase
         item.ItemOrderModifiedDate = now;
 
         await _context.SaveChangesAsync();
+
+        await LogAuditAsync(
+            action: "UpdateSellerOrderItemStatus",
+            status: "Success",
+            entityType: "OrderItem",
+            entityId: item.OrderItemId.ToString(),
+            description: $"Seller changed order item status from '{oldItemStatus}' to '{item.OrderItemStatus}'.",
+            oldValues: new
+            {
+                OrderItemStatus = oldItemStatus,
+                IsReturnEligible = oldReturnEligible,
+                ReturnEligibleTill = oldReturnEligibleTill
+            },
+            newValues: new
+            {
+                item.OrderItemStatus,
+                item.IsReturnEligible,
+                item.ReturnEligibleTill,
+                item.PackedDate,
+                item.ShippedDate,
+                item.OutForDeliveryDate,
+                item.DeliveredDate,
+                item.CancelledAt
+            });
 
         return Ok(new
         {

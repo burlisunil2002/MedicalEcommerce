@@ -1,17 +1,24 @@
-﻿using DocumentFormat.OpenXml.Spreadsheet;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using VivekMedicalProducts.Data;
-using VivekMedicalProducts.Models;
-using VivekMedicalProducts.ViewModels;
 using VivekMedicalProducts.DTOs;
+using VivekMedicalProducts.Interfaces;
+using VivekMedicalProducts.Models;
+using VivekMedicalProducts.Services;
+using VivekMedicalProducts.Services.Notification;
+using VivekMedicalProducts.ViewModels;
 
 
 
 
+
+namespace VivekMedicalProducts.Controllers;
 
 [Route("[controller]")]
 public class AccountController : Controller
@@ -23,6 +30,8 @@ public class AccountController : Controller
     private readonly ApplicationDbContext _context;
     private readonly GstVerificationService _gstService;
     private readonly IUserContextService _userContext;
+    private readonly IAuditService _auditService;
+    private readonly ILogger<AccountController> _logger;
 
 
     public AccountController(
@@ -32,7 +41,9 @@ public class AccountController : Controller
         EmailService emailService,
         ApplicationDbContext context,
         GstVerificationService gstService,
-        IUserContextService userContext
+        IUserContextService userContext,
+        IAuditService auditService,
+        ILogger<AccountController> logger
         )
     {
         _userManager = userManager;
@@ -42,6 +53,8 @@ public class AccountController : Controller
         _emailService = emailService;
         _gstService = gstService;
         _userContext = userContext;
+        _auditService = auditService;
+        _logger = logger;
     }
 
     // ================= COMMON HELPERS =================
@@ -49,7 +62,47 @@ public class AccountController : Controller
 
     private string GenerateOTP()
     {
-        return new Random().Next(100000, 999999).ToString();
+        return RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
+    }
+
+    private async Task WriteAuditAsync(
+        string action,
+        string module,
+        string status,
+        string description,
+        string? userId = null,
+        string? role = null,
+        string? entityType = "ApplicationUser",
+        string? entityId = null,
+        object? oldValues = null,
+        object? newValues = null)
+    {
+        string? actorUserName = null;
+
+        if (!string.IsNullOrWhiteSpace(userId))
+        {
+            var actor = await _userManager.FindByIdAsync(userId);
+            actorUserName = actor?.CustomerName
+                ?? actor?.UserName
+                ?? actor?.Email;
+        }
+        else if (User?.Identity?.IsAuthenticated == true)
+        {
+            actorUserName = User.Identity.Name;
+        }
+
+        await _auditService.LogAsync(
+            action: action,
+            module: module,
+            status: status,
+            entityType: entityType,
+            entityId: entityId ?? userId,
+            description: description,
+            oldValues: oldValues,
+            newValues: newValues,
+            actorUserId: userId,
+            actorRole: role,
+            actorUserName: actorUserName);
     }
 
 
@@ -59,7 +112,7 @@ public class AccountController : Controller
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(req.Email))
+            if (req == null || string.IsNullOrWhiteSpace(req.Email))
                 return BadRequest(new { success = false, message = "Email is required" });
 
             var email = req.Email.Trim();
@@ -111,12 +164,7 @@ public class AccountController : Controller
             }
 
             // 🔹 STEP 5: Generate OTP
-            var otp = new Random()
-    .Next(100000, 999999)
-    .ToString();
-
-            Console.WriteLine(
-                $"OTP Generated => {email} => {otp}");
+            var otp = GenerateOTP();
 
             user.LoginOTP = otp;
             user.OTPExpiry =
@@ -135,12 +183,16 @@ public class AccountController : Controller
 
             // 🔹 STEP 6: Send email
             await _emailService.SendEmailAsync(
-     user.Email,
-     "Login OTP",
-     otp
- );
+                user.Email,
+                "Login OTP",
+                otp);
 
-            // 🔹 STEP 7: Response
+            await WriteAuditAsync(
+                "OTP_SENT", "Authentication", "Success",
+                "Login OTP issued to customer account.",
+                user.Id, "Customer");
+
+            // STEP 7: Response
             return Ok(new
             {
                 success = true,
@@ -149,11 +201,11 @@ public class AccountController : Controller
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Error while issuing login OTP.");
             return StatusCode(500, new
             {
                 success = false,
-                message = ex.Message,
-                inner = ex.InnerException?.Message
+                message = "Unable to process the OTP request. Please try again."
             });
         }
     }
@@ -166,7 +218,7 @@ public class AccountController : Controller
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(req.Email))
+            if (req == null || string.IsNullOrWhiteSpace(req.Email))
             {
                 return BadRequest(new
                 {
@@ -191,6 +243,8 @@ public class AccountController : Controller
 
             if (user == null)
             {
+                await WriteAuditAsync("OTP_LOGIN_FAILED", "Authentication", "Failed",
+                    "OTP login attempted for an unknown account.", role: "Customer");
                 return BadRequest(new
                 {
                     success = false,
@@ -200,6 +254,8 @@ public class AccountController : Controller
 
             if (string.IsNullOrWhiteSpace(user.LoginOTP))
             {
+                await WriteAuditAsync("OTP_LOGIN_FAILED", "Authentication", "Failed",
+                    "OTP verification attempted when no active OTP existed.", user.Id, "Customer");
                 return BadRequest(new
                 {
                     success = false,
@@ -209,6 +265,8 @@ public class AccountController : Controller
 
             if (!user.OTPExpiry.HasValue)
             {
+                await WriteAuditAsync("OTP_LOGIN_FAILED", "Authentication", "Failed",
+                    "OTP verification failed because expiry was unavailable.", user.Id, "Customer");
                 return BadRequest(new
                 {
                     success = false,
@@ -218,6 +276,8 @@ public class AccountController : Controller
 
             if (user.OTPExpiry.Value < DateTime.UtcNow)
             {
+                await WriteAuditAsync("OTP_LOGIN_FAILED", "Authentication", "Failed",
+                    "OTP verification failed because the OTP expired.", user.Id, "Customer");
                 return BadRequest(new
                 {
                     success = false,
@@ -231,16 +291,12 @@ public class AccountController : Controller
             var enteredOtp =
                 req.Otp.Trim();
 
-            Console.WriteLine(
-                $"Stored OTP = {storedOtp}");
-
-            Console.WriteLine(
-                $"Entered OTP = {enteredOtp}");
-
             if (!storedOtp.Equals(
                     enteredOtp,
                     StringComparison.Ordinal))
             {
+                await WriteAuditAsync("OTP_LOGIN_FAILED", "Authentication", "Failed",
+                    "OTP verification failed due to an invalid code.", user.Id, "Customer");
                 return BadRequest(new
                 {
                     success = false,
@@ -271,6 +327,12 @@ public class AccountController : Controller
                 user,
                 isPersistent: true);
 
+            var customerRoles = await _userManager.GetRolesAsync(user);
+            await WriteAuditAsync(
+                "LOGIN", "Authentication", "Success",
+                "Customer logged in successfully.", user.Id,
+                customerRoles.FirstOrDefault() ?? "Customer");
+
             return Ok(new
             {
                 success = true,
@@ -284,10 +346,11 @@ public class AccountController : Controller
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Error during OTP verification.");
             return StatusCode(500, new
             {
                 success = false,
-                message = ex.Message
+                message = "Unable to verify OTP. Please try again."
             });
         }
     }
@@ -296,6 +359,22 @@ public class AccountController : Controller
     [HttpPost("/api/account/logout")]
     public async Task<IActionResult> Logout()
     {
+        var userId = _userContext.GetUserId();
+        string? role = null;
+
+        if (!string.IsNullOrWhiteSpace(userId))
+        {
+            var currentUser = await _userManager.FindByIdAsync(userId);
+            if (currentUser != null)
+            {
+                var roles = await _userManager.GetRolesAsync(currentUser);
+                role = roles.FirstOrDefault();
+            }
+
+            await WriteAuditAsync("LOGOUT", "Authentication", "Success",
+                "User logged out.", userId, role);
+        }
+
         await _signInManager.SignOutAsync();
         return Ok(new { success = true });
     }
@@ -359,6 +438,8 @@ public class AccountController : Controller
             return Unauthorized();
 
         var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+            return NotFound(new { success = false, message = "User not found." });
 
         // GST VALIDATION (keep your logic)
         var gstResult = await _gstService.VerifyGST(model.GSTNo);
@@ -444,7 +525,18 @@ public class AccountController : Controller
 
         user.IsProfileCompleted = true;
 
-        await _userManager.UpdateAsync(user);
+        var kycUpdateResult = await _userManager.UpdateAsync(user);
+        if (!kycUpdateResult.Succeeded)
+        {
+            _logger.LogWarning("KYC profile update failed for user {UserId}: {Errors}",
+                user.Id, string.Join(", ", kycUpdateResult.Errors.Select(e => e.Code)));
+            return BadRequest(new { success = false, message = "Unable to save KYC details." });
+        }
+
+        await WriteAuditAsync(
+            "KYC_COMPLETED", "KYC", "Success",
+            "Customer completed KYC registration.", user.Id, "Customer",
+            newValues: new { user.IsProfileCompleted });
 
         return Ok(new
         {
@@ -571,13 +663,24 @@ public class AccountController : Controller
             });
         }
 
-        user.CustomerName =
-            model.CustomerName.Trim();
+        var changedFields = new List<string>();
+        if (!string.Equals(user.CustomerName, model.CustomerName?.Trim(), StringComparison.Ordinal))
+            changedFields.Add("CustomerName");
+        if (!string.Equals(user.MobileNo, model.MobileNo?.Trim(), StringComparison.Ordinal))
+            changedFields.Add("MobileNo");
 
-        user.MobileNo =
-            model.MobileNo?.Trim();
+        user.CustomerName = model.CustomerName.Trim();
+        user.MobileNo = model.MobileNo?.Trim();
 
-        await _userManager.UpdateAsync(user);
+        var profileUpdateResult = await _userManager.UpdateAsync(user);
+        if (!profileUpdateResult.Succeeded)
+            return BadRequest(new { success = false, message = "Unable to update profile." });
+
+        await WriteAuditAsync(
+            "PROFILE_UPDATED", "Profile", "Success",
+            "Customer profile details updated.", user.Id, "Customer",
+            oldValues: new { changedFields },
+            newValues: new { changedFields });
 
         return Ok(new
         {
@@ -653,6 +756,12 @@ public class AccountController : Controller
             });
         }
 
+        var addressChangedFields = new[]
+        {
+            "FullName", "MobileNumber", "AddressLine1", "AddressLine2",
+            "Landmark", "City", "State", "Pincode", "AddressType", "IsDefault"
+        };
+
         if (model.IsDefault)
         {
             var others = await _context.UserAddresses
@@ -701,6 +810,13 @@ public class AccountController : Controller
 
         await _context.SaveChangesAsync();
 
+        await WriteAuditAsync(
+            "ADDRESS_UPDATED", "CustomerAddress", "Success",
+            "Customer address updated.", userId, "Customer",
+            entityType: "UserAddress", entityId: id.ToString(),
+            oldValues: new { changedFields = addressChangedFields },
+            newValues: new { changedFields = addressChangedFields });
+
         return Ok(new
         {
             success = true,
@@ -725,6 +841,7 @@ public class AccountController : Controller
             return NotFound();
 
         bool wasDefault = address.IsDefault;
+        var deletedAddressId = address.Id;
 
         _context.UserAddresses.Remove(address);
 
@@ -744,6 +861,12 @@ public class AccountController : Controller
                 await _context.SaveChangesAsync();
             }
         }
+
+        await WriteAuditAsync(
+            "ADDRESS_DELETED", "CustomerAddress", "Success",
+            "Customer address deleted.", userId, "Customer",
+            entityType: "UserAddress", entityId: deletedAddressId.ToString(),
+            oldValues: new { isDefault = wasDefault });
 
         return Ok(new
         {
@@ -772,6 +895,8 @@ public class AccountController : Controller
             .Where(x => x.UserId == userId)
             .ToListAsync();
 
+        var previousDefaultId = addresses.FirstOrDefault(x => x.IsDefault)?.Id;
+
         foreach (var address in addresses)
         {
             address.IsDefault =
@@ -779,6 +904,13 @@ public class AccountController : Controller
         }
 
         await _context.SaveChangesAsync();
+
+        await WriteAuditAsync(
+            "DEFAULT_ADDRESS_CHANGED", "CustomerAddress", "Success",
+            "Customer changed the default delivery address.", userId, "Customer",
+            entityType: "UserAddress", entityId: id.ToString(),
+            oldValues: new { defaultAddressId = previousDefaultId },
+            newValues: new { defaultAddressId = id });
 
         return Ok(new
         {
@@ -788,63 +920,70 @@ public class AccountController : Controller
     }
 
     [HttpPost("/api/admin-login")]
+    [AllowAnonymous]
     public async Task<IActionResult> AdminLoginApi(
-     [FromBody] AdminLoginRequest model)
+        [FromBody] AdminLoginRequest model)
     {
         try
         {
-            var user = await _userManager
-                .FindByEmailAsync(model.Email);
+            if (model == null || string.IsNullOrWhiteSpace(model.Email) ||
+                string.IsNullOrWhiteSpace(model.Password))
+            {
+                await WriteAuditAsync("ADMIN_LOGIN_FAILED", "Authentication", "Failed",
+                    "Admin login request had missing credentials.", role: "Admin");
+                return BadRequest(new { success = false, message = "Email and password are required." });
+            }
 
+            var user = await _userManager.FindByEmailAsync(model.Email.Trim());
             if (user == null)
             {
-                return BadRequest(new
-                {
-                    success = false,
-                    message = "Admin not found"
-                });
+                await WriteAuditAsync("ADMIN_LOGIN_FAILED", "Authentication", "Failed",
+                    "Admin login attempted for an unknown account.", role: "Admin");
+                return Unauthorized(new { success = false, message = "Invalid credentials." });
             }
 
             if (!await _userManager.IsInRoleAsync(user, "Admin"))
             {
-                return BadRequest(new
+                await WriteAuditAsync("ADMIN_LOGIN_DENIED", "Authentication", "Denied",
+                    "Non-admin account attempted admin login.", user.Id, "Customer");
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    new { success = false, message = "Access denied." });
+            }
+
+            // PasswordSignInAsync applies Identity lockout rules and records failed attempts.
+            var signInResult = await _signInManager.PasswordSignInAsync(
+                user, model.Password, isPersistent: true, lockoutOnFailure: true);
+
+            if (!signInResult.Succeeded)
+            {
+                var reason = signInResult.IsLockedOut
+                    ? "Admin account is locked out after repeated failed sign-in attempts."
+                    : "Admin password verification failed.";
+
+                await WriteAuditAsync("ADMIN_LOGIN_FAILED", "Authentication", "Failed",
+                    reason, user.Id, "Admin");
+
+                return Unauthorized(new
                 {
                     success = false,
-                    message = "Access denied"
+                    message = signInResult.IsLockedOut
+                        ? "Account temporarily locked. Please try again later."
+                        : "Invalid credentials."
                 });
             }
 
-            var passwordValid =
-                await _userManager.CheckPasswordAsync(
-                    user,
-                    model.Password);
+            await WriteAuditAsync("ADMIN_LOGIN", "Authentication", "Success",
+                "Administrator logged in successfully.", user.Id, "Admin");
 
-            if (!passwordValid)
-            {
-                return BadRequest(new
-                {
-                    success = false,
-                    message = "Invalid password"
-                });
-            }
-
-            await _signInManager.SignInAsync(
-                user,
-                isPersistent: true);
-
-            return Ok(new
-            {
-                success = true,
-                role = "Admin",
-                email = user.Email
-            });
+            return Ok(new { success = true, role = "Admin", email = user.Email });
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Admin login failed unexpectedly.");
             return StatusCode(500, new
             {
                 success = false,
-                message = ex.Message
+                message = "An unexpected error occurred. Please try again."
             });
         }
     }

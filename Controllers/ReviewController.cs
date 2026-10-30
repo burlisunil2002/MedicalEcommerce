@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using VivekMedicalProducts.Data;
+using VivekMedicalProducts.Interfaces;
 using VivekMedicalProducts.Services;
 using VivekMedicalProducts.ViewModels;
 
@@ -12,19 +13,55 @@ public class ReviewController : Controller
     private readonly IUserContextService _userContext;
     private readonly ICartCalculationService _calc;
     private readonly ILogger<ReviewController> _logger;
+    private readonly IAuditService _auditService;
 
     public ReviewController(
         IConfiguration config,
         IUserContextService userContext,
         ApplicationDbContext context,
         ICartCalculationService calc,
-        ILogger<ReviewController> logger)
+        ILogger<ReviewController> logger,
+        IAuditService auditService)
     {
         _userContext = userContext;
         _context = context;
         _config = config;
         _calc = calc;
         _logger = logger;
+        _auditService = auditService;
+    }
+
+    // Audit failures must not interrupt the checkout workflow.
+    private async Task LogAuditAsync(
+        string action,
+        string status,
+        string? entityType,
+        string? entityId,
+        string description,
+        object? oldValues = null,
+        object? newValues = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _auditService.LogAsync(
+                action: action,
+                module: "Checkout",
+                status: status,
+                entityType: entityType,
+                entityId: entityId,
+                description: description,
+                oldValues: oldValues,
+                newValues: newValues,
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception auditException)
+        {
+            _logger.LogError(
+                auditException,
+                "Failed to write checkout audit event {Action}.",
+                action);
+        }
     }
 
     // ---------------------------------------------------------------
@@ -49,7 +86,7 @@ public class ReviewController : Controller
     // ================= SAVE ADDRESS =================
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public IActionResult Review(CheckoutViewModel model)
+    public async Task<IActionResult> Review(CheckoutViewModel model, CancellationToken ct)
     {
         if (!ModelState.IsValid)
         {
@@ -57,10 +94,30 @@ public class ReviewController : Controller
             // instead of forcing them to re-enter everything.
             TempData["Error"] = "Please fill all required fields";
             TempData["AddressInput"] = JsonConvert.SerializeObject(model);
+
+            await LogAuditAsync(
+                action: "SubmitCheckoutAddress",
+                status: "Failed",
+                entityType: "CheckoutAddress",
+                entityId: _userContext.GetUserId(),
+                description: "Checkout address submission failed validation.",
+                cancellationToken: ct);
+
             return RedirectToAction(nameof(Review));
         }
 
         HttpContext.Session.SetString("Address", JsonConvert.SerializeObject(model));
+
+        // Do not place the submitted address or personal contact details
+        // in audit snapshots. The audit event records the action only.
+        await LogAuditAsync(
+            action: "SubmitCheckoutAddress",
+            status: "Success",
+            entityType: "CheckoutAddress",
+            entityId: _userContext.GetUserId(),
+            description: "Checkout address was saved to the session.",
+            cancellationToken: ct);
+
         return RedirectToAction(nameof(Review));
     }
 
@@ -112,6 +169,16 @@ public class ReviewController : Controller
         ViewBag.RazorpayKey = _config["Razorpay:Key"];
         ViewBag.Address = address;
 
+        // Avoid logging guest identifiers, coupon codes, address details,
+        // or cart contents. This records only that checkout review was viewed.
+        await LogAuditAsync(
+            action: "ViewCheckoutReview",
+            status: "Success",
+            entityType: "Checkout",
+            entityId: userId,
+            description: "Customer viewed the checkout review page.",
+            cancellationToken: ct);
+
         return View();
     }
 
@@ -144,6 +211,14 @@ public class ReviewController : Controller
 
         if (string.IsNullOrEmpty(userId))
         {
+            await LogAuditAsync(
+                action: "PlaceOrderRequest",
+                status: "Failed",
+                entityType: "Checkout",
+                entityId: null,
+                description: "Order request was rejected because the customer was not authenticated.",
+                cancellationToken: ct);
+
             return Json(new
             {
                 success = false,
@@ -153,6 +228,14 @@ public class ReviewController : Controller
 
         if (request is null || string.IsNullOrWhiteSpace(request.PaymentMethod))
         {
+            await LogAuditAsync(
+                action: "PlaceOrderRequest",
+                status: "Failed",
+                entityType: "Checkout",
+                entityId: userId,
+                description: "Order request was rejected because no payment method was selected.",
+                cancellationToken: ct);
+
             return BadRequest(new
             {
                 success = false,
@@ -166,6 +249,15 @@ public class ReviewController : Controller
 
         if (!hasCartItems)
         {
+            await LogAuditAsync(
+                action: "PlaceOrderRequest",
+                status: "Failed",
+                entityType: "Checkout",
+                entityId: userId,
+                description: "Order request was rejected because the customer's cart was empty.",
+                newValues: new { paymentMethod = request.PaymentMethod },
+                cancellationToken: ct);
+
             return BadRequest(new
             {
                 success = false,
@@ -176,6 +268,17 @@ public class ReviewController : Controller
         _logger.LogInformation(
             "PlaceOrder requested by {UserId} via {PaymentMethod}",
             userId, request.PaymentMethod);
+
+        // This endpoint currently only acknowledges the requested flow.
+        // It does not create an order or capture/verify a payment.
+        await LogAuditAsync(
+            action: "PlaceOrderRequest",
+            status: "Success",
+            entityType: "Checkout",
+            entityId: userId,
+            description: "Checkout order request was accepted by the current placeholder endpoint; no order record was created.",
+            newValues: new { paymentMethod = request.PaymentMethod },
+            cancellationToken: ct);
 
         if (request.PaymentMethod == "COD")
         {

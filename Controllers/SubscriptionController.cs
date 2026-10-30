@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using VivekMedicalProducts.Data;
 using VivekMedicalProducts.Models;
+using VivekMedicalProducts.Interfaces;
 using VivekMedicalProducts.Services;
 
 
@@ -17,12 +18,44 @@ public class SubscriptionController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly IConfiguration _config;
     private readonly SubscriptionService _service;
+    private readonly IAuditService _auditService;
+    private readonly ILogger<SubscriptionController> _logger;
 
-    public SubscriptionController(ApplicationDbContext context, IConfiguration config)
+    public SubscriptionController(ApplicationDbContext context, IConfiguration config, IAuditService auditService, ILogger<SubscriptionController> logger)
     {
         _context = context;
         _config = config;
         _service = new SubscriptionService();
+        _auditService = auditService;
+        _logger = logger;
+    }
+
+    private async Task LogAuditAsync(
+        string action,
+        string status,
+        int? sellerId = null,
+        int? subscriptionId = null,
+        string? description = null,
+        object? oldValues = null,
+        object? newValues = null)
+    {
+        try
+        {
+            await _auditService.LogAsync(
+                action: action,
+                module: "Subscriptions",
+                status: status,
+                entityType: "Subscription",
+                entityId: subscriptionId?.ToString(),
+                description: description ?? (sellerId.HasValue ? $"SellerId: {sellerId.Value}" : null),
+                oldValues: oldValues,
+                newValues: newValues);
+        }
+        catch (Exception auditEx)
+        {
+            // Audit failures must not interrupt subscription or payment processing.
+            _logger.LogError(auditEx, "Failed to write subscription audit log for {Action}", action);
+        }
     }
 
     /*  private int GetSellerId()
@@ -70,6 +103,7 @@ public class SubscriptionController : ControllerBase
 
             if (seller == null)
             {
+                await LogAuditAsync("ViewSubscriptionStatus", "Failed", description: "Subscription status requested but seller was not found.");
                 return Unauthorized(new
                 {
                     success = false,
@@ -84,6 +118,7 @@ public class SubscriptionController : ControllerBase
 
             if (subscription == null)
             {
+                await LogAuditAsync("ViewSubscriptionStatus", "Success", seller.SellerId, description: "No subscription record found.");
                 return Ok(new
                 {
                     success = true,
@@ -91,6 +126,7 @@ public class SubscriptionController : ControllerBase
                 });
             }
 
+            await LogAuditAsync("ViewSubscriptionStatus", "Success", seller.SellerId, subscription.Id, "Seller viewed subscription status.", newValues: new { subscription.Status, subscription.ProductRange, subscription.Years });
             return Ok(new
             {
                 success = true,
@@ -111,6 +147,7 @@ public class SubscriptionController : ControllerBase
         }
         catch (Exception ex)
         {
+            await LogAuditAsync("ViewSubscriptionStatus", "Failed", description: ex.GetType().Name);
             return StatusCode(500, new
             {
                 success = false,
@@ -136,6 +173,7 @@ public class SubscriptionController : ControllerBase
 
             if (!allowedPlans.Contains(model.Plan))
             {
+                await LogAuditAsync("CreateSubscription", "Failed", sellerId, description: "Invalid subscription plan.", newValues: new { plan = model.Plan, model.ProductRange });
                 return BadRequest(new
                 {
                     success = false,
@@ -174,6 +212,7 @@ public class SubscriptionController : ControllerBase
 
             _context.Subscriptions.Add(sub);
             await _context.SaveChangesAsync();
+            await LogAuditAsync("CreateSubscription", "Success", sellerId, sub.Id, "Subscription payment order created.", newValues: new { plan = model.Plan, sub.ProductRange, sub.Years, sub.Amount, sub.Status });
 
             return Ok(new
             {
@@ -185,6 +224,7 @@ public class SubscriptionController : ControllerBase
         }
         catch (Exception ex)
         {
+            await LogAuditAsync("CreateSubscription", "Failed", description: ex.GetType().Name);
             return BadRequest(new
             {
                 success = false,
@@ -206,10 +246,16 @@ public class SubscriptionController : ControllerBase
         model.razorpay_order_id);
 
             if (sub == null)
+            {
+                await LogAuditAsync("VerifySubscriptionPayment", "Failed", description: "Subscription not found for payment verification.");
                 return BadRequest(new { success = false, message = "Subscription not found" });
+            }
 
             if (sub.Status == "Active")
+            {
+                await LogAuditAsync("VerifySubscriptionPayment", "Success", sub.SellerId, sub.Id, "Payment verification requested for an already active subscription.");
                 return Ok(new { success = true });
+            }
 
             var secret = _config["Razorpay:Secret"];
 
@@ -223,6 +269,7 @@ public class SubscriptionController : ControllerBase
             {
                 sub.Status = "Failed"; // ✅ removed FailureReason
                 await _context.SaveChangesAsync();
+                await LogAuditAsync("VerifySubscriptionPayment", "Failed", sub.SellerId, sub.Id, "Razorpay payment signature verification failed.", oldValues: new { status = "Pending" }, newValues: new { status = "Failed" });
 
                 return BadRequest(new { success = false, message = "Verification failed" });
             }
@@ -239,6 +286,7 @@ public class SubscriptionController : ControllerBase
 
             if (seller == null)
             {
+                await LogAuditAsync("VerifySubscriptionPayment", "Failed", sub.SellerId, sub.Id, "Seller record not found during subscription activation.");
                 return BadRequest(new { success = false, message = "Seller not found" });
             }
 
@@ -248,6 +296,7 @@ public class SubscriptionController : ControllerBase
             seller.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+            await LogAuditAsync("VerifySubscriptionPayment", "Success", sub.SellerId, sub.Id, "Subscription activated after successful payment verification.", oldValues: new { status = "Pending" }, newValues: new { status = sub.Status, sub.ProductRange, sub.Years, sub.Amount, sub.StartDate, sub.EndDate });
 
             return Ok(new
             {
@@ -258,6 +307,7 @@ public class SubscriptionController : ControllerBase
         }
         catch (Exception ex)
         {
+            await LogAuditAsync("VerifySubscriptionPayment", "Failed", description: ex.GetType().Name);
             return BadRequest(new
             {
                 success = false,
@@ -276,8 +326,14 @@ public class SubscriptionController : ControllerBase
 
         if (sub != null)
         {
+            var oldStatus = sub.Status;
             sub.Status = "Failed"; // ✅ removed UpdatedAt
             _context.SaveChanges();
+            await LogAuditAsync("MarkSubscriptionPaymentFailed", "Success", sub.SellerId, sub.Id, "Subscription payment marked as failed.", oldValues: new { status = oldStatus }, newValues: new { status = sub.Status });
+        }
+        else
+        {
+            await LogAuditAsync("MarkSubscriptionPaymentFailed", "Failed", subscriptionId: subscriptionId, description: "Subscription not found.");
         }
 
         return Ok(new
@@ -295,8 +351,12 @@ public class SubscriptionController : ControllerBase
             .FindAsync(subscriptionId);
 
         if (sub == null)
+        {
+            await LogAuditAsync("CheckSubscriptionPaymentStatus", "Failed", subscriptionId: subscriptionId, description: "Subscription not found.");
             return BadRequest(new { success = false });
+        }
 
+        await LogAuditAsync("CheckSubscriptionPaymentStatus", "Success", sub.SellerId, sub.Id, "Subscription payment status checked.", newValues: new { sub.Status, sub.StartDate, sub.EndDate });
         return Ok(new
         {
             success = true,
@@ -309,8 +369,9 @@ public class SubscriptionController : ControllerBase
     }
 
     [HttpGet("config")]
-    public IActionResult GetConfig()
+    public async Task<IActionResult> GetConfig()
     {
+        await LogAuditAsync("ViewPaymentConfig", "Success", description: "Razorpay public key configuration viewed.");
         return Ok(new
         {
             razorpayKey = _config["Razorpay:Key"]
@@ -323,7 +384,10 @@ public class SubscriptionController : ControllerBase
         var seller = await GetCurrentSellerAsync();
 
         if (seller == null)
+        {
+            await LogAuditAsync("ViewCurrentSubscription", "Failed", description: "Current subscription requested but seller was not found.");
             return Unauthorized();
+        }
 
         var subscription = await _context.Subscriptions
             .Where(x =>
@@ -334,12 +398,14 @@ public class SubscriptionController : ControllerBase
 
         if (subscription == null)
         {
+            await LogAuditAsync("ViewCurrentSubscription", "Success", seller.SellerId, description: "No active subscription found.");
             return Ok(new
             {
                 subscribed = false
             });
         }
 
+        await LogAuditAsync("ViewCurrentSubscription", "Success", seller.SellerId, subscription.Id, "Seller viewed current active subscription.", newValues: new { subscription.Status, subscription.ProductRange, subscription.Years, subscription.StartDate, subscription.EndDate });
         return Ok(new
         {
             subscribed = true,

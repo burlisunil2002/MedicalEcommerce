@@ -1,5 +1,4 @@
-using DocumentFormat.OpenXml.Drawing;
-using DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing;
+
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Rotativa.AspNetCore;
@@ -14,7 +13,6 @@ using VivekMedicalProducts.Services.Storage;
 
 var builder = WebApplication.CreateBuilder(args);
 
-
 // =====================================================
 // MVC / API
 // =====================================================
@@ -27,33 +25,30 @@ builder.Services
             ReferenceHandler.IgnoreCycles;
     });
 
-
 // =====================================================
 // APPLICATION SERVICES
 // =====================================================
 
 builder.Services.AddMemoryCache();
 
-builder.Services.AddScoped<ProductService>();
-
-builder.Services.AddScoped<ISmsService, TwilioSmsService>();
-
-builder.Services.AddHttpClient<GstVerificationService>();
-
 builder.Services.AddHttpContextAccessor();
 
+builder.Services.AddScoped<ProductService>();
+builder.Services.AddScoped<ISmsService, TwilioSmsService>();
+builder.Services.AddHttpClient<GstVerificationService>();
+
 builder.Services.AddScoped<IUserContextService, UserContextService>();
-
 builder.Services.AddScoped<InvoiceService>();
-
 builder.Services.AddScoped<IFileStorageService, SupabaseService>();
-
 builder.Services.AddScoped<ICouponService, CouponService>();
-
 builder.Services.AddScoped<ICheckoutService, CheckoutService>();
-
 builder.Services.AddScoped<ICartCalculationService, CartCalculationService>();
 
+// =====================================================
+// AUDIT MANAGEMENT
+// =====================================================
+
+builder.Services.AddScoped<IAuditService, AuditService>();
 
 // =====================================================
 // SESSION
@@ -63,8 +58,8 @@ builder.Services.AddSession(options =>
 {
     options.IdleTimeout = TimeSpan.FromMinutes(30);
 
+    options.Cookie.Name = "VMP.Session";
     options.Cookie.HttpOnly = true;
-
     options.Cookie.IsEssential = true;
 
     options.Cookie.SecurePolicy =
@@ -75,24 +70,19 @@ builder.Services.AddSession(options =>
     options.Cookie.SameSite = SameSiteMode.Lax;
 });
 
-
 // =====================================================
-// DATABASE
+// DATABASE - POSTGRESQL
 // =====================================================
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
     options.UseNpgsql(
-        builder.Configuration.GetConnectionString(
-            "DefaultConnection"
-        ),
+        builder.Configuration.GetConnectionString("DefaultConnection"),
         npgsqlOptions =>
         {
             npgsqlOptions.CommandTimeout(60);
-        }
-    );
+        });
 });
-
 
 // =====================================================
 // ASP.NET IDENTITY
@@ -103,53 +93,26 @@ builder.Services
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
 
-
 // =====================================================
 // AUTHENTICATION COOKIE
 // =====================================================
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
-    // Authentication cookie
     options.Cookie.Name = "VMP.Auth";
-
-    // Prevent JavaScript access
     options.Cookie.HttpOnly = true;
 
-    // HTTPS only in production
     options.Cookie.SecurePolicy =
         builder.Environment.IsDevelopment()
             ? CookieSecurePolicy.SameAsRequest
             : CookieSecurePolicy.Always;
 
-    /*
-     * React frontend -> API
-     *
-     * Keep None if frontend and backend
-     * are on different origins.
-     */
     options.Cookie.SameSite = SameSiteMode.None;
-
     options.Cookie.Path = "/";
 
-    /*
-     * Persistent login lifetime.
-     *
-     * Because your SignInAsync uses
-     * isPersistent: true, the cookie survives
-     * browser restart.
-     */
     options.ExpireTimeSpan = TimeSpan.FromDays(30);
-
-    /*
-     * Active users get their expiry extended.
-     */
     options.SlidingExpiration = true;
 
-    /*
-     * API should return 401 instead of redirecting
-     * to an HTML login page.
-     */
     options.Events.OnRedirectToLogin = context =>
     {
         context.Response.StatusCode =
@@ -158,9 +121,6 @@ builder.Services.ConfigureApplicationCookie(options =>
         return Task.CompletedTask;
     };
 
-    /*
-     * API should return 403 instead of redirecting.
-     */
     options.Events.OnRedirectToAccessDenied = context =>
     {
         context.Response.StatusCode =
@@ -170,9 +130,7 @@ builder.Services.ConfigureApplicationCookie(options =>
     };
 });
 
-
 builder.Services.AddAuthorization();
-
 
 // =====================================================
 // EMAIL
@@ -183,14 +141,12 @@ builder.Services.Configure<EmailSettings>(
 
 builder.Services.AddTransient<EmailService>();
 
-
 // =====================================================
 // ROTATIVA
 // =====================================================
 
 Rotativa.AspNetCore.RotativaConfiguration
     .Setup(builder.Environment.WebRootPath);
-
 
 // =====================================================
 // CORS
@@ -205,8 +161,7 @@ builder.Services.AddCors(options =>
             policy
                 .WithOrigins(
                     "http://localhost:3000",
-                    "https://localhost:3000"
-                )
+                    "https://localhost:3000")
                 .AllowAnyHeader()
                 .AllowAnyMethod()
                 .AllowCredentials();
@@ -214,11 +169,7 @@ builder.Services.AddCors(options =>
         else
         {
             policy
-                .WithOrigins(
-                    "https://themakeinindia.in"
-                // Add this only if you actually use www:
-                // "https://www.themakeinindia.in"
-                )
+                .WithOrigins("https://themakeinindia.in")
                 .AllowAnyHeader()
                 .AllowAnyMethod()
                 .AllowCredentials();
@@ -226,9 +177,11 @@ builder.Services.AddCors(options =>
     });
 });
 
+// =====================================================
+// BUILD APPLICATION
+// =====================================================
 
 var app = builder.Build();
-
 
 // =====================================================
 // DATABASE INITIALIZATION
@@ -243,11 +196,10 @@ using (var scope = app.Services.CreateScope())
         var context =
             services.GetRequiredService<ApplicationDbContext>();
 
-        // Database first
+        // Apply pending EF Core migrations.
         await context.Database.MigrateAsync();
 
-
-        // Roles
+        // Create required Identity roles.
         var roleManager =
             services.GetRequiredService<RoleManager<IdentityRole>>();
 
@@ -262,24 +214,32 @@ using (var scope = app.Services.CreateScope())
         {
             if (!await roleManager.RoleExistsAsync(role))
             {
-                await roleManager.CreateAsync(
-                    new IdentityRole(role)
-                );
+                var result = await roleManager.CreateAsync(
+                    new IdentityRole(role));
+
+                if (!result.Succeeded)
+                {
+                    throw new InvalidOperationException(
+                        $"Failed to create role '{role}': " +
+                        string.Join(", ",
+                            result.Errors.Select(e => e.Description)));
+                }
             }
         }
 
-
-        // Admin user after database is ready
+        // Seed administrator account.
         await DbSeeder.SeedAdminUser(services);
     }
     catch (Exception ex)
     {
-        Console.WriteLine(
-            $"Database initialization failed: {ex}"
-        );
+        app.Logger.LogCritical(
+            ex,
+            "Database initialization failed. Application startup aborted.");
+
+        // Do not run production without a working database.
+        throw;
     }
 }
-
 
 // =====================================================
 // PRODUCTION ERROR HANDLING
@@ -288,13 +248,11 @@ using (var scope = app.Services.CreateScope())
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
-
     app.UseHsts();
 }
 
-
 // =====================================================
-// MIDDLEWARE
+// SECURITY AND MIDDLEWARE
 // =====================================================
 
 app.UseHttpsRedirection();
@@ -310,7 +268,6 @@ app.UseSession();
 app.UseAuthentication();
 
 app.UseAuthorization();
-
 
 // =====================================================
 // ROUTES

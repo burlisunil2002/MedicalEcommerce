@@ -1,9 +1,11 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using System.Linq;
 using VivekMedicalProducts.Data;
 using VivekMedicalProducts.DTOs;
+using VivekMedicalProducts.Interfaces;
 using VivekMedicalProducts.Models;
 
 namespace VivekMedicalProducts.Controllers
@@ -14,11 +16,17 @@ namespace VivekMedicalProducts.Controllers
     public class AdminOrderController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IAuditService _auditService;
+        private readonly ILogger<AdminOrderController> _logger;
 
         public AdminOrderController(
-            ApplicationDbContext context)
+            ApplicationDbContext context,
+            IAuditService auditService,
+            ILogger<AdminOrderController> logger)
         {
             _context = context;
+            _auditService = auditService;
+            _logger = logger;
         }
 
         // =========================================================
@@ -338,6 +346,12 @@ namespace VivekMedicalProducts.Controllers
                 // RESPONSE
                 // =====================================================
 
+                await LogAdminAuditAsync(
+                    action: "ViewOrders",
+                    status: "Success",
+                    entityType: "Order",
+                    description: "Admin viewed the order management list.");
+
                 return Ok(new
                 {
                     success = true,
@@ -407,7 +421,12 @@ namespace VivekMedicalProducts.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Admin Get Orders Error: {ex}");
+                _logger.LogError(ex, "Admin Get Orders failed.");
+                await LogAdminAuditAsync(
+                    action: "ViewOrders",
+                    status: "Failed",
+                    entityType: "Order",
+                    description: "Admin order list could not be loaded.");
 
                 return StatusCode(
                     StatusCodes.Status500InternalServerError,
@@ -415,8 +434,7 @@ namespace VivekMedicalProducts.Controllers
                     {
                         success = false,
                         message = "Unable to load admin orders.",
-                        error = ex.Message,
-                        innerException = ex.InnerException?.Message
+                        error = "An internal server error occurred."
                     });
             }
         }
@@ -486,6 +504,12 @@ namespace VivekMedicalProducts.Controllers
 
                 if (sellers.Count == 0)
                 {
+                    await LogAdminAuditAsync(
+                        action: "ViewSellers",
+                        status: "Success",
+                        entityType: "Seller",
+                        description: "Admin viewed seller management; no sellers were found.");
+
                     return Ok(new
                     {
                         success = true,
@@ -667,6 +691,12 @@ namespace VivekMedicalProducts.Controllers
                     };
                 }).ToList();
 
+                await LogAdminAuditAsync(
+                    action: "ViewSellers",
+                    status: "Success",
+                    entityType: "Seller",
+                    description: "Admin viewed the seller management list.");
+
                 return Ok(new
                 {
                     success = true,
@@ -678,7 +708,12 @@ namespace VivekMedicalProducts.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Admin Seller List Error: {ex}");
+                _logger.LogError(ex, "Admin seller list failed.");
+                await LogAdminAuditAsync(
+                    action: "ViewSellers",
+                    status: "Failed",
+                    entityType: "Seller",
+                    description: "Admin seller list could not be loaded.");
 
                 return StatusCode(
                     StatusCodes.Status500InternalServerError,
@@ -686,8 +721,7 @@ namespace VivekMedicalProducts.Controllers
                     {
                         success = false,
                         message = "Unable to load seller management data.",
-                        error = ex.Message,
-                        innerException = ex.InnerException?.Message
+                        error = "An internal server error occurred."
                     });
             }
         }
@@ -829,6 +863,13 @@ namespace VivekMedicalProducts.Controllers
                             StringComparison.OrdinalIgnoreCase))
                     .Sum(x => x.FinalPaidAmount);
 
+                await LogAdminAuditAsync(
+                    action: "ViewSellerDetails",
+                    status: "Success",
+                    entityType: "Seller",
+                    entityId: sellerId.ToString(),
+                    description: "Admin viewed seller details.");
+
                 return Ok(new
                 {
                     success = true,
@@ -883,8 +924,13 @@ namespace VivekMedicalProducts.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine(
-                    $"Admin Seller Details Error: {ex}");
+                _logger.LogError(ex, "Admin seller details failed.");
+                await LogAdminAuditAsync(
+                    action: "ViewSellerDetails",
+                    status: "Failed",
+                    entityType: "Seller",
+                    entityId: sellerId.ToString(),
+                    description: "Admin seller details could not be loaded.");
 
                 return StatusCode(
                     StatusCodes.Status500InternalServerError,
@@ -892,8 +938,7 @@ namespace VivekMedicalProducts.Controllers
                     {
                         success = false,
                         message = "Unable to load seller details.",
-                        error = ex.Message,
-                        innerException = ex.InnerException?.Message
+                        error = "An internal server error occurred."
                     });
             }
         }
@@ -981,6 +1026,9 @@ namespace VivekMedicalProducts.Controllers
                 // UPDATE STATUS
                 // -------------------------------------------------
 
+                var oldSellerStatus = seller.Status;
+                var oldSellerIsActive = seller.IsActive;
+
                 seller.Status = requestedStatus;
 
                 // Keep IsActive synchronized with account status.
@@ -994,6 +1042,23 @@ namespace VivekMedicalProducts.Controllers
                 // -------------------------------------------------
 
                 await _context.SaveChangesAsync();
+
+                await LogAdminAuditAsync(
+                    action: "UpdateSellerStatus",
+                    status: "Success",
+                    entityType: "Seller",
+                    entityId: seller.SellerId.ToString(),
+                    description: "Admin changed seller account status.",
+                    oldValues: new
+                    {
+                        status = oldSellerStatus,
+                        isActive = oldSellerIsActive
+                    },
+                    newValues: new
+                    {
+                        status = seller.Status,
+                        isActive = seller.IsActive
+                    });
 
                 // -------------------------------------------------
                 // RESPONSE
@@ -1013,8 +1078,13 @@ namespace VivekMedicalProducts.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine(
-                    $"Update Seller Status Error: {ex}");
+                _logger.LogError(ex, "Admin seller status update failed.");
+                await LogAdminAuditAsync(
+                    action: "UpdateSellerStatus",
+                    status: "Failed",
+                    entityType: "Seller",
+                    entityId: sellerId.ToString(),
+                    description: "Admin seller status update failed.");
 
                 return StatusCode(
                     StatusCodes.Status500InternalServerError,
@@ -1022,9 +1092,7 @@ namespace VivekMedicalProducts.Controllers
                     {
                         success = false,
                         message = "Unable to update seller status.",
-                        error = ex.Message,
-                        innerException =
-                            ex.InnerException?.Message
+                        error = "An internal server error occurred."
                     });
             }
         }
@@ -1087,6 +1155,9 @@ namespace VivekMedicalProducts.Controllers
                         message = "Associated order was not found."
                     });
                 }
+
+                var oldPaymentStatus = item.Order.PaymentStatus;
+                var oldItemOrderStatus = item.OrderItemStatus;
 
                 var now = DateTime.UtcNow;
 
@@ -1290,6 +1361,23 @@ namespace VivekMedicalProducts.Controllers
 
                 await _context.SaveChangesAsync();
 
+                await LogAdminAuditAsync(
+                    action: "UpdateOrderItemStatus",
+                    status: "Success",
+                    entityType: "OrderItem",
+                    entityId: item.OrderItemId.ToString(),
+                    description: "Admin updated order payment and/or delivery status.",
+                    oldValues: new
+                    {
+                        paymentStatus = oldPaymentStatus,
+                        orderItemStatus = oldItemOrderStatus
+                    },
+                    newValues: new
+                    {
+                        paymentStatus = item.Order.PaymentStatus,
+                        orderItemStatus = item.OrderItemStatus
+                    });
+
                 // =========================================================
                 // 7. RESPONSE MESSAGE
                 // =========================================================
@@ -1362,8 +1450,13 @@ namespace VivekMedicalProducts.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine(
-                    $"Admin Order Status Update Error: {ex}");
+                _logger.LogError(ex, "Admin order status update failed.");
+                await LogAdminAuditAsync(
+                    action: "UpdateOrderItemStatus",
+                    status: "Failed",
+                    entityType: "OrderItem",
+                    entityId: orderItemId.ToString(),
+                    description: "Admin order status update failed.");
 
                 return StatusCode(
                     StatusCodes.Status500InternalServerError,
@@ -1372,10 +1465,42 @@ namespace VivekMedicalProducts.Controllers
                         success = false,
                         message =
                             "An unexpected error occurred while updating the order status.",
-                        error = ex.Message,
-                        innerException =
-                            ex.InnerException?.Message
+                        error = "An internal server error occurred."
                     });
+            }
+        }
+
+        private async Task LogAdminAuditAsync(
+            string action,
+            string status,
+            string entityType,
+            string? entityId = null,
+            string? description = null,
+            object? oldValues = null,
+            object? newValues = null)
+        {
+            try
+            {
+                await _auditService.LogAsync(
+                    action: action,
+                    module: "Admin Order Management",
+                    status: status,
+                    entityType: entityType,
+                    entityId: entityId,
+                    description: description,
+                    oldValues: oldValues,
+                    newValues: newValues);
+            }
+            catch (Exception ex)
+            {
+                // Audit failures must be visible to operations but should not
+                // turn a successfully saved business operation into a failed API response.
+                _logger.LogError(
+                    ex,
+                    "Failed to write admin audit event {AuditAction} for {EntityType} {EntityId}.",
+                    action,
+                    entityType,
+                    entityId);
             }
         }
 

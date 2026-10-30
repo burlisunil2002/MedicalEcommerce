@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Razorpay.Api;
 using VivekMedicalProducts.Data;
+using VivekMedicalProducts.Interfaces;
 using VivekMedicalProducts.Models;
 using VivekMedicalProducts.Services;
 using VivekMedicalProducts.Services.Storage;
@@ -23,6 +24,7 @@ namespace VivekMedicalProducts.Controllers
         private readonly IMemoryCache _cache;
         private readonly ILogger<ProductsController> _logger;
         private readonly IWebHostEnvironment _env;
+        private readonly IAuditService _auditService;
 
         // Bumping this key invalidates every cached product list/detail at
         // once. Cheap and correct for a single-instance deployment. If this
@@ -40,7 +42,8 @@ namespace VivekMedicalProducts.Controllers
             IFileStorageService fileStorage,
             IMemoryCache cache,
             ILogger<ProductsController> logger,
-            IWebHostEnvironment env)
+            IWebHostEnvironment env,
+            IAuditService auditService)
         {
             _userManager = userManager;
             _service = service;
@@ -50,11 +53,44 @@ namespace VivekMedicalProducts.Controllers
             _cache = cache;
             _logger = logger;
             _env = env;
+            _auditService = auditService;
         }
 
         // ============================================================
         // SHARED HELPERS
         // ============================================================
+
+        private async Task LogAuditAsync(
+            string action,
+            string status,
+            string? entityId,
+            string description,
+            object? oldValues = null,
+            object? newValues = null,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                await _auditService.LogAsync(
+                    action: action,
+                    module: "Products",
+                    status: status,
+                    entityType: "Product",
+                    entityId: entityId,
+                    description: description,
+                    oldValues: oldValues,
+                    newValues: newValues,
+                    cancellationToken: cancellationToken);
+            }
+            catch (Exception auditException)
+            {
+                // Audit failures must not break the product workflow.
+                _logger.LogError(
+                    auditException,
+                    "Failed to write product audit event {Action}.",
+                    action);
+            }
+        }
 
         private IActionResult ErrorResponse(
             Exception ex,
@@ -566,6 +602,36 @@ namespace VivekMedicalProducts.Controllers
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
 
+                await LogAuditAsync(
+                    action: "CreateProduct",
+                    status: "Success",
+                    entityId: product.Id.ToString(),
+                    description: $"Product '{product.Name}' was created.",
+                    newValues: new
+                    {
+                        product.Id,
+                        product.Name,
+                        product.Brand,
+                        product.Category,
+                        product.PriceType,
+                        product.GSTPercentage,
+                        product.HSNCode,
+                        product.Status,
+                        product.SellerId,
+                        Variants = product.Variants.Select(v => new
+                        {
+                            v.ProductVariantId,
+                            v.Model,
+                            v.Price,
+                            v.StockQuantity,
+                            v.MinQuantity,
+                            v.MaxQuantity,
+                            v.StepQuantity,
+                            v.Status
+                        }).ToList()
+                    },
+                    cancellationToken: cancellationToken);
+
                 // New product should show up immediately on the storefront,
                 // not after the cache TTL expires.
                 InvalidateProductCache();
@@ -580,6 +646,13 @@ namespace VivekMedicalProducts.Controllers
             catch (Exception ex)
             {
                 await transaction.RollbackAsync(cancellationToken);
+                await LogAuditAsync(
+                    action: "CreateProduct",
+                    status: "Failed",
+                    entityId: product.Id > 0 ? product.Id.ToString() : null,
+                    description: "Product creation failed.",
+                    newValues: new { product.Name, product.Brand, product.Category },
+                    cancellationToken: cancellationToken);
                 return ErrorResponse(ex, "Failed to save product.", "Something went wrong while saving the product.");
             }
         }
@@ -912,6 +985,39 @@ namespace VivekMedicalProducts.Controllers
                     return NotFound(new { success = false, message = "Product not found." });
                 }
 
+                // Capture a safe before-state for the audit trail before mutations.
+                var oldProductAudit = new
+                {
+                    product.Id,
+                    product.Name,
+                    product.Brand,
+                    product.Category,
+                    product.Description,
+                    product.PriceType,
+                    product.GSTPercentage,
+                    product.HSNCode,
+                    product.Weight,
+                    product.IsHotDeal,
+                    product.DiscountPercentage,
+                    product.Status,
+                    product.SellerId,
+                    Variants = product.Variants.Select(v => new
+                    {
+                        v.ProductVariantId,
+                        v.Model,
+                        v.Size,
+                        v.Unit,
+                        v.PackSize,
+                        v.MinQuantity,
+                        v.MaxQuantity,
+                        v.StepQuantity,
+                        v.Price,
+                        v.StockQuantity,
+                        v.Status,
+                        Specifications = v.Specifications.Select(sp => new { sp.Key, sp.Value }).ToList()
+                    }).ToList()
+                };
+
                 #region Validation
 
                 if (string.IsNullOrWhiteSpace(model.Name))
@@ -1115,6 +1221,45 @@ namespace VivekMedicalProducts.Controllers
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
 
+                await LogAuditAsync(
+                    action: "UpdateProduct",
+                    status: "Success",
+                    entityId: product.Id.ToString(),
+                    description: $"Product '{product.Name}' was updated.",
+                    oldValues: oldProductAudit,
+                    newValues: new
+                    {
+                        product.Id,
+                        product.Name,
+                        product.Brand,
+                        product.Category,
+                        product.Description,
+                        product.PriceType,
+                        product.GSTPercentage,
+                        product.HSNCode,
+                        product.Weight,
+                        product.IsHotDeal,
+                        product.DiscountPercentage,
+                        product.Status,
+                        product.SellerId,
+                        Variants = product.Variants.Select(v => new
+                        {
+                            v.ProductVariantId,
+                            v.Model,
+                            v.Size,
+                            v.Unit,
+                            v.PackSize,
+                            v.MinQuantity,
+                            v.MaxQuantity,
+                            v.StepQuantity,
+                            v.Price,
+                            v.StockQuantity,
+                            v.Status,
+                            Specifications = v.Specifications.Select(sp => new { sp.Key, sp.Value }).ToList()
+                        }).ToList()
+                    },
+                    cancellationToken: cancellationToken);
+
                 InvalidateProductCache();
 
                 return Ok(new
@@ -1127,6 +1272,12 @@ namespace VivekMedicalProducts.Controllers
             catch (Exception ex)
             {
                 await transaction.RollbackAsync(cancellationToken);
+                await LogAuditAsync(
+                    action: "UpdateProduct",
+                    status: "Failed",
+                    entityId: id.ToString(),
+                    description: "Product update failed.",
+                    cancellationToken: cancellationToken);
                 return ErrorResponse(ex, "Failed to update product.", "Something went wrong while updating the product.");
             }
         }
@@ -1173,9 +1324,19 @@ namespace VivekMedicalProducts.Controllers
                     }
                 }
 
+                var oldStatus = product.Status;
                 product.Status = product.Status == "Active" ? "InActive" : "Active";
 
                 await _context.SaveChangesAsync(cancellationToken);
+
+                await LogAuditAsync(
+                    action: "ChangeProductStatus",
+                    status: "Success",
+                    entityId: product.Id.ToString(),
+                    description: $"Product '{product.Name}' status changed from '{oldStatus}' to '{product.Status}'.",
+                    oldValues: new { Status = oldStatus },
+                    newValues: new { Status = product.Status },
+                    cancellationToken: cancellationToken);
 
                 InvalidateProductCache();
 
@@ -1183,6 +1344,13 @@ namespace VivekMedicalProducts.Controllers
             }
             catch (Exception ex)
             {
+                await LogAuditAsync(
+                    action: "ChangeProductStatus",
+                    status: "Failed",
+                    entityId: id.ToString(),
+                    description: "Product status change failed.",
+                    cancellationToken: cancellationToken);
+
                 // Previously: return StatusCode(500, ex.ToString()) — a full
                 // stack trace, straight to the client, as the entire
                 // response body. That's fixed.
