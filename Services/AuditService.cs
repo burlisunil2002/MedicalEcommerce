@@ -59,9 +59,21 @@ public sealed class AuditService : IAuditService
             ?? principal?.Identity?.Name
             ?? principal?.FindFirstValue(ClaimTypes.Email);
 
-        var userRole = actorRole
-            ?? principal?.FindFirstValue(ClaimTypes.Role)
-            ?? principal?.FindFirstValue("role");
+        var userRole = actorRole;
+
+        if (string.IsNullOrWhiteSpace(userRole))
+        {
+            if (principal?.IsInRole("Admin") == true)
+                userRole = "Admin";
+            else if (principal?.IsInRole("Seller") == true)
+                userRole = "Seller";
+            else if (principal?.IsInRole("Customer") == true)
+                userRole = "Customer";
+            else if (principal?.Identity?.IsAuthenticated == true)
+                userRole = "Authenticated";
+            else
+                userRole = "Anonymous";
+        }
 
         var audit = new AuditLog
         {
