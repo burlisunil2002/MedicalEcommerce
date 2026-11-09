@@ -249,47 +249,6 @@ export default function AdminLayout() {
 
 
                     {/* =================================================
-                        ADMIN PROFILE
-                    ================================================= */}
-
-                    <div className="px-4 pt-5">
-
-                        <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-
-                            <div className="flex items-center gap-3">
-
-                                <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold">
-
-                                    A
-
-                                </div>
-
-                                <div className="min-w-0">
-
-                                    <p className="font-semibold text-slate-900 truncate">
-                                        Administrator
-                                    </p>
-
-                                    <p className="text-xs text-slate-500 flex items-center gap-1">
-
-                                        <ShieldCheck
-                                            size={13}
-                                        />
-
-                                        Admin Access
-
-                                    </p>
-
-                                </div>
-
-                            </div>
-
-                        </div>
-
-                    </div>
-
-
-                    {/* =================================================
                         NAVIGATION
                     ================================================= */}
 

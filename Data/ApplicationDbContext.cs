@@ -103,8 +103,8 @@ public class ApplicationDbContext
         // APPLICATION USERS
         // =================================================
 
-        modelBuilder.Entity<ApplicationUser>()
-            .HasQueryFilter(u => u.Status == "Active");
+       // modelBuilder.Entity<ApplicationUser>()
+       //     .HasQueryFilter(u => u.Status == "Active");
 
         // =================================================
         // ENQUIRIES

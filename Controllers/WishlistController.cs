@@ -355,11 +355,6 @@ public class WishlistController : Controller
             )
             .CountAsync();
 
-        await LogAuditAsync(
-            action: "WishlistCountViewed",
-            entityType: "Wishlist",
-            description: $"Wishlist item count viewed; count={count}.");
-
         return Ok(count);
     }
 

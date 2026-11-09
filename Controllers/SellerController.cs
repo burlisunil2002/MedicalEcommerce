@@ -94,30 +94,32 @@ public class SellerController : ControllerBase
 
 
 
+
+    [AllowAnonymous]
     [HttpPost("register")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(21 * 1024 * 1024)]
     public async Task<IActionResult> Register(
         [FromForm] SellerRegisterViewModel model)
     {
-        // 1. Normalize input
-        model.Email = model.Email?.Trim() ?? "";
+        // =============================================
+        // 1. NORMALIZE INPUT
+        // =============================================
+
+        model.Email = model.Email?.Trim().ToLowerInvariant() ?? "";
         model.Phone = model.Phone?.Trim() ?? "";
         model.GSTNumber = model.GSTNumber?.Trim().ToUpperInvariant() ?? "";
         model.PAN = model.PAN?.Trim().ToUpperInvariant() ?? "";
         model.IFSCCode = model.IFSCCode?.Trim().ToUpperInvariant() ?? "";
-        model.WarehouseFullAddress = model.WarehouseFullAddress?.Trim();
-        model.WarehouseContactPersonName = model.WarehouseContactPersonName?.Trim();
-        model.WarehouseContactMobileNumber = model.WarehouseContactMobileNumber?.Trim();
 
-        // 2. Required GST certificate
-        if (model.GSTCertificateDocument == null ||
-            model.GSTCertificateDocument.Length == 0)
-        {
-            ModelState.AddModelError(
-                nameof(model.GSTCertificateDocument),
-                "GST certificate is required.");
-        }
+        model.WarehouseFullAddress =
+            model.WarehouseFullAddress?.Trim();
+
+        model.WarehouseContactPersonName =
+            model.WarehouseContactPersonName?.Trim();
+
+        model.WarehouseContactMobileNumber =
+            model.WarehouseContactMobileNumber?.Trim();
 
         if (!ModelState.IsValid)
         {
@@ -135,7 +137,20 @@ public class SellerController : ControllerBase
             });
         }
 
-        // 3. GSTIN format validation
+        // =============================================
+        // 2. GST CERTIFICATE VALIDATION
+        // =============================================
+
+        if (model.GSTCertificateDocument == null ||
+            model.GSTCertificateDocument.Length == 0)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "GST certificate is required."
+            });
+        }
+
         if (!Regex.IsMatch(
             model.GSTNumber,
             @"^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$"))
@@ -147,25 +162,30 @@ public class SellerController : ControllerBase
             });
         }
 
-        // 3.1 Check whether this GSTIN is already registered
-        var normalizedGST = model.GSTNumber.Trim().ToUpperInvariant();
+        // =============================================
+        // 3. CHECK DUPLICATE GST NUMBER
+        // =============================================
 
         var gstAlreadyRegistered = await _context.Sellers
             .IgnoreQueryFilters()
             .AsNoTracking()
-            .AnyAsync(s => s.GSTNumber != null &&
-                           s.GSTNumber.Trim().ToUpper() == normalizedGST);
+            .AnyAsync(s =>
+                s.GSTNumber != null &&
+                s.GSTNumber.Trim().ToUpper() == model.GSTNumber);
 
         if (gstAlreadyRegistered)
         {
             return Conflict(new
             {
                 success = false,
-                message = "This GST number is already registered. Please use your existing seller account."
+                message = "This GST number is already registered."
             });
         }
 
-        // 4. PAN format validation
+        // =============================================
+        // 4. PAN VALIDATION
+        // =============================================
+
         if (!Regex.IsMatch(model.PAN, @"^[A-Z]{5}\d{4}[A-Z]$"))
         {
             return BadRequest(new
@@ -175,7 +195,6 @@ public class SellerController : ControllerBase
             });
         }
 
-        // 5. GSTIN PAN must match the entered PAN
         if (!string.Equals(
             model.GSTNumber.Substring(2, 10),
             model.PAN,
@@ -188,7 +207,10 @@ public class SellerController : ControllerBase
             });
         }
 
-        // 6. IFSC format validation
+        // =============================================
+        // 5. IFSC VALIDATION
+        // =============================================
+
         if (!Regex.IsMatch(model.IFSCCode, @"^[A-Z]{4}0[A-Z0-9]{6}$"))
         {
             return BadRequest(new
@@ -198,17 +220,24 @@ public class SellerController : ControllerBase
             });
         }
 
-        // 7. Document validation
+        // =============================================
+        // 6. DOCUMENT VALIDATION
+        // =============================================
+
         string? ValidateDocument(
             IFormFile? file,
             bool required,
             string label)
         {
             if (file == null || file.Length == 0)
+            {
                 return required ? $"{label} is required." : null;
+            }
 
             if (file.Length > 10 * 1024 * 1024)
+            {
                 return $"{label} must be 10 MB or smaller.";
+            }
 
             var extension = Path.GetExtension(file.FileName)
                 .ToLowerInvariant();
@@ -230,7 +259,7 @@ public class SellerController : ControllerBase
         var licenceError = ValidateDocument(
             model.ProductLicenceDocument,
             false,
-            "Make in India / Product Licence document");
+            "Product Licence document");
 
         if (gstError != null || licenceError != null)
         {
@@ -241,17 +270,53 @@ public class SellerController : ControllerBase
             });
         }
 
+        // =============================================
+        // 7. CHECK EXISTING SELLER BY EMAIL
+        // =============================================
 
-        // 8. Find the Identity account by email.
-        var existingUser = await _userManager.FindByEmailAsync(model.Email);
+        var sellerEmailExists = await _context.Sellers
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .AnyAsync(s =>
+                s.Email.ToLower() == model.Email);
+
+        if (sellerEmailExists)
+        {
+            return Conflict(new
+            {
+                success = false,
+                message = "This email is already registered as a seller."
+            });
+        }
+
+        // =============================================
+        // 8. FIND EXISTING IDENTITY USER
+        // =============================================
+
+        var existingUser =
+            await _userManager.FindByEmailAsync(model.Email);
 
         ApplicationUser user;
         bool createNewUser = existingUser == null;
 
         if (existingUser != null)
         {
-            // Prevent duplicate seller profiles.
+            // Never automatically reactivate a disabled Identity account.
+            if (!string.Equals(
+                existingUser.Status,
+                "Active",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return StatusCode(403, new
+                {
+                    success = false,
+                    message = "This login account is inactive. Please contact support."
+                });
+            }
+
+            // Check all seller profiles, including Pending and Inactive.
             var existingSeller = await _context.Sellers
+                .IgnoreQueryFilters()
                 .AnyAsync(s => s.UserId == existingUser.Id);
 
             if (existingSeller)
@@ -263,26 +328,32 @@ public class SellerController : ControllerBase
                 });
             }
 
-            // Reuse the existing Identity account.
-            // Do not require customer login.
+            // Reuse existing customer Identity account.
             user = existingUser;
         }
         else
         {
-            // Create a new Identity account for a new seller.
             user = new ApplicationUser
             {
                 UserName = model.Email,
-                Email = model.Email
+                Email = model.Email,
+                Status = "Active"
             };
         }
+
+        // =============================================
+        // 9. DATABASE TRANSACTION
+        // =============================================
 
         await using var transaction =
             await _context.Database.BeginTransactionAsync();
 
         try
         {
-            // 9. Create Identity user only for a new email.
+            // =============================================
+            // 10. CREATE IDENTITY USER
+            // =============================================
+
             if (createNewUser)
             {
                 var createResult = await _userManager.CreateAsync(
@@ -303,7 +374,10 @@ public class SellerController : ControllerBase
                 }
             }
 
-            // 10. Preserve existing roles and add Seller if needed.
+            // =============================================
+            // 11. ASSIGN SELLER ROLE
+            // =============================================
+
             if (!await _userManager.IsInRoleAsync(user, "Seller"))
             {
                 var roleResult = await _userManager.AddToRoleAsync(
@@ -313,11 +387,6 @@ public class SellerController : ControllerBase
                 if (!roleResult.Succeeded)
                 {
                     await transaction.RollbackAsync();
-
-                    // A newly created Identity user may need cleanup
-                    // if the role assignment fails.
-                    if (createNewUser)
-                        await _userManager.DeleteAsync(user);
 
                     return BadRequest(new
                     {
@@ -329,35 +398,47 @@ public class SellerController : ControllerBase
                 }
             }
 
-            // 11. Upload mandatory GST certificate.
-            var gstCertificatePath = await _fileStorage.UploadAsync(
-                model.GSTCertificateDocument!,
-                "seller-gst-certificates");
+            // =============================================
+            // 12. UPLOAD GST CERTIFICATE
+            // =============================================
 
-            // 12. Upload optional Product Licence.
+            var gstCertificatePath =
+                await _fileStorage.UploadAsync(
+                    model.GSTCertificateDocument!,
+                    "seller-gst-certificates");
+
+            // =============================================
+            // 13. OPTIONAL PRODUCT LICENCE
+            // =============================================
+
             string? productLicencePath = null;
 
             if (model.ProductLicenceDocument is { Length: > 0 })
             {
-                productLicencePath = await _fileStorage.UploadAsync(
-                    model.ProductLicenceDocument,
-                    "seller-product-licences");
+                productLicencePath =
+                    await _fileStorage.UploadAsync(
+                        model.ProductLicenceDocument,
+                        "seller-product-licences");
             }
 
-            // 13. Create seller profile linked to the same Identity user.
+            // =============================================
+            // 14. FREE SUBSCRIPTION PERIOD
+            // =============================================
 
             var registrationDate = DateTime.UtcNow;
 
             var launchDate = new DateTime(
                 2026, 12, 14, 0, 0, 0, DateTimeKind.Utc);
 
-            // Registrations before launch start their free period
-            // on December 14. Later registrations start immediately.
             var freeStartDate = registrationDate < launchDate
                 ? launchDate
                 : registrationDate;
 
             var freeEndDate = freeStartDate.AddMonths(3);
+
+            // =============================================
+            // 15. CREATE SELLER PROFILE
+            // =============================================
 
             var seller = new SellerModel
             {
@@ -382,10 +463,14 @@ public class SellerController : ControllerBase
                 State = model.State.Trim(),
                 Pincode = model.Pincode.Trim(),
 
-                // WAREHOUSE DETAILS
-                WarehouseFullAddress = model.WarehouseFullAddress?.Trim(),
-                WarehouseContactPersonName = model.WarehouseContactPersonName?.Trim(),
-                WarehouseContactMobileNumber = model.WarehouseContactMobileNumber?.Trim(),
+                WarehouseFullAddress =
+                    model.WarehouseFullAddress,
+
+                WarehouseContactPersonName =
+                    model.WarehouseContactPersonName,
+
+                WarehouseContactMobileNumber =
+                    model.WarehouseContactMobileNumber,
 
                 AccountHolderName = model.AccountHolderName.Trim(),
                 AccountNumber = model.AccountNumber.Trim(),
@@ -395,28 +480,36 @@ public class SellerController : ControllerBase
                 GSTCertificateDocumentPath = gstCertificatePath,
                 ProductLicenceDocumentPath = productLicencePath,
 
-                // Admin must review and approve the seller.
+                // Three-month free subscription.
                 FreeSubscriptionStartDate = freeStartDate,
                 FreeSubscriptionEndDate = freeEndDate,
                 SubscriptionPlan = "Free",
                 IsLaunchFreeSubscription = true,
 
+                // Admin approval required.
                 Status = "Pending",
                 IsActive = false,
+
                 CreatedAt = registrationDate
             };
 
             _context.Sellers.Add(seller);
 
             await _context.SaveChangesAsync();
+
             await transaction.CommitAsync();
+
+            // =============================================
+            // 16. AUDIT LOG
+            // =============================================
 
             await LogAuditAsync(
                 action: "SellerRegistration",
                 status: "Success",
                 entityType: "Seller",
                 entityId: seller.SellerId.ToString(),
-                description: "Seller registration completed and is pending admin approval.",
+                description:
+                    "Seller registration completed and is pending admin approval.",
                 newValues: new
                 {
                     seller.SellerId,
@@ -429,30 +522,29 @@ public class SellerController : ControllerBase
                     FreeSubscriptionEndDate = freeEndDate
                 });
 
+            // =============================================
+            // 17. RESPONSE
+            // =============================================
+
             return Ok(new
             {
                 success = true,
-                message = $"Registration successful! Your account is pending admin approval. " +
-              $"Your 3-month free subscription starts on " +
-              $"{freeStartDate:dd MMM yyyy} and ends on {freeEndDate:dd MMM yyyy}. " +
-              "You can access the seller portal after admin approval.",
+                message =
+                    "Registration successful! Your account is pending admin approval.",
+
+                sellerId = seller.SellerId,
                 status = seller.Status,
                 isActive = seller.IsActive,
-                freeSubscriptionStartDate = freeStartDate,
-                freeSubscriptionEndDate = freeEndDate
-            });
 
+                freeSubscriptionStartDate = freeStartDate,
+                freeSubscriptionEndDate = freeEndDate,
+
+                redirectUrl = "/seller/pending-approval"
+            });
         }
         catch (Exception ex)
         {
             await transaction.RollbackAsync();
-
-            await LogAuditAsync(
-                action: "SellerRegistration",
-                status: "Failed",
-                entityType: "Seller",
-                entityId: null,
-                description: "Seller registration failed.");
 
             _logger.LogError(
                 ex,
@@ -462,11 +554,11 @@ public class SellerController : ControllerBase
             return StatusCode(500, new
             {
                 success = false,
-                message =
-                    "Registration could not be completed. Please try again."
+                message = "Registration could not be completed. Please try again."
             });
         }
     }
+
 
 
 
@@ -477,11 +569,16 @@ public class SellerController : ControllerBase
 
 
 
+
     [AllowAnonymous]
     [HttpPost("login")]
     public async Task<IActionResult> Login(
         [FromBody] SellerLoginRequest model)
     {
+        // =============================================
+        // 1. VALIDATE REQUEST
+        // =============================================
+
         if (model == null ||
             string.IsNullOrWhiteSpace(model.Email) ||
             string.IsNullOrWhiteSpace(model.Password))
@@ -493,36 +590,58 @@ public class SellerController : ControllerBase
             });
         }
 
-        var email = model.Email.Trim();
+        var email = model.Email.Trim().ToLowerInvariant();
 
-        // 1. Find seller profile.
+        // =============================================
+        // 2. FIND SELLER PROFILE
+        // =============================================
+
+        // Ignore the global Seller filter.
+        // This allows Pending and Inactive sellers to be found.
+
         var seller = await _context.Sellers
-            .FirstOrDefaultAsync(s => s.Email == email);
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s =>
+                s.Email.ToLower() == email);
 
         if (seller == null)
         {
             return Unauthorized(new
             {
                 success = false,
-                message = "Seller account not found."
+                message = "Invalid seller email or password."
             });
         }
 
-        // 2. Find linked Identity user.
-        var user = await _userManager.FindByIdAsync(seller.UserId);
+        // =============================================
+        // 3. FIND LINKED IDENTITY USER
+        // =============================================
+
+        var user = await _userManager.FindByIdAsync(
+            seller.UserId);
 
         if (user == null)
         {
+            _logger.LogWarning(
+                "Seller Identity mapping missing. SellerId: {SellerId}",
+                seller.SellerId);
+
             return Unauthorized(new
             {
                 success = false,
-                message = "Seller login account not found."
+                message = "Invalid seller email or password."
             });
         }
 
-        // 3. Validate password.
-        var passwordValid = await _userManager.CheckPasswordAsync(
-            user, model.Password);
+        // =============================================
+        // 4. VALIDATE PASSWORD
+        // =============================================
+
+        var passwordValid =
+            await _userManager.CheckPasswordAsync(
+                user,
+                model.Password);
 
         if (!passwordValid)
         {
@@ -540,14 +659,69 @@ public class SellerController : ControllerBase
             });
         }
 
-        // 4. Ensure the user already has the Seller role.
-        // Do not automatically grant roles during login.
+        // =============================================
+        // 5. CHECK IDENTITY ACCOUNT STATUS
+        // =============================================
+
+        if (!string.Equals(
+            user.Status,
+            "Active",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                success = false,
+                reason = "identity-account-inactive",
+                message = "Your login account is inactive. Please contact support."
+            });
+        }
+
+        // =============================================
+        // 6. VERIFY SELLER ROLE
+        // =============================================
+
         if (!await _userManager.IsInRoleAsync(user, "Seller"))
         {
+            await LogAuditAsync(
+                action: "SellerLogin",
+                status: "Failed",
+                entityType: "Seller",
+                entityId: seller.SellerId.ToString(),
+                description: "User does not have the Seller role.");
+
             return Forbid();
         }
 
-        // 5. Admin approval is mandatory.
+        // =============================================
+        // 7. CHECK SELLER APPROVAL STATUS
+        // =============================================
+
+        if (string.Equals(
+            seller.Status,
+            "Rejected",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                success = false,
+                reason = "rejected",
+                message = "Your seller application has been rejected. Please contact support."
+            });
+        }
+
+        if (string.Equals(
+            seller.Status,
+            "Inactive",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                success = false,
+                reason = "inactive",
+                message = "Your seller account is inactive. Please contact support."
+            });
+        }
+
         if (!seller.IsActive ||
             !string.Equals(
                 seller.Status,
@@ -559,21 +733,27 @@ public class SellerController : ControllerBase
                 success = false,
                 reason = "pending-approval",
                 message =
-                    "Your seller account is awaiting admin approval. You can access the portal after your documents are verified.",
+                    "Your seller account is awaiting admin approval.",
                 redirectUrl = "/seller/pending-approval"
             });
         }
 
+        // =============================================
+        // 8. CHECK FREE SUBSCRIPTION
+        // =============================================
+
         var now = DateTime.UtcNow;
 
-        // 6. Check the seller's individual 3-month free period.
         bool freeSubscriptionActive =
             seller.FreeSubscriptionStartDate.HasValue &&
             seller.FreeSubscriptionEndDate.HasValue &&
             now >= seller.FreeSubscriptionStartDate.Value &&
             now < seller.FreeSubscriptionEndDate.Value;
 
-        // 7. Check whether a paid subscription is currently valid.
+        // =============================================
+        // 9. CHECK PAID SUBSCRIPTION
+        // =============================================
+
         bool paidSubscriptionActive =
             await _context.Subscriptions.AnyAsync(s =>
                 s.SellerId == seller.SellerId &&
@@ -582,9 +762,13 @@ public class SellerController : ControllerBase
                 s.EndDate > now);
 
         bool hasValidSubscription =
-            freeSubscriptionActive || paidSubscriptionActive;
+            freeSubscriptionActive ||
+            paidSubscriptionActive;
 
-        // 8. Authenticate the seller.
+        // =============================================
+        // 10. AUTHENTICATE SELLER
+        // =============================================
+
         await _signInManager.SignOutAsync();
 
         var signInResult =
@@ -606,10 +790,13 @@ public class SellerController : ControllerBase
             return Unauthorized(new
             {
                 success = false,
-                message =
-                    "Seller sign-in failed. Check your authentication configuration."
+                message = "Seller sign-in failed. Please try again."
             });
         }
+
+        // =============================================
+        // 11. AUDIT SUCCESSFUL AUTHENTICATION
+        // =============================================
 
         await LogAuditAsync(
             action: "SellerLogin",
@@ -620,11 +807,17 @@ public class SellerController : ControllerBase
             newValues: new
             {
                 seller.SellerId,
-                SubscriptionType = freeSubscriptionActive ? "Free" : paidSubscriptionActive ? "Paid" : "None",
+                seller.UserId,
+                SubscriptionType = freeSubscriptionActive
+                    ? "Free"
+                    : paidSubscriptionActive ? "Paid" : "None",
                 HasValidSubscription = hasValidSubscription
             });
 
-        // 9. No active free or paid subscription.
+        // =============================================
+        // 12. NO ACTIVE SUBSCRIPTION
+        // =============================================
+
         if (!hasValidSubscription)
         {
             return Ok(new
@@ -632,18 +825,31 @@ public class SellerController : ControllerBase
                 success = true,
                 subscribed = false,
                 message = "Please subscribe to access the seller portal.",
-                redirectUrl = "/seller/subscription"
+                redirectUrl = "/seller/subscription",
+
+                seller = new
+                {
+                    sellerId = seller.SellerId,
+                    businessName = seller.BusinessName,
+                    ownerName = seller.OwnerName,
+                    email = seller.Email
+                }
             });
         }
 
-        // 10. Valid subscription: allow seller portal access.
+        // =============================================
+        // 13. SUCCESSFUL SELLER LOGIN
+        // =============================================
+
         return Ok(new
         {
             success = true,
             subscribed = true,
+
             subscriptionType = freeSubscriptionActive
                 ? "Free"
                 : "Paid",
+
             seller = new
             {
                 sellerId = seller.SellerId,
@@ -651,9 +857,14 @@ public class SellerController : ControllerBase
                 ownerName = seller.OwnerName,
                 email = seller.Email,
                 status = seller.Status,
-                freeSubscriptionEnd = seller.FreeSubscriptionEndDate,
-                subscriptionEnd = seller.SubscriptionEndDate
+
+                freeSubscriptionEnd =
+                    seller.FreeSubscriptionEndDate,
+
+                subscriptionEnd =
+                    seller.SubscriptionEndDate
             },
+
             redirectUrl = "/seller/dashboard"
         });
     }
