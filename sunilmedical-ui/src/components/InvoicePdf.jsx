@@ -1,34 +1,6 @@
 ﻿import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-/*
- * InvoicePdf.jsx
- * ----------------
- * Single responsibility: generate the customer invoice PDF.
- *
- * OrderCard.jsx should call:
- *     import generateInvoicePdf from "../InvoicePdf";
- *     await generateInvoicePdf(order);
- *
- * The order model used by the current application contains:
- * order.items
- * order.grandTotal
- * order.couponDiscount
- * order.deliveryAddress
- * order.orderNumber
- * order.orderDate
- * order.paymentStatus
- *
- * Item fields used:
- * item.productName / item.name
- * item.variantName / item.modelName
- * item.quantity
- * item.price
- * item.discountAmount / item.discountPercentage
- * item.gstPercentage
- * item.finalUnitPrice / item.productFinalPrice / item.sellingPrice
- * item.itemTotal
- */
 
 const toNumber = (value) => {
     if (value === null || value === undefined || value === "") return 0;
@@ -487,144 +459,146 @@ const buildTotals = (order, lines) => {
 };
 
 const addHeader = (doc, order) => {
-    const pageWidth =
-        doc.internal.pageSize.getWidth();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 14;
+    const rightX = pageWidth - margin;
+    const leftWidth = 112;
+    const rightWidth = 62;
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(17);
-    doc.text(
-        "JEDE MEDTECH INDIA PRIVATE LIMITED",
-        14,
-        18
-    );
+    const invoiceNo =
+        order?.invoiceNumber ??
+        order?.taxInvoiceNumber ??
+        `INV-${order?.orderNumber || order?.orderId || "-"}`;
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-
-    doc.text(
-        "GSTIN: 37AKLPA6711H1ZA",
-        14,
-        24
-    );
-
-    doc.text(
-        "480/2, AMTZ CAMPUS, Pragathi Maiden, Visakhapatnam Steel Plant, Pedagantyada, Visakhapatnam, Andhra Pradesh, India",
-        14,
-        29
-    );
-
-    doc.text(
-        "Phone: 6301427306, 9014060858",
-        14,
-        34
-    );
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(21);
-
-    doc.text(
-        "TAX INVOICE",
-        pageWidth - 14,
-        18,
-        { align: "right" }
-    );
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-
-    doc.text(
-        `Invoice No: INV-${order?.orderNumber || order?.orderId || "-"}`,
-        pageWidth - 14,
-        25,
-        { align: "right" }
-    );
-
-    doc.text(
-        `Order ID: #${order?.orderId || "-"}`,
-        pageWidth - 14,
-        30,
-        { align: "right" }
-    );
-
-    const dateText = order?.orderDate
-        ? new Date(order.orderDate).toLocaleDateString("en-IN")
+    const invoiceDate = order?.invoiceDate ?? order?.issuedAt ?? order?.orderDate;
+    const dateText = invoiceDate
+        ? new Date(invoiceDate).toLocaleDateString("en-IN")
         : new Date().toLocaleDateString("en-IN");
 
-    doc.text(
-        `Date: ${dateText}`,
-        pageWidth - 14,
-        35,
-        { align: "right" }
-    );
-
-    doc.setDrawColor(210);
-    doc.line(
-        14,
-        40,
-        pageWidth - 14,
-        40
-    );
-};
-
-const addAddress = (doc, order) => {
-    const address =
-        order?.deliveryAddress;
-
+    // Seller identity block: wrap long legal name/address instead of allowing overlap.
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-
-    doc.text(
-        "BILLING / DELIVERY ADDRESS",
-        14,
-        50
+    doc.setFontSize(13);
+    const companyLines = doc.splitTextToSize(
+        "JEDE MEDTECH INDIA PRIVATE LIMITED",
+        leftWidth
     );
+    doc.text(companyLines, margin, 17);
 
+    let sellerY = 17 + companyLines.length * 5.2;
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-
-    const addressLines = [
-        address?.fullName,
-        [
-            address?.addressLine1,
-            address?.addressLine2,
-            address?.landmark,
-        ]
-            .filter(Boolean)
-            .join(", "),
-        [
-            address?.city,
-            address?.state,
-        ]
-            .filter(Boolean)
-            .join(", "),
-        address?.pincode
-            ? `Pincode: ${address.pincode}`
-            : "",
-        address?.mobileNumber
-            ? `Phone: ${address.mobileNumber}`
-            : "",
-    ].filter(Boolean);
-
-    let y = 57;
-
-    addressLines.forEach((line) => {
-        const wrapped =
-            doc.splitTextToSize(
-                String(line),
-                180
-            );
-
-        doc.text(
-            wrapped,
-            14,
-            y
-        );
-
-        y +=
-            wrapped.length * 4.5;
+    doc.setFontSize(8);
+    [
+        "GSTIN: 37AKLPA6711H1ZA",
+        "480/2, AMTZ CAMPUS, Pragathi Maiden, Visakhapatnam Steel Plant, Pedagantyada, Visakhapatnam, Andhra Pradesh, India",
+        "Phone: 6301427306, 9014060858"
+    ].forEach((value) => {
+        const wrapped = doc.splitTextToSize(value, leftWidth);
+        doc.text(wrapped, margin, sellerY);
+        sellerY += wrapped.length * 3.8 + 1;
     });
 
-    return y;
+    // Invoice metadata is right-aligned in its own fixed-width column.
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(19);
+    doc.text("TAX INVOICE", rightX, 18, { align: "right" });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    const meta = [
+        `Invoice No: ${invoiceNo}`,
+        `Order ID: #${order?.orderId || "-"}`,
+        `Date: ${dateText}`,
+        order?.placeOfSupply ? `Place of Supply: ${order.placeOfSupply}` : null
+    ].filter(Boolean);
+
+    let metaY = 25;
+    meta.forEach((value) => {
+        const wrapped = doc.splitTextToSize(value, rightWidth);
+        doc.text(wrapped, rightX, metaY, { align: "right" });
+        metaY += wrapped.length * 3.8 + 1;
+    });
+
+    const dividerY = Math.max(sellerY, metaY) + 2;
+    doc.setDrawColor(205);
+    doc.setLineWidth(0.35);
+    doc.line(margin, dividerY, rightX, dividerY);
+    return dividerY;
+};
+
+const addAddress = (doc, order, startY = 48) => {
+    const address = order?.deliveryAddress ?? order?.billingAddress ?? {};
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 14;
+    const gap = 8;
+    const colWidth = (pageWidth - margin * 2 - gap) / 2;
+    const leftX = margin;
+    const rightX = margin + colWidth + gap;
+
+    const buyerName =
+        address?.fullName ??
+        order?.customerName ??
+        order?.userName ??
+        order?.customer?.name ??
+        "-";
+
+    const addressLines = [
+        buyerName,
+        address?.companyName,
+        [address?.addressLine1, address?.addressLine2, address?.landmark]
+            .filter(Boolean).join(", "),
+        [address?.city, address?.district, address?.state, address?.pincode]
+            .filter(Boolean).join(", "),
+        address?.country ?? "India",
+        address?.mobileNumber || address?.phone
+            ? `Phone: ${address.mobileNumber ?? address.phone}` : null,
+        address?.email || order?.customerEmail
+            ? `Email: ${address.email ?? order.customerEmail}` : null,
+        address?.gstin ? `GSTIN: ${address.gstin}` : null
+    ].filter((value) => value !== null && value !== undefined && String(value).trim());
+
+    const drawBlock = (heading, lines, x, width) => {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.text(heading, x, startY);
+
+        let y = startY + 6;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        lines.forEach((value, index) => {
+            const wrapped = doc.splitTextToSize(String(value), width);
+            if (index === 0) doc.setFont("helvetica", "bold");
+            else doc.setFont("helvetica", "normal");
+            doc.text(wrapped, x, y);
+            y += wrapped.length * 3.8 + 1;
+        });
+        return y;
+    };
+
+    const buyerEndY = drawBlock(
+        "BILL TO / SHIP TO",
+        addressLines.length ? addressLines : ["Address details not provided"],
+        leftX,
+        colWidth
+    );
+
+    const sellerTaxLines = [
+        "JEDE MEDTECH INDIA PRIVATE LIMITED",
+        "GSTIN: 37AKLPA6711H1ZA",
+        "Andhra Pradesh, India",
+        order?.placeOfSupply ? `Place of Supply: ${order.placeOfSupply}` : null
+    ].filter(Boolean);
+
+    const sellerEndY = drawBlock(
+        "SUPPLIER DETAILS",
+        sellerTaxLines,
+        rightX,
+        colWidth
+    );
+
+    const bottomY = Math.max(buyerEndY, sellerEndY);
+    doc.setDrawColor(225);
+    doc.line(margin, bottomY + 1, pageWidth - margin, bottomY + 1);
+    return bottomY + 2;
 };
 
 const addSummary = (
@@ -886,16 +860,13 @@ export const generateInvoicePdf = async (
     const pageHeight =
         doc.internal.pageSize.getHeight();
 
-    addHeader(
-        doc,
-        order
-    );
+    const headerEndY = addHeader(doc, order);
 
-    const addressEndY =
-        addAddress(
-            doc,
-            order
-        );
+    const addressEndY = addAddress(
+        doc,
+        order,
+        headerEndY + 7
+    );
 
     const tableRows =
         lines.map((line) => [
@@ -949,6 +920,8 @@ export const generateInvoicePdf = async (
         body: tableRows,
 
         theme: "grid",
+        tableWidth: "auto",
+        showHead: "everyPage",
 
         styles: {
             font: "helvetica",
@@ -965,30 +938,30 @@ export const generateInvoicePdf = async (
 
         columnStyles: {
             0: {
-                cellWidth: 49,
+                cellWidth: 43,
             },
             1: {
-                cellWidth: 11,
+                cellWidth: 10,
                 halign: "center",
             },
             2: {
-                cellWidth: 30,
-                halign: "right",
-            },
-            3: {
-                cellWidth: 15,
-                halign: "right",
-            },
-            4: {
-                cellWidth: 25,
-                halign: "right",
-            },
-            5: {
                 cellWidth: 27,
                 halign: "right",
             },
+            3: {
+                cellWidth: 13,
+                halign: "right",
+            },
+            4: {
+                cellWidth: 24,
+                halign: "right",
+            },
+            5: {
+                cellWidth: 29,
+                halign: "right",
+            },
             6: {
-                cellWidth: 28,
+                cellWidth: 36,
                 halign: "right",
             },
         },

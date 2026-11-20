@@ -6,7 +6,7 @@
     useState
 } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import API from "../services/api"; // Update this path to your shared Axios API.js location.
 import { toast } from "react-toastify";
 
 import OrderHero from "../components/orders/OrderHero";
@@ -129,7 +129,7 @@ export default function MyOrdersPage() {
                     setRefreshing(true);
                 }
 
-                const response = await axios.get(
+                const response = await API.get(
                     `/api/order/my-orders?page=1&pageSize=${PAGE_SIZE}`,
                     {
                         signal: controller.signal,
@@ -214,7 +214,7 @@ export default function MyOrdersPage() {
             setLoadingMore(true);
 
             try {
-                const response = await axios.get(
+                const response = await API.get(
                     `/api/order/my-orders?page=${nextPage}&pageSize=${PAGE_SIZE}`,
                     {
                         headers: {
@@ -510,12 +510,10 @@ export default function MyOrdersPage() {
         );
     }
 
-    function handleInvoice(order) {
-        window.open(
-            `/invoice/${order.orderId}`,
-            "_blank",
-            "noopener,noreferrer"
-        );
+    // Seller invoices are loaded and downloaded by OrderCard using the
+    // seller-invoice API. Do not call the legacy combined /invoice/{orderId} route.
+    function handleInvoice() {
+        toast.info("Seller invoices are shown in the order card when available.");
     }
 
     function handleReview(item) {
@@ -526,7 +524,7 @@ export default function MyOrdersPage() {
 
     async function handleBuyAgain(item) {
         try {
-            await axios.post(
+            await API.post(
                 "/api/cart/add",
                 {
                     productId:
@@ -564,7 +562,7 @@ export default function MyOrdersPage() {
         try {
             setCancelLoading(true);
 
-            await axios.put(
+            await API.put(
                 `/api/order/cancel-item/${selectedItem.orderItemId}`,
                 {
                     reasonType:
@@ -643,7 +641,7 @@ export default function MyOrdersPage() {
                 );
             }
 
-            await axios.post(
+            await API.post(
                 `/api/order/request-return/${selectedItem.orderItemId}`,
                 formData,
                 {
@@ -676,7 +674,7 @@ export default function MyOrdersPage() {
 
     return (
         <div className="min-h-screen bg-slate-100">
-            <div className="mx-auto max-w-7xl px-4 py-8">
+            <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-4 sm:py-6 lg:px-6 lg:py-8">
 
                 <OrderHero
                     search={search}
@@ -738,7 +736,7 @@ export default function MyOrdersPage() {
                     )}
 
                 {filteredOrders.length > 0 && (
-                    <div className="mt-8 space-y-8">
+                    <div className="mt-5 space-y-5 sm:mt-8 sm:space-y-7">
                         {filteredOrders.map(
                             (order) => (
                                 <OrderCard

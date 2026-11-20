@@ -177,6 +177,8 @@ builder.Services.AddCors(options =>
     });
 });
 
+builder.Services.AddScoped<DeliveryBatchService>();
+
 // =====================================================
 // BUILD APPLICATION
 // =====================================================

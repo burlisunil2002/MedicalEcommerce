@@ -9,6 +9,7 @@ using VivekMedicalProducts.Interfaces;
 using VivekMedicalProducts.DTOs;
 using VivekMedicalProducts.Models;
 using VivekMedicalProducts.Services.Storage;
+using VivekMedicalProducts.Services;
 using VivekMedicalProducts.ViewModels;
 
 namespace VivekMedicalProducts.Controllers;
@@ -25,6 +26,7 @@ public class SellerController : ControllerBase
     private readonly IFileStorageService _fileStorage;
     private readonly ILogger<SellerController> _logger;
     private readonly IAuditService _auditService;
+    private readonly DeliveryBatchService _deliveryBatchService;
 
     public SellerController(
         ApplicationDbContext context,
@@ -34,7 +36,8 @@ public class SellerController : ControllerBase
         EmailService emailService,
         IFileStorageService filestorage,
         ILogger<SellerController> logger,
-        IAuditService auditService)
+        IAuditService auditService,
+        DeliveryBatchService deliveryBatchService)
     {
         _context = context;
         _userManager = userManager;
@@ -44,6 +47,7 @@ public class SellerController : ControllerBase
         _fileStorage = filestorage;
         _logger = logger;
         _auditService = auditService;
+        _deliveryBatchService = deliveryBatchService;
     }
 
 
@@ -421,20 +425,8 @@ public class SellerController : ControllerBase
                         "seller-product-licences");
             }
 
-            // =============================================
-            // 14. FREE SUBSCRIPTION PERIOD
-            // =============================================
-
+            // Subscription is not required for seller registration.
             var registrationDate = DateTime.UtcNow;
-
-            var launchDate = new DateTime(
-                2026, 12, 14, 0, 0, 0, DateTimeKind.Utc);
-
-            var freeStartDate = registrationDate < launchDate
-                ? launchDate
-                : registrationDate;
-
-            var freeEndDate = freeStartDate.AddMonths(3);
 
             // =============================================
             // 15. CREATE SELLER PROFILE
@@ -453,10 +445,10 @@ public class SellerController : ControllerBase
                 Phone = model.Phone,
 
                 GSTNumber = model.GSTNumber,
-                IsGSTVerified = false,
+                IsGSTVerified = true,
 
                 PAN = model.PAN,
-                IsPANVerified = false,
+                IsPANVerified = true,
 
                 AddressLine1 = model.AddressLine1.Trim(),
                 City = model.City.Trim(),
@@ -479,12 +471,6 @@ public class SellerController : ControllerBase
 
                 GSTCertificateDocumentPath = gstCertificatePath,
                 ProductLicenceDocumentPath = productLicencePath,
-
-                // Three-month free subscription.
-                FreeSubscriptionStartDate = freeStartDate,
-                FreeSubscriptionEndDate = freeEndDate,
-                SubscriptionPlan = "Free",
-                IsLaunchFreeSubscription = true,
 
                 // Admin approval required.
                 Status = "Pending",
@@ -516,10 +502,7 @@ public class SellerController : ControllerBase
                     seller.UserId,
                     seller.BusinessName,
                     seller.Status,
-                    seller.IsActive,
-                    seller.SubscriptionPlan,
-                    FreeSubscriptionStartDate = freeStartDate,
-                    FreeSubscriptionEndDate = freeEndDate
+                    seller.IsActive
                 });
 
             // =============================================
@@ -535,9 +518,6 @@ public class SellerController : ControllerBase
                 sellerId = seller.SellerId,
                 status = seller.Status,
                 isActive = seller.IsActive,
-
-                freeSubscriptionStartDate = freeStartDate,
-                freeSubscriptionEndDate = freeEndDate,
 
                 redirectUrl = "/seller/pending-approval"
             });
@@ -738,45 +718,14 @@ public class SellerController : ControllerBase
             });
         }
 
-        // =============================================
-        // 8. CHECK FREE SUBSCRIPTION
-        // =============================================
-
-        var now = DateTime.UtcNow;
-
-        bool freeSubscriptionActive =
-            seller.FreeSubscriptionStartDate.HasValue &&
-            seller.FreeSubscriptionEndDate.HasValue &&
-            now >= seller.FreeSubscriptionStartDate.Value &&
-            now < seller.FreeSubscriptionEndDate.Value;
-
-        // =============================================
-        // 9. CHECK PAID SUBSCRIPTION
-        // =============================================
-
-        bool paidSubscriptionActive =
-            await _context.Subscriptions.AnyAsync(s =>
-                s.SellerId == seller.SellerId &&
-                s.Status == "Active" &&
-                s.StartDate <= now &&
-                s.EndDate > now);
-
-        bool hasValidSubscription =
-            freeSubscriptionActive ||
-            paidSubscriptionActive;
-
-        // =============================================
-        // 10. AUTHENTICATE SELLER
-        // =============================================
-
+        // Subscription is not required. Admin approval remains mandatory.
         await _signInManager.SignOutAsync();
 
-        var signInResult =
-            await _signInManager.PasswordSignInAsync(
-                user.UserName!,
-                model.Password,
-                isPersistent: false,
-                lockoutOnFailure: false);
+        var signInResult = await _signInManager.PasswordSignInAsync(
+            user.UserName!,
+            model.Password,
+            isPersistent: false,
+            lockoutOnFailure: false);
 
         if (!signInResult.Succeeded)
         {
@@ -794,77 +743,27 @@ public class SellerController : ControllerBase
             });
         }
 
-        // =============================================
-        // 11. AUDIT SUCCESSFUL AUTHENTICATION
-        // =============================================
-
         await LogAuditAsync(
             action: "SellerLogin",
             status: "Success",
             entityType: "Seller",
             entityId: seller.SellerId.ToString(),
             description: "Seller authenticated successfully.",
-            newValues: new
-            {
-                seller.SellerId,
-                seller.UserId,
-                SubscriptionType = freeSubscriptionActive
-                    ? "Free"
-                    : paidSubscriptionActive ? "Paid" : "None",
-                HasValidSubscription = hasValidSubscription
-            });
-
-        // =============================================
-        // 12. NO ACTIVE SUBSCRIPTION
-        // =============================================
-
-        if (!hasValidSubscription)
-        {
-            return Ok(new
-            {
-                success = true,
-                subscribed = false,
-                message = "Please subscribe to access the seller portal.",
-                redirectUrl = "/seller/subscription",
-
-                seller = new
-                {
-                    sellerId = seller.SellerId,
-                    businessName = seller.BusinessName,
-                    ownerName = seller.OwnerName,
-                    email = seller.Email
-                }
-            });
-        }
-
-        // =============================================
-        // 13. SUCCESSFUL SELLER LOGIN
-        // =============================================
+            newValues: new { seller.SellerId, seller.UserId });
 
         return Ok(new
         {
             success = true,
             subscribed = true,
-
-            subscriptionType = freeSubscriptionActive
-                ? "Free"
-                : "Paid",
-
+            subscriptionRequired = false,
             seller = new
             {
                 sellerId = seller.SellerId,
                 businessName = seller.BusinessName,
                 ownerName = seller.OwnerName,
                 email = seller.Email,
-                status = seller.Status,
-
-                freeSubscriptionEnd =
-                    seller.FreeSubscriptionEndDate,
-
-                subscriptionEnd =
-                    seller.SubscriptionEndDate
+                status = seller.Status
             },
-
             redirectUrl = "/seller/dashboard"
         });
     }
@@ -1119,12 +1018,10 @@ public class SellerController : ControllerBase
             status: "Success",
             entityType: "Seller",
             entityId: seller.SellerId.ToString(),
-            description: "Seller access and subscription eligibility were checked.");
+            description: "Seller access eligibility was checked; subscription is not required.");
 
-        // Step 1: Admin approval is mandatory.
         if (!seller.IsActive ||
-            !string.Equals(seller.Status, "Active",
-                StringComparison.OrdinalIgnoreCase))
+            !string.Equals(seller.Status, "Active", StringComparison.OrdinalIgnoreCase))
         {
             return Ok(new
             {
@@ -1135,51 +1032,12 @@ public class SellerController : ControllerBase
             });
         }
 
-        var now = DateTime.UtcNow;
-
-        // Step 2: Allow access during the seller's own free period.
-        if (seller.FreeSubscriptionStartDate.HasValue &&
-            seller.FreeSubscriptionEndDate.HasValue &&
-            now >= seller.FreeSubscriptionStartDate.Value &&
-            now < seller.FreeSubscriptionEndDate.Value)
-        {
-            return Ok(new
-            {
-                allowed = true,
-                reason = "free-subscription",
-                redirect = "/seller/dashboard"
-            });
-        }
-
-        // Step 3: Check for a currently valid paid subscription.
-        var paidSubscription = await _context.Subscriptions
-            .Where(s =>
-                s.SellerId == seller.SellerId &&
-                s.Status == "Active" &&
-                s.StartDate.HasValue &&
-                s.EndDate.HasValue &&
-                s.StartDate.Value <= now &&
-                s.EndDate.Value > now)
-            .OrderByDescending(s => s.EndDate)
-            .FirstOrDefaultAsync();
-
-        if (paidSubscription != null)
-        {
-            return Ok(new
-            {
-                allowed = true,
-                reason = "paid-subscription",
-                redirect = "/seller/dashboard"
-            });
-        }
-
-        // Step 4: No valid subscription.
         return Ok(new
         {
-            allowed = false,
-            reason = "subscription-required",
-            redirect = "/seller/subscription",
-            message = "Please subscribe to continue using the seller portal."
+            allowed = true,
+            reason = "subscription-not-required",
+            redirect = "/seller/dashboard",
+            message = "Your seller account is active. No subscription is required."
         });
     }
 
@@ -1494,14 +1352,6 @@ public class SellerController : ControllerBase
         }
 
         // -----------------------------------------------------
-        // SUBSCRIPTION
-        // -----------------------------------------------------
-
-        var isSubscribed =
-            seller.SubscriptionEndDate.HasValue &&
-            seller.SubscriptionEndDate.Value >= DateTime.UtcNow;
-
-        // -----------------------------------------------------
         // RESPONSE
         // -----------------------------------------------------
 
@@ -1536,10 +1386,7 @@ public class SellerController : ControllerBase
 
             growth,
 
-            subscriptionEnd =
-                seller.SubscriptionEndDate,
-
-            isSubscribed,
+            subscriptionRequired = false,
 
             payment = new
             {
@@ -1688,9 +1535,7 @@ public class SellerController : ControllerBase
 
             revenue,
 
-            activeSubscription =
-                seller.SubscriptionEndDate >=
-                DateTime.UtcNow
+            subscriptionRequired = false
         });
     }
 
@@ -1703,34 +1548,19 @@ public class SellerController : ControllerBase
     public async Task<IActionResult> Subscription()
     {
         var userId = _userManager.GetUserId(User);
-
-        var seller =
-            await _context.Sellers
-                .FirstOrDefaultAsync(
-                    x => x.UserId == userId);
+        var seller = await _context.Sellers
+            .FirstOrDefaultAsync(x => x.UserId == userId);
 
         if (seller == null)
-        {
-            return NotFound();
-        }
-
-        await LogAuditAsync(
-            action: "ViewSellerSubscription",
-            status: "Success",
-            entityType: "Seller",
-            entityId: seller.SellerId.ToString(),
-            description: "Seller viewed subscription status.");
+            return NotFound(new { success = false, message = "Seller not found." });
 
         return Ok(new
         {
             success = true,
-
-            isSubscribed =
-                seller.SubscriptionEndDate >
-                DateTime.UtcNow,
-
-            subscriptionEnd =
-                seller.SubscriptionEndDate
+            isSubscribed = true,
+            subscriptionRequired = false,
+            subscriptionStatus = "NotRequired",
+            subscriptionEnd = (DateTime?)null
         });
     }
 
@@ -1743,53 +1573,29 @@ public class SellerController : ControllerBase
     public async Task<IActionResult> ProductLimit()
     {
         var userId = _userManager.GetUserId(User);
-
-        var seller =
-            await _context.Sellers
-                .FirstOrDefaultAsync(
-                    x => x.UserId == userId);
+        var seller = await _context.Sellers
+            .FirstOrDefaultAsync(x => x.UserId == userId);
 
         if (seller == null)
-        {
-            return NotFound();
-        }
+            return NotFound(new { success = false, message = "Seller not found." });
 
-        var sub =
-            await _context.Subscriptions
-                .Where(x =>
-                    x.SellerId == seller.SellerId &&
-                    x.Status == "Active")
-                .OrderByDescending(
-                    x => x.CreatedDate)
-                .FirstOrDefaultAsync();
-
-        int limit = sub?.ProductRange switch
-        {
-            "1-5" => 5,
-            "6-10" => 10,
-            "11-15" => 15,
-            "16-20" => 20,
-            "20+" => 999,
-            _ => 0
-        };
-
-        var currentProducts =
-            await _context.Products
-                .CountAsync(x =>
-                    x.SellerId == seller.SellerId);
+        var currentProducts = await _context.Products
+            .CountAsync(x => x.SellerId == seller.SellerId);
 
         await LogAuditAsync(
             action: "ViewSellerProductLimit",
             status: "Success",
             entityType: "Seller",
             entityId: seller.SellerId.ToString(),
-            description: "Seller viewed product limit.");
+            description: "Seller product limit checked; no subscription-based product limit applies.");
 
         return Ok(new
         {
             success = true,
-            productLimit = limit,
-            currentProducts
+            productLimit = int.MaxValue,
+            unlimited = true,
+            currentProducts,
+            subscriptionRequired = false
         });
     }
 
@@ -2514,278 +2320,268 @@ public class SellerController : ControllerBase
 
     [Authorize(Roles = "Seller")]
     [HttpPut("orders/items/{orderItemId}/status")]
-    public async Task<IActionResult>
-        UpdateSellerOrderItemStatus(
-            int orderItemId,
-            [FromBody] UpdateOrderStatusDto model)
+    public async Task<IActionResult> UpdateSellerOrderItemStatus(
+        int orderItemId,
+        [FromBody] UpdateOrderStatusDto model,
+        CancellationToken cancellationToken)
     {
         if (model == null)
         {
             return BadRequest(new
             {
                 success = false,
-                message = "Invalid request."
+                message = "Request body is required."
             });
         }
 
-        var userId =
-            _userManager.GetUserId(User);
-
+        var userId = _userManager.GetUserId(User);
         if (string.IsNullOrWhiteSpace(userId))
-        {
-            return Unauthorized(new
-            {
-                success = false,
-                message = "Please login."
-            });
-        }
+            return Unauthorized(new { success = false, message = "Please login." });
 
-        var seller =
-            await _context.Sellers
-                .FirstOrDefaultAsync(
-                    x => x.UserId == userId);
+        var seller = await _context.Sellers
+            .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
 
         if (seller == null)
-        {
-            return Unauthorized(new
-            {
-                success = false,
-                message = "Seller account not found."
-            });
-        }
+            return Unauthorized(new { success = false, message = "Seller account not found." });
 
-        // -----------------------------------------------------
-        // SUBSCRIPTION
-        // -----------------------------------------------------
-
-        if (!seller.SubscriptionEndDate.HasValue ||
-            seller.SubscriptionEndDate.Value <
-            DateTime.UtcNow)
-        {
-            return StatusCode(
-                StatusCodes.Status403Forbidden,
-                new
-                {
-                    success = false,
-                    message =
-                        "Your subscription has expired. Please renew your subscription."
-                });
-        }
-
-        // -----------------------------------------------------
-        // SECURITY
-        // Seller can only update own items
-        // -----------------------------------------------------
-
-        var item =
-            await _context.OrderItems
-                .Include(x => x.Order)
-                .FirstOrDefaultAsync(x =>
-                    x.OrderItemId == orderItemId &&
-                    x.SellerId == seller.SellerId);
+        // Keep authentication and ownership checks. Status transitions themselves
+        // are unrestricted: any supported status can move to any other supported status.
+        var item = await _context.OrderItems
+            .Include(x => x.Order)
+            .FirstOrDefaultAsync(
+                x => x.OrderItemId == orderItemId &&
+                     x.SellerId == seller.SellerId,
+                cancellationToken);
 
         if (item == null)
         {
             return NotFound(new
             {
                 success = false,
-                message =
-                    "Order item not found or you are not authorized to update it."
+                message = "Order item not found or you are not authorized to update it."
             });
         }
-
-        // -----------------------------------------------------
-        // PAYMENT CANNOT BE CHANGED BY SELLER
-        // -----------------------------------------------------
-
-        if (!string.IsNullOrWhiteSpace(
-                model.PaymentStatus))
-        {
-            return BadRequest(new
-            {
-                success = false,
-                message =
-                    "Seller cannot update payment status."
-            });
-        }
-
-        if (string.IsNullOrWhiteSpace(
-                model.ItemOrderStatus))
-        {
-            return BadRequest(new
-            {
-                success = false,
-                message =
-                    "Order item status is required."
-            });
-        }
-
-        var status =
-            model.ItemOrderStatus.Trim();
-
-        var validStatuses = new[]
-        {
-            "Placed",
-            "Accepted",
-            "Packed",
-            "Shipped",
-            "OutForDelivery",
-            "Delivered",
-            "Cancelled"
-        };
-
-        if (!validStatuses.Contains(
-                status,
-                StringComparer.OrdinalIgnoreCase))
-        {
-            return BadRequest(new
-            {
-                success = false,
-                message =
-                    "Invalid order item status."
-            });
-        }
-
-        status =
-            validStatuses.First(x =>
-                x.Equals(
-                    status,
-                    StringComparison.OrdinalIgnoreCase));
-
-        // -----------------------------------------------------
-        // DELIVERED CANNOT GO BACK
-        // -----------------------------------------------------
-
-        if (item.OrderItemStatus ==
-                "Delivered" &&
-            status != "Delivered")
-        {
-            return BadRequest(new
-            {
-                success = false,
-                message =
-                    "A delivered item cannot be moved back to another status."
-            });
-        }
-
-        // =========================================================
-        // CANCELLATION RULE
-        // Customer can cancel before shipment.
-        // =========================================================
-
-        var cancellableStatuses = new[]
-        {
-    "Pending",
-    "Placed",
-    "Accepted",
-    "Packed"
-};
-
-        if (!cancellableStatuses.Contains(
-                item.OrderItemStatus,
-                StringComparer.OrdinalIgnoreCase))
-        {
-            return BadRequest(new
-            {
-                success = false,
-                message =
-                    "This item cannot be cancelled after shipment."
-            });
-        }
-
-        // -----------------------------------------------------
-        // UPDATE
-        // -----------------------------------------------------
 
         var oldItemStatus = item.OrderItemStatus;
-        var oldReturnEligible = item.IsReturnEligible;
-        var oldReturnEligibleTill = item.ReturnEligibleTill;
+        var oldPaymentStatus = item.Order.PaymentStatus;
+
+        var itemStatusProvided = !string.IsNullOrWhiteSpace(model.ItemOrderStatus);
+        var paymentStatusProvided = !string.IsNullOrWhiteSpace(model.PaymentStatus);
+
+        if (!itemStatusProvided && !paymentStatusProvided)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Provide ItemOrderStatus, PaymentStatus, or both."
+            });
+        }
+
+        // No transition restrictions. Keep a finite set of recognized values
+        // to prevent typos and inconsistent status strings in the database.
+        var itemStatuses = new[]
+        {
+            "Placed", "Accepted", "Packed", "Shipped",
+            "OutForDelivery", "Delivered", "Cancelled"
+        };
+
+        var paymentStatuses = new[]
+        {
+            "Pending", "Initiated", "Completed", "Failed",
+            "Cancelled", "Refunded", "Refund Pending",
+            "Cash On Delivery", "COD"
+        };
+
+        string? normalizedItemStatus = null;
+        string? normalizedPaymentStatus = null;
+
+        if (itemStatusProvided)
+        {
+            normalizedItemStatus = itemStatuses.FirstOrDefault(
+                x => x.Equals(model.ItemOrderStatus!.Trim(),
+                    StringComparison.OrdinalIgnoreCase));
+
+            if (normalizedItemStatus == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Unsupported item status.",
+                    allowedStatuses = itemStatuses
+                });
+            }
+        }
+
+        if (paymentStatusProvided)
+        {
+            normalizedPaymentStatus = paymentStatuses.FirstOrDefault(
+                x => x.Equals(model.PaymentStatus!.Trim(),
+                    StringComparison.OrdinalIgnoreCase));
+
+            if (normalizedPaymentStatus == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Unsupported payment status.",
+                    allowedStatuses = paymentStatuses
+                });
+            }
+        }
 
         var now = DateTime.UtcNow;
 
-        item.OrderItemStatus = status;
-
-        switch (status)
+        if (normalizedItemStatus != null)
         {
-            case "Packed":
-                item.PackedDate ??= now;
-                break;
+            item.OrderItemStatus = normalizedItemStatus;
 
-            case "Shipped":
-                item.ShippedDate ??= now;
-                break;
+            // Preserve the first timestamp for each milestone. Changing status
+            // backwards does not erase the historical timestamp.
+            switch (normalizedItemStatus)
+            {
+                case "Packed":
+                    item.PackedDate ??= now;
+                    break;
+                case "Shipped":
+                    item.ShippedDate ??= now;
+                    break;
+                case "OutForDelivery":
+                    item.OutForDeliveryDate ??= now;
+                    break;
+                case "Delivered":
+                    item.DeliveredDate ??= now;
+                    item.IsReturnEligible = true;
+                    item.ReturnEligibleTill ??= now.AddDays(7);
+                    break;
+                case "Cancelled":
+                    item.CancelledAt ??= now;
+                    break;
+            }
+        }
 
-            case "OutForDelivery":
-                item.OutForDeliveryDate ??= now;
-                break;
-
-            case "Delivered":
-                item.DeliveredDate ??= now;
-
-                item.IsReturnEligible = true;
-
-                item.ReturnEligibleTill ??=
-                    now.AddDays(7);
-
-                break;
-
-            case "Cancelled":
-                item.CancelledAt ??= now;
-                break;
+        // PaymentStatus belongs to the parent Order, not OrderItem.
+        // Updating it here therefore updates payment status for the whole order.
+        if (normalizedPaymentStatus != null)
+        {
+            item.Order.PaymentStatus = normalizedPaymentStatus;
         }
 
         item.UpdatedAt = now;
         item.ItemOrderModifiedDate = now;
 
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            _logger.LogWarning(ex,
+                "Concurrent seller order update. OrderItemId: {OrderItemId}",
+                orderItemId);
+
+            return Conflict(new
+            {
+                success = false,
+                message = "This order was changed by another request. Refresh and try again."
+            });
+        }
+        catch (DbUpdateException ex)
+        {
+            _logger.LogError(ex,
+                "Database update failed for seller order item {OrderItemId}.",
+                orderItemId);
+
+            return StatusCode(StatusCodes.Status500InternalServerError, new
+            {
+                success = false,
+                message = "The order update could not be saved.",
+                error = ex.InnerException?.Message ?? ex.Message
+            });
+        }
+
+        // Batch/invoice service is only eligible for delivery-stage items and
+        // completed/COD orders. Do not turn a successful status/payment update
+        // into a failed API response if invoice prerequisites are not yet met.
+        var currentPayment = item.Order.PaymentStatus ?? string.Empty;
+        var paymentEligible =
+            currentPayment.Equals("Completed", StringComparison.OrdinalIgnoreCase) ||
+            currentPayment.Equals("COD", StringComparison.OrdinalIgnoreCase) ||
+            currentPayment.Equals("Cash On Delivery", StringComparison.OrdinalIgnoreCase);
+
+        var batchEligible =
+            item.OrderItemStatus.Equals("OutForDelivery", StringComparison.OrdinalIgnoreCase) ||
+            item.OrderItemStatus.Equals("Delivered", StringComparison.OrdinalIgnoreCase);
+
+        string? batchWarning = null;
+        int? batchId = null;
+        int? invoiceId = null;
+
+        if (batchEligible && paymentEligible && item.SellerId.HasValue)
+        {
+            try
+            {
+                var result = await _deliveryBatchService.EnsureBatchAndInvoiceAsync(
+                    item, cancellationToken);
+
+                batchId = result.BatchId;
+                invoiceId = result.InvoiceId;
+            }
+            catch (Exception ex)
+            {
+                // The status/payment update is already committed. Report the
+                // batch failure separately so the UI can still show the saved state.
+                _logger.LogError(ex,
+                    "Batch/invoice generation failed after order update. " +
+                    "OrderItemId: {OrderItemId}, OrderId: {OrderId}, SellerId: {SellerId}",
+                    item.OrderItemId, item.OrderId, item.SellerId);
+
+                batchWarning = ex.InnerException?.Message ?? ex.Message;
+            }
+        }
 
         await LogAuditAsync(
-            action: "UpdateSellerOrderItemStatus",
+            action: "UpdateSellerOrderItemAndPaymentStatus",
             status: "Success",
             entityType: "OrderItem",
             entityId: item.OrderItemId.ToString(),
-            description: $"Seller changed order item status from '{oldItemStatus}' to '{item.OrderItemStatus}'.",
+            description:
+                $"Seller updated item status from '{oldItemStatus}' to '{item.OrderItemStatus}'" +
+                (paymentStatusProvided
+                    ? $"; order payment status from '{oldPaymentStatus}' to '{item.Order.PaymentStatus}'."
+                    : "."),
             oldValues: new
             {
                 OrderItemStatus = oldItemStatus,
-                IsReturnEligible = oldReturnEligible,
-                ReturnEligibleTill = oldReturnEligibleTill
+                PaymentStatus = oldPaymentStatus
             },
             newValues: new
             {
-                item.OrderItemStatus,
-                item.IsReturnEligible,
-                item.ReturnEligibleTill,
-                item.PackedDate,
-                item.ShippedDate,
-                item.OutForDeliveryDate,
-                item.DeliveredDate,
-                item.CancelledAt
-            });
+                OrderItemStatus = item.OrderItemStatus,
+                PaymentStatus = item.Order.PaymentStatus,
+                item.DeliveryBatchId,
+                BatchId = batchId,
+                InvoiceId = invoiceId
+            },
+            cancellationToken: cancellationToken);
 
         return Ok(new
         {
             success = true,
-
-            message =
-                "Order item status updated successfully.",
-
+            message = "Order item and payment status updated successfully.",
             orderItem = new
             {
-                orderItemId =
-                    item.OrderItemId,
-
-                orderId =
-                    item.OrderId,
-
-                paymentStatus =
-                    item.Order.PaymentStatus,
-
-                orderStatus =
-                    item.OrderItemStatus,
-
-                deliveredDate =
-                    item.DeliveredDate
+                orderItemId = item.OrderItemId,
+                orderId = item.OrderId,
+                paymentStatus = item.Order.PaymentStatus,
+                orderStatus = item.OrderItemStatus,
+                deliveryBatchId = item.DeliveryBatchId,
+                deliveredDate = item.DeliveredDate
+            },
+            batch = new
+            {
+                batchId,
+                invoiceId,
+                warning = batchWarning
             }
         });
     }

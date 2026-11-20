@@ -7,6 +7,7 @@ using VivekMedicalProducts.Data;
 using VivekMedicalProducts.DTOs;
 using VivekMedicalProducts.Interfaces;
 using VivekMedicalProducts.Models;
+using VivekMedicalProducts.Services;
 
 namespace VivekMedicalProducts.Controllers
 {
@@ -18,15 +19,20 @@ namespace VivekMedicalProducts.Controllers
         private readonly ApplicationDbContext _context;
         private readonly IAuditService _auditService;
         private readonly ILogger<AdminOrderController> _logger;
+        private readonly DeliveryBatchService _deliveryBatchService;
+
 
         public AdminOrderController(
             ApplicationDbContext context,
             IAuditService auditService,
-            ILogger<AdminOrderController> logger)
+            ILogger<AdminOrderController> logger,
+            DeliveryBatchService deliveryBatchService)
         {
             _context = context;
             _auditService = auditService;
             _logger = logger;
+            _deliveryBatchService = deliveryBatchService;
+
         }
 
         // =========================================================
@@ -490,13 +496,8 @@ namespace VivekMedicalProducts.Controllers
         s.WarehouseFullAddress,
         s.WarehouseContactPersonName,
         s.WarehouseContactMobileNumber,
-        s.SubscriptionPlan,
-        s.FreeSubscriptionStartDate,
-        s.FreeSubscriptionEndDate,
-        s.IsLaunchFreeSubscription,
         s.Status,
         s.IsActive,
-        s.SubscriptionEndDate,
         s.CreatedAt
     })
     .OrderBy(s => s.BusinessName)
@@ -663,16 +664,11 @@ namespace VivekMedicalProducts.Controllers
                         warehouseFullAddress = s.WarehouseFullAddress ?? "",
                         warehouseContactPersonName = s.WarehouseContactPersonName ?? "",
                         warehouseContactMobileNumber = s.WarehouseContactMobileNumber ?? "",
-                        subscriptionPlan = s.SubscriptionPlan ?? "",
-                        freeSubscriptionStartDate = s.FreeSubscriptionStartDate,
-                        freeSubscriptionEndDate = s.FreeSubscriptionEndDate,
-                        isLaunchFreeSubscription = s.IsLaunchFreeSubscription,
                         status = string.IsNullOrWhiteSpace(s.Status)
     ? (s.IsActive ? "Active" : "Inactive")
     : s.Status,
 
                         isActive = s.IsActive,
-                        subscriptionEndDate = s.SubscriptionEndDate,
                         createdAt = s.CreatedAt,
 
                         productCount = productCounts.TryGetValue(
@@ -773,13 +769,8 @@ namespace VivekMedicalProducts.Controllers
                         s.WarehouseFullAddress,
                         s.WarehouseContactPersonName,
                         s.WarehouseContactMobileNumber,
-                        s.SubscriptionPlan,
-                        s.FreeSubscriptionStartDate,
-                        s.FreeSubscriptionEndDate,
-                        s.IsLaunchFreeSubscription,
                         s.Status,
                         s.IsActive,
-                        s.SubscriptionEndDate,
                         s.CreatedAt
                     })
                     .FirstOrDefaultAsync();
@@ -900,15 +891,10 @@ namespace VivekMedicalProducts.Controllers
                         warehouseFullAddress = seller.WarehouseFullAddress ?? "",
                         warehouseContactPersonName = seller.WarehouseContactPersonName ?? "",
                         warehouseContactMobileNumber = seller.WarehouseContactMobileNumber ?? "",
-                        subscriptionPlan = seller.SubscriptionPlan ?? "",
-                        freeSubscriptionStartDate = seller.FreeSubscriptionStartDate,
-                        freeSubscriptionEndDate = seller.FreeSubscriptionEndDate,
-                        isLaunchFreeSubscription = seller.IsLaunchFreeSubscription,
                         status = string.IsNullOrWhiteSpace(seller.Status)
                             ? (seller.IsActive ? "Active" : "Inactive")
                             : seller.Status,
                         isActive = seller.IsActive,
-                        subscriptionEndDate = seller.SubscriptionEndDate,
                         createdAt = seller.CreatedAt,
 
                         productCount,
@@ -1098,376 +1084,220 @@ namespace VivekMedicalProducts.Controllers
         }
 
         [Authorize(Roles = "Admin")]
-        [HttpPut("items/{orderItemId}/status")]
+        [HttpPut("items/{orderItemId:int}/status")]
         public async Task<IActionResult> UpdateOrderItemStatusDTO(
-     int orderItemId,
-     [FromBody] UpdateOrderStatusDto model)
+            int orderItemId,
+            [FromBody] UpdateOrderStatusDto model,
+            CancellationToken cancellationToken)
         {
-            try
+            if (model == null)
             {
-                // =========================================================
-                // 1. VALIDATE REQUEST
-                // =========================================================
-
-                if (model == null)
+                return BadRequest(new
                 {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Invalid request."
-                    });
-                }
-
-                // At least one status must be supplied
-                if (string.IsNullOrWhiteSpace(model.PaymentStatus) &&
-                    string.IsNullOrWhiteSpace(model.ItemOrderStatus))
-                {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Please provide PaymentStatus or ItemOrderStatus."
-                    });
-                }
-
-                // =========================================================
-                // 2. GET ORDER ITEM + ORDER
-                // =========================================================
-
-                var item = await _context.OrderItems
-                    .Include(x => x.Order)
-                    .FirstOrDefaultAsync(x =>
-                        x.OrderItemId == orderItemId);
-
-                if (item == null)
-                {
-                    return NotFound(new
-                    {
-                        success = false,
-                        message = $"Order item with ID {orderItemId} was not found."
-                    });
-                }
-
-                if (item.Order == null)
-                {
-                    return NotFound(new
-                    {
-                        success = false,
-                        message = "Associated order was not found."
-                    });
-                }
-
-                var oldPaymentStatus = item.Order.PaymentStatus;
-                var oldItemOrderStatus = item.OrderItemStatus;
-
-                var now = DateTime.UtcNow;
-
-                // Track what was changed
-                bool paymentStatusChanged = false;
-                bool itemStatusChanged = false;
-
-                // =========================================================
-                // 3. PAYMENT STATUS
-                //
-                // PaymentStatus belongs to Orders table.
-                // =========================================================
-
-                if (!string.IsNullOrWhiteSpace(model.PaymentStatus))
-                {
-                    var requestedPaymentStatus =
-                        model.PaymentStatus.Trim();
-
-                    var validPaymentStatuses = new[]
-                    {
-                "Pending",
-                "Completed",
-                "Failed",
-                "Refunded"
-            };
-
-                    var normalizedPaymentStatus =
-                        validPaymentStatuses.FirstOrDefault(x =>
-                            x.Equals(
-                                requestedPaymentStatus,
-                                StringComparison.OrdinalIgnoreCase));
-
-                    if (normalizedPaymentStatus == null)
-                    {
-                        return BadRequest(new
-                        {
-                            success = false,
-                            message =
-                                $"Invalid payment status '{requestedPaymentStatus}'.",
-                            allowedStatuses = validPaymentStatuses
-                        });
-                    }
-
-                    // Update payment status
-                    item.Order.PaymentStatus =
-                        normalizedPaymentStatus;
-
-                    item.Order.OrderModifiedDate =
-                        now;
-
-                    paymentStatusChanged = true;
-                }
-
-                // =========================================================
-                // 4. ORDER ITEM / DELIVERY STATUS
-                //
-                // OrderItemStatus belongs to OrderItems table.
-                // =========================================================
-
-                if (!string.IsNullOrWhiteSpace(model.ItemOrderStatus))
-                {
-                    var requestedItemStatus =
-                        model.ItemOrderStatus.Trim();
-
-                    var validItemStatuses = new[]
-                    {
-                "Placed",
-                "Packed",
-                "Shipped",
-                "OutForDelivery",
-                "Delivered",
-                "Cancelled"
-            };
-
-                    var normalizedItemStatus =
-                        validItemStatuses.FirstOrDefault(x =>
-                            x.Equals(
-                                requestedItemStatus,
-                                StringComparison.OrdinalIgnoreCase));
-
-                    if (normalizedItemStatus == null)
-                    {
-                        return BadRequest(new
-                        {
-                            success = false,
-                            message =
-                                $"Invalid order item status '{requestedItemStatus}'.",
-                            allowedStatuses = validItemStatuses
-                        });
-                    }
-
-                    // =====================================================
-                    // PREVENT DELIVERED → OTHER STATUS
-                    // =====================================================
-
-                    if (string.Equals(
-                            item.OrderItemStatus,
-                            "Delivered",
-                            StringComparison.OrdinalIgnoreCase) &&
-                        !string.Equals(
-                            normalizedItemStatus,
-                            "Delivered",
-                            StringComparison.OrdinalIgnoreCase))
-                    {
-                        return BadRequest(new
-                        {
-                            success = false,
-                            message =
-                                "A delivered order item cannot be moved back to another status."
-                        });
-                    }
-
-                    // =====================================================
-                    // PREVENT INVALID CANCELLATION
-                    // =====================================================
-
-                    if (string.Equals(
-                            normalizedItemStatus,
-                            "Cancelled",
-                            StringComparison.OrdinalIgnoreCase) &&
-                        !string.Equals(
-                            item.OrderItemStatus,
-                            "Placed",
-                            StringComparison.OrdinalIgnoreCase) &&
-                        !string.Equals(
-                            item.OrderItemStatus,
-                            "Packed",
-                            StringComparison.OrdinalIgnoreCase))
-                    {
-                        return BadRequest(new
-                        {
-                            success = false,
-                            message =
-                                "This order item cannot be cancelled at its current stage."
-                        });
-                    }
-
-                    // =====================================================
-                    // UPDATE ORDER ITEM STATUS
-                    // =====================================================
-
-                    item.OrderItemStatus =
-                        normalizedItemStatus;
-
-                    itemStatusChanged = true;
-
-                    // =====================================================
-                    // STATUS TIMESTAMPS
-                    // =====================================================
-
-                    switch (normalizedItemStatus)
-                    {
-                        case "Packed":
-
-                            item.PackedDate ??= now;
-
-                            break;
-
-                        case "Shipped":
-
-                            item.ShippedDate ??= now;
-
-                            break;
-
-                        case "OutForDelivery":
-
-                            item.OutForDeliveryDate ??= now;
-
-                            break;
-
-                        case "Delivered":
-
-                            item.DeliveredDate ??= now;
-
-                            item.IsReturnEligible = true;
-
-                            item.ReturnEligibleTill ??=
-                                now.AddDays(7);
-
-                            break;
-
-                        case "Cancelled":
-
-                            item.CancelledAt ??= now;
-
-                            break;
-                    }
-                }
-
-                // =========================================================
-                // 5. COMMON AUDIT FIELDS
-                // =========================================================
-
-                item.UpdatedAt = now;
-
-                item.ItemOrderModifiedDate = now;
-
-                // =========================================================
-                // 6. SAVE CHANGES
-                // =========================================================
-
-                await _context.SaveChangesAsync();
-
-                await LogAdminAuditAsync(
-                    action: "UpdateOrderItemStatus",
-                    status: "Success",
-                    entityType: "OrderItem",
-                    entityId: item.OrderItemId.ToString(),
-                    description: "Admin updated order payment and/or delivery status.",
-                    oldValues: new
-                    {
-                        paymentStatus = oldPaymentStatus,
-                        orderItemStatus = oldItemOrderStatus
-                    },
-                    newValues: new
-                    {
-                        paymentStatus = item.Order.PaymentStatus,
-                        orderItemStatus = item.OrderItemStatus
-                    });
-
-                // =========================================================
-                // 7. RESPONSE MESSAGE
-                // =========================================================
-
-                string message;
-
-                if (paymentStatusChanged && itemStatusChanged)
-                {
-                    message =
-                        "Payment status and order delivery status updated successfully.";
-                }
-                else if (paymentStatusChanged)
-                {
-                    message =
-                        "Payment status updated successfully.";
-                }
-                else
-                {
-                    message =
-                        "Order delivery status updated successfully.";
-                }
-
-                // =========================================================
-                // 8. RESPONSE
-                // =========================================================
-
-                return Ok(new
-                {
-                    success = true,
-
-                    message = message,
-
-                    data = new
-                    {
-                        orderItemId = item.OrderItemId,
-
-                        orderId = item.OrderId,
-
-                        paymentStatus =
-                            item.Order.PaymentStatus,
-
-                        orderItemStatus =
-                            item.OrderItemStatus,
-
-                        packedDate =
-                            item.PackedDate,
-
-                        shippedDate =
-                            item.ShippedDate,
-
-                        outForDeliveryDate =
-                            item.OutForDeliveryDate,
-
-                        deliveredDate =
-                            item.DeliveredDate,
-
-                        cancelledAt =
-                            item.CancelledAt,
-
-                        updatedAt =
-                            item.UpdatedAt,
-
-                        itemOrderModifiedDate =
-                            item.ItemOrderModifiedDate,
-
-                        orderModifiedDate =
-                            item.Order.OrderModifiedDate
-                    }
+                    success = false,
+                    message = "Request body is required."
                 });
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Admin order status update failed.");
-                await LogAdminAuditAsync(
-                    action: "UpdateOrderItemStatus",
-                    status: "Failed",
-                    entityType: "OrderItem",
-                    entityId: orderItemId.ToString(),
-                    description: "Admin order status update failed.");
 
-                return StatusCode(
-                    StatusCodes.Status500InternalServerError,
-                    new
-                    {
-                        success = false,
-                        message =
-                            "An unexpected error occurred while updating the order status.",
-                        error = "An internal server error occurred."
-                    });
+            var hasPaymentStatus = !string.IsNullOrWhiteSpace(model.PaymentStatus);
+            var hasItemStatus = !string.IsNullOrWhiteSpace(model.ItemOrderStatus);
+
+            if (!hasPaymentStatus && !hasItemStatus)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Provide PaymentStatus, ItemOrderStatus, or both."
+                });
             }
+
+            var item = await _context.OrderItems
+                .Include(x => x.Order)
+                .FirstOrDefaultAsync(
+                    x => x.OrderItemId == orderItemId,
+                    cancellationToken);
+
+            if (item == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = $"Order item with ID {orderItemId} was not found."
+                });
+            }
+
+            if (item.Order == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "The associated order was not found."
+                });
+            }
+
+            var oldPaymentStatus = item.Order.PaymentStatus;
+            var oldItemStatus = item.OrderItemStatus;
+            var now = DateTime.UtcNow;
+
+            // PaymentStatus is stored on Orders. Updating it here affects
+            // the entire order, not only this particular order item.
+            if (hasPaymentStatus)
+            {
+                item.Order.PaymentStatus = model.PaymentStatus!.Trim();
+                item.Order.OrderModifiedDate = now;
+            }
+
+            // OrderItemStatus is stored independently on OrderItems.
+            // No transition rules or status allow-list are applied here.
+            if (hasItemStatus)
+            {
+                item.OrderItemStatus = model.ItemOrderStatus!.Trim();
+
+                switch (item.OrderItemStatus.Trim().ToLowerInvariant())
+                {
+                    case "packed":
+                        item.PackedDate ??= now;
+                        break;
+
+                    case "shipped":
+                        item.ShippedDate ??= now;
+                        break;
+
+                    case "outfordelivery":
+                    case "out for delivery":
+                        item.OutForDeliveryDate ??= now;
+                        break;
+
+                    case "delivered":
+                        item.DeliveredDate ??= now;
+                        item.IsReturnEligible = true;
+                        item.ReturnEligibleTill ??= now.AddDays(7);
+                        break;
+
+                    case "cancelled":
+                    case "canceled":
+                        item.CancelledAt ??= now;
+                        break;
+                }
+            }
+
+            item.UpdatedAt = now;
+            item.ItemOrderModifiedDate = now;
+
+            try
+            {
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Concurrency conflict while updating OrderItemId {OrderItemId}.",
+                    orderItemId);
+
+                return Conflict(new
+                {
+                    success = false,
+                    message = "This order item was modified by another request. Refresh and try again."
+                });
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Database error while updating OrderItemId {OrderItemId}.",
+                    orderItemId);
+
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    success = false,
+                    message = "The order status could not be saved.",
+                    error = "A database error occurred."
+                });
+            }
+
+            // Ensure/retry the delivery batch and seller invoice whenever the
+            // current item status is OutForDelivery or Delivered. This also
+            // repairs records if the item status was already set previously.
+            int? deliveryBatchId = item.DeliveryBatchId;
+            string? batchWarning = null;
+
+            var deliveryStage =
+                string.Equals(item.OrderItemStatus, "OutForDelivery",
+                    StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(item.OrderItemStatus, "Out For Delivery",
+                    StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(item.OrderItemStatus, "Delivered",
+                    StringComparison.OrdinalIgnoreCase);
+
+            if (deliveryStage)
+            {
+                try
+                {
+                    await _deliveryBatchService.EnsureBatchAndInvoiceAsync(item);
+                    deliveryBatchId = item.DeliveryBatchId;
+                }
+                catch (Exception ex)
+                {
+                    // The order/payment status has already been saved.
+                    // Keep that successful update and expose the batch failure
+                    // separately so the admin can retry without losing changes.
+                    _logger.LogError(
+                        ex,
+                        "Delivery batch/invoice generation failed for OrderItemId {OrderItemId}, OrderId {OrderId}.",
+                        item.OrderItemId,
+                        item.OrderId);
+
+                    batchWarning = ex.InnerException?.Message ?? ex.Message;
+                }
+            }
+
+            await LogAdminAuditAsync(
+                action: "UpdateOrderItemStatus",
+                status: "Success",
+                entityType: "OrderItem",
+                entityId: item.OrderItemId.ToString(),
+                description: "Admin updated order payment and/or order item status.",
+                oldValues: new
+                {
+                    paymentStatus = oldPaymentStatus,
+                    orderItemStatus = oldItemStatus
+                },
+                newValues: new
+                {
+                    paymentStatus = item.Order.PaymentStatus,
+                    orderItemStatus = item.OrderItemStatus,
+                    deliveryBatchId
+                });
+
+            var message = hasPaymentStatus && hasItemStatus
+                ? "Payment status and order item status updated successfully."
+                : hasPaymentStatus
+                    ? "Payment status updated successfully."
+                    : "Order item status updated successfully.";
+
+            return Ok(new
+            {
+                success = true,
+                message,
+                data = new
+                {
+                    orderItemId = item.OrderItemId,
+                    orderId = item.OrderId,
+                    paymentStatus = item.Order.PaymentStatus,
+                    orderItemStatus = item.OrderItemStatus,
+                    packedDate = item.PackedDate,
+                    shippedDate = item.ShippedDate,
+                    outForDeliveryDate = item.OutForDeliveryDate,
+                    deliveredDate = item.DeliveredDate,
+                    cancelledAt = item.CancelledAt,
+                    updatedAt = item.UpdatedAt,
+                    itemOrderModifiedDate = item.ItemOrderModifiedDate,
+                    orderModifiedDate = item.Order.OrderModifiedDate,
+                    deliveryBatchId,
+                    batchWarning
+                }
+            });
         }
 
         private async Task LogAdminAuditAsync(

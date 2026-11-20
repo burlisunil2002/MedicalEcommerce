@@ -128,4 +128,9 @@ public class OrderItemModel
     [ForeignKey(nameof(ProductVariantId))]
     public ProductVariant? ProductVariant { get; set; }
 
+    public int? DeliveryBatchId { get; set; }
+
+    [ForeignKey(nameof(DeliveryBatchId))]
+    public DeliveryBatchModel? DeliveryBatch { get; set; }
+
 }

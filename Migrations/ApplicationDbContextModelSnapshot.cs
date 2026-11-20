@@ -308,6 +308,9 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<DateTime?>("DeliveredDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int?>("DeliveryBatchId")
+                        .HasColumnType("integer");
+
                     b.Property<decimal>("DiscountAmount")
                         .HasColumnType("decimal(18,2)");
 
@@ -415,6 +418,8 @@ namespace VivekMedicalProducts.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("OrderItemId");
+
+                    b.HasIndex("DeliveryBatchId");
 
                     b.HasIndex("OrderId");
 
@@ -756,6 +761,92 @@ namespace VivekMedicalProducts.Migrations
                     b.HasIndex("SelectedAddressId");
 
                     b.ToTable("CheckoutSessions");
+                });
+
+            modelBuilder.Entity("VivekMedicalProducts.Models.DeliveryBatchItemModel", b =>
+                {
+                    b.Property<int>("DeliveryBatchItemId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("DeliveryBatchItemId"));
+
+                    b.Property<int>("DeliveryBatchId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DispatchedQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("GstAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("LineTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("OrderItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TaxableAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("DeliveryBatchItemId");
+
+                    b.HasIndex("OrderItemId");
+
+                    b.HasIndex("DeliveryBatchId", "OrderItemId")
+                        .IsUnique();
+
+                    b.ToTable("DeliveryBatchItems");
+                });
+
+            modelBuilder.Entity("VivekMedicalProducts.Models.DeliveryBatchModel", b =>
+                {
+                    b.Property<int>("DeliveryBatchId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("DeliveryBatchId"));
+
+                    b.Property<string>("BatchNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeliveredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DispatchedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ExpectedDeliveryDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("OutForDeliveryDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("SellerId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.HasKey("DeliveryBatchId");
+
+                    b.HasIndex("OrderId", "SellerId", "OutForDeliveryDate")
+                        .IsUnique();
+
+                    b.ToTable("DeliveryBatches");
                 });
 
             modelBuilder.Entity("VivekMedicalProducts.Models.EnquiryModel", b =>
@@ -1516,6 +1607,172 @@ namespace VivekMedicalProducts.Migrations
                     b.ToTable("ProductVariantImages");
                 });
 
+            modelBuilder.Entity("VivekMedicalProducts.Models.SellerInvoiceItemModel", b =>
+                {
+                    b.Property<int>("SellerInvoiceItemId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SellerInvoiceItemId"));
+
+                    b.Property<int?>("DeliveryBatchItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("GstAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("GstPercentage")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<string>("HSNCode")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<decimal>("LineTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("OrderItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SellerInvoiceId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TaxableAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("SellerInvoiceItemId");
+
+                    b.HasIndex("DeliveryBatchItemId")
+                        .IsUnique()
+                        .HasFilter("\"DeliveryBatchItemId\" IS NOT NULL");
+
+                    b.HasIndex("SellerInvoiceId");
+
+                    b.ToTable("SellerInvoiceItems");
+                });
+
+            modelBuilder.Entity("VivekMedicalProducts.Models.SellerInvoiceModel", b =>
+                {
+                    b.Property<int>("SellerInvoiceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SellerInvoiceId"));
+
+                    b.Property<string>("CustomerAddress")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("CustomerGSTIN")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("CustomerName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CustomerPhone")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int?>("DeliveryBatchId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("GstTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("InvoiceNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<decimal>("InvoiceTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("IssuedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("OrderNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("PlaceOfSupply")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("SellerId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("SupplierAddress")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SupplierGSTIN")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("SupplierName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("SupplierType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("TaxableTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("SellerInvoiceId");
+
+                    b.HasIndex("DeliveryBatchId")
+                        .IsUnique()
+                        .HasFilter("\"DeliveryBatchId\" IS NOT NULL AND \"SellerId\" IS NULL");
+
+                    b.HasIndex("InvoiceNumber")
+                        .IsUnique();
+
+                    b.HasIndex("DeliveryBatchId", "SellerId")
+                        .IsUnique()
+                        .HasFilter("\"DeliveryBatchId\" IS NOT NULL AND \"SellerId\" IS NOT NULL");
+
+                    b.ToTable("SellerInvoices");
+                });
+
             modelBuilder.Entity("VivekMedicalProducts.Models.SellerModel", b =>
                 {
                     b.Property<int>("SellerId")
@@ -1847,6 +2104,11 @@ namespace VivekMedicalProducts.Migrations
 
             modelBuilder.Entity("OrderItemModel", b =>
                 {
+                    b.HasOne("VivekMedicalProducts.Models.DeliveryBatchModel", "DeliveryBatch")
+                        .WithMany("Items")
+                        .HasForeignKey("DeliveryBatchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("VivekMedicalProducts.Models.OrderModel", "Order")
                         .WithMany("OrderItems")
                         .HasForeignKey("OrderId")
@@ -1864,6 +2126,8 @@ namespace VivekMedicalProducts.Migrations
                         .HasForeignKey("ProductVariantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("DeliveryBatch");
 
                     b.Navigation("Order");
 
@@ -1904,6 +2168,34 @@ namespace VivekMedicalProducts.Migrations
                         .HasForeignKey("SelectedAddressId");
 
                     b.Navigation("SelectedAddress");
+                });
+
+            modelBuilder.Entity("VivekMedicalProducts.Models.DeliveryBatchItemModel", b =>
+                {
+                    b.HasOne("VivekMedicalProducts.Models.DeliveryBatchModel", "DeliveryBatch")
+                        .WithMany("BatchItems")
+                        .HasForeignKey("DeliveryBatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OrderItemModel", "OrderItem")
+                        .WithMany()
+                        .HasForeignKey("OrderItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DeliveryBatch");
+
+                    b.Navigation("OrderItem");
+                });
+
+            modelBuilder.Entity("VivekMedicalProducts.Models.DeliveryBatchModel", b =>
+                {
+                    b.HasOne("VivekMedicalProducts.Models.OrderModel", null)
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("VivekMedicalProducts.Models.GstResponseModel", b =>
@@ -2005,6 +2297,33 @@ namespace VivekMedicalProducts.Migrations
                     b.Navigation("ProductVariant");
                 });
 
+            modelBuilder.Entity("VivekMedicalProducts.Models.SellerInvoiceItemModel", b =>
+                {
+                    b.HasOne("VivekMedicalProducts.Models.DeliveryBatchItemModel", "DeliveryBatchItem")
+                        .WithMany()
+                        .HasForeignKey("DeliveryBatchItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("VivekMedicalProducts.Models.SellerInvoiceModel", "Invoice")
+                        .WithMany("Items")
+                        .HasForeignKey("SellerInvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DeliveryBatchItem");
+
+                    b.Navigation("Invoice");
+                });
+
+            modelBuilder.Entity("VivekMedicalProducts.Models.SellerInvoiceModel", b =>
+                {
+                    b.HasOne("VivekMedicalProducts.Models.DeliveryBatchModel", "DeliveryBatch")
+                        .WithMany()
+                        .HasForeignKey("DeliveryBatchId");
+
+                    b.Navigation("DeliveryBatch");
+                });
+
             modelBuilder.Entity("VivekMedicalProducts.Models.WishlistModel", b =>
                 {
                     b.HasOne("VivekMedicalProducts.Models.ProductModel", "Product")
@@ -2028,6 +2347,13 @@ namespace VivekMedicalProducts.Migrations
                     b.Navigation("productVariant");
                 });
 
+            modelBuilder.Entity("VivekMedicalProducts.Models.DeliveryBatchModel", b =>
+                {
+                    b.Navigation("BatchItems");
+
+                    b.Navigation("Items");
+                });
+
             modelBuilder.Entity("VivekMedicalProducts.Models.OrderModel", b =>
                 {
                     b.Navigation("OrderItems");
@@ -2043,6 +2369,11 @@ namespace VivekMedicalProducts.Migrations
                     b.Navigation("Images");
 
                     b.Navigation("Specifications");
+                });
+
+            modelBuilder.Entity("VivekMedicalProducts.Models.SellerInvoiceModel", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("VivekMedicalProducts.Models.SellerModel", b =>

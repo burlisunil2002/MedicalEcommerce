@@ -1,558 +1,111 @@
-﻿import React, { useEffect, useState, useRef } from "react";
-import { useParams } from "react-router-dom";
+﻿import { useCallback, useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { toast } from "react-toastify";
+import { Download, ArrowLeft } from "lucide-react";
 import API from "../services/api";
-import html2pdf from "html2pdf.js";
-import InvoicePdf from "../components/InvoicePdf";
+
+const money = (value) => `₹${Number(value ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const dateText = (value) => value ? new Date(value).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-";
 
 export default function InvoicePage() {
-
+    const { id: invoiceId } = useParams();
     const [invoice, setInvoice] = useState(null);
     const [loading, setLoading] = useState(true);
     const [downloading, setDownloading] = useState(false);
+    const [loadError, setLoadError] = useState("");
 
-    const invoicePdfRef = useRef(null);
-
-    const { id: orderId } =
-        useParams();
-
-    useEffect(() => {
-        loadInvoice();
-    }, []);
-
-    const loadInvoice = async () => {
-
-        try {
-
-            setLoading(true);
-
-            const res = await API.get(
-                `/api/order/invoice/${orderId}`
-            );
-
-            console.log("Invoice Response", res.data);
-
-            if (res.data.success) {
-                setInvoice(res.data.invoice);
-            }
-
-        } catch (err) {
-
-            console.log(err);
-
-        } finally {
-
+    const loadInvoice = useCallback(async () => {
+        if (!invoiceId) {
+            setLoadError("Invoice reference is missing.");
             setLoading(false);
-
+            return;
         }
-    };
+        try {
+            setLoading(true);
+            setLoadError("");
+            // Existing authenticated detail endpoint in SellerInvoicesController.
+            const response = await API.get(`/api/seller-invoices/${encodeURIComponent(invoiceId)}`);
+            setInvoice(response?.data ?? null);
+        } catch (error) {
+            console.error("Invoice load failed:", error);
+            setInvoice(null);
+            setLoadError(error?.response?.status === 404
+                ? "This invoice was not found or is not available to your account."
+                : "Unable to load this invoice. Please try again.");
+        } finally {
+            setLoading(false);
+        }
+    }, [invoiceId]);
 
-    if (loading) {
-        return (
-            <div className="
-            min-h-screen
-            flex
-            items-center
-            justify-center
-            bg-slate-50
-        ">
-                <div className="
-                bg-white
-                p-10
-                rounded-3xl
-                shadow-xl
-                text-center
-            ">
-
-                    <div className="
-                    h-16
-                    w-16
-                    border-4
-                    border-blue-600
-                    border-t-transparent
-                    rounded-full
-                    animate-spin
-                    mx-auto
-                " />
-
-                    <h3 className="
-                    mt-5
-                    text-xl
-                    font-semibold
-                ">
-                        Loading Invoice
-                    </h3>
-
-                    <p className="text-gray-500 mt-2">
-                        Please wait...
-                    </p>
-
-                </div>
-            </div>
-        );
-    }
-
-    if (!invoice) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                Invoice not found
-            </div>
-        );
-    }
+    useEffect(() => { loadInvoice(); }, [loadInvoice]);
 
     const downloadInvoice = async () => {
-
-        if (!invoicePdfRef.current)
-            return;
-
-        setDownloading(true);
-
+        if (!invoiceId || downloading) return;
         try {
-
-            await html2pdf()
-                .set({
-                    margin: 5,
-
-                    filename:
-                        `Invoice-${invoice.invoiceNumber}.pdf`,
-
-                    image: {
-                        type: "jpeg",
-                        quality: 1
-                    },
-
-                    html2canvas: {
-                        scale: 2,
-                        useCORS: true
-                    },
-
-                    jsPDF: {
-                        unit: "mm",
-                        format: "a4",
-                        orientation: "portrait"
-                    }
-                })
-                .from(invoicePdfRef.current)
-                .save();
-
-        }
-        finally {
+            setDownloading(true);
+            // The backend must expose this route and render the stored invoice snapshot as PDF.
+            const response = await API.get(`/api/seller-invoices/${encodeURIComponent(invoiceId)}/download`, { responseType: "blob" });
+            const contentType = response.headers?.["content-type"] || "application/pdf";
+            if (!contentType.includes("pdf")) throw new Error("The server did not return a PDF file.");
+            const blob = new Blob([response.data], { type: "application/pdf" });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `${String(invoice?.invoiceNumber || `Invoice-${invoiceId}`).replace(/[^a-zA-Z0-9._-]/g, "_")}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+        } catch (error) {
+            console.error("Invoice download failed:", error);
+            toast.error("Unable to download the invoice PDF. Please try again.");
+        } finally {
             setDownloading(false);
         }
     };
-   
 
-    return (
-        <>
-            
-            <div className="max-w-7xl mx-auto mt-6 flex justify-end">
+    if (loading) return <main className="flex min-h-[60vh] items-center justify-center"><div className="text-center"><div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" /><p className="mt-4 text-sm text-slate-600">Loading invoice…</p></div></main>;
+    if (!invoice) return <main className="mx-auto max-w-3xl px-4 py-16 text-center"><h1 className="text-xl font-bold text-slate-800">Invoice unavailable</h1><p className="mt-2 text-slate-600">{loadError || "The requested invoice could not be loaded."}</p><Link to="/my-orders" className="mt-6 inline-flex items-center gap-2 rounded-lg border px-4 py-2"><ArrowLeft size={16} />Back to orders</Link></main>;
 
-                <button
-                    onClick={downloadInvoice}
-                    className="
-            bg-gradient-to-r
-            from-blue-600
-            to-indigo-600
-            text-white
-            px-6
-            py-3
-            rounded-xl
-            font-semibold
-            shadow-lg
-            hover:scale-105
-            transition-all
-            duration-300
-        "
-                >
-                    📄 Download Invoice
-                </button>
+    const items = Array.isArray(invoice.items) ? invoice.items : [];
+    const supplierName = invoice.supplierName || "Supplier";
+    const customerName = invoice.customerName || "Customer";
 
+    return <main className="min-h-screen bg-slate-100 px-4 py-8">
+        <div className="mx-auto max-w-5xl">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <Link to="/my-orders" className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900"><ArrowLeft size={16} />Back to orders</Link>
+                <button type="button" onClick={downloadInvoice} disabled={downloading} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"><Download size={17} />{downloading ? "Downloading…" : "Download PDF"}</button>
             </div>
 
-            <div
-                ref={invoicePdfRef}
-                className="
-                max-w-7xl
-                mx-auto
-                bg-white
-                shadow-xl
-                rounded-3xl
-                p-10
-                my-8
-            "
-            >
-                {/* Header */}
+            <article className="rounded-2xl border bg-white p-6 shadow-sm sm:p-10">
+                <header className="flex flex-col justify-between gap-6 border-b pb-6 sm:flex-row">
+                    <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-700">Tax invoice</p><h1 className="mt-2 break-all text-2xl font-bold text-slate-900">{invoice.invoiceNumber || "Invoice"}</h1><p className="mt-2 text-sm text-slate-500">Issued {dateText(invoice.issuedAtUtc)}</p><p className="mt-1 text-sm text-slate-500">Order: {invoice.orderNumber || invoice.orderId || "-"}</p></div>
+                    <div className="sm:max-w-xs sm:text-right"><h2 className="font-bold text-slate-900">{supplierName}</h2><p className="mt-1 whitespace-pre-line text-sm text-slate-600">{invoice.supplierAddress || "-"}</p>{invoice.supplierGSTIN && <p className="mt-2 text-sm text-slate-600">GSTIN: {invoice.supplierGSTIN}</p>}</div>
+                </header>
 
-                <div className="flex justify-between items-start border-b pb-8">
+                <section className="grid gap-5 border-b py-6 sm:grid-cols-2">
+                    <div><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Bill to</h3><p className="font-semibold text-slate-900">{customerName}</p><p className="mt-1 whitespace-pre-line text-sm text-slate-600">{invoice.customerAddress || "-"}</p>{invoice.customerPhone && <p className="mt-1 text-sm text-slate-600">Phone: {invoice.customerPhone}</p>}{invoice.customerGSTIN && <p className="mt-1 text-sm text-slate-600">GSTIN: {invoice.customerGSTIN}</p>}</div>
+                    <div><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Supply details</h3><p className="text-sm text-slate-700">Place of supply: {invoice.placeOfSupply || "-"}</p><p className="mt-1 text-sm text-slate-700">Status: {invoice.status || "Issued"}</p></div>
+                </section>
 
-                    <div>
-                        <h1 className="text-4xl font-bold text-slate-800">
-                            TAX INVOICE
-                        </h1>
-
-                        <p className="mt-3 text-gray-600">
-                            Invoice No :
-                            {invoice.invoiceNumber}
-                        </p>
-
-                        <p className="text-gray-600">
-                            Date :
-                            {new Date(
-                                invoice.date
-                            ).toLocaleDateString()}
-                        </p>
-
-                        <p className="text-gray-600">
-                            Order Id :
-                            #{invoice.orderId}
-                        </p>
-                    </div>
-
-                    <div className="text-right">
-
-                        <img
-                            src={`${window.location.origin}/images/JEDElogo.png`}
-                            alt="THE MAKE IN INDIA Medical Products"
-                            style={{
-                                width: "220px",
-                                height: "auto"
-                            }}
-                            onError={() => console.log("Logo failed to load")}
-                        />
-
-                        <h2 className="font-bold text-2xl">
-                            {invoice.companyName}
-                        </h2>
-
-                        <p className="text-gray-600">
-                            GSTIN :
-                            {invoice.companyGST}
-                        </p>
-
-                        <p className="text-gray-600">
-                            {invoice.companyAddress}
-                        </p>
-
-                        <p className="text-gray-600">
-                            {invoice.companyPhone}
-                        </p>
-                    </div>
-                </div>
-
-                {/* Billing */}
-
-                <div className="grid md:grid-cols-2 gap-6 mt-8">
-
-                    <div className="border rounded-2xl p-5">
-
-                        <h3 className="font-semibold text-lg mb-3">
-                            Billing Address
-                        </h3>
-
-                        <p className="font-medium">
-                            {invoice.customerName}
-                        </p>
-
-                        <p>{invoice.address}</p>
-
-                        <p>
-                            {invoice.city}
-                        </p>
-
-                        <p>
-                            {invoice.pincode}
-                        </p>
-
-                        <p>
-                            {invoice.phone}
-                        </p>
-
-                    </div>
-
-                    <div className="border rounded-2xl p-5">
-
-                        <h3 className="font-semibold text-lg mb-3">
-                            Payment Details
-                        </h3>
-                        <p>
-                            Payment Id :
-                            {invoice.paymentId}
-                        </p>
-
-                        <p>
-                            Status :
-                            {invoice.orderStatus}
-                        </p>
-
-                    </div>
-
-                </div>
-
-                {/* Items */}
-
-                <div className="mt-10 overflow-x-auto">
-
-                    <table className="w-full border-collapse">
-
-                        <thead>
-
-                            <tr className="bg-slate-100 text-sm uppercase">
-
-                                <th className="p-4 text-left">
-                                    Product
-                                </th>
-
-                                <th className="p-4 text-right">
-                                    Unit Price
-                                </th>
-
-                                <th className="p-4 text-center">
-                                    Qty
-                                </th>
-
-                                <th className="p-4 text-right">
-                                    Taxable Amount
-                                </th>
-
-                                <th className="p-4 text-center">
-                                    GST %
-                                </th>
-
-                                <th className="p-4 text-right">
-                                    GST Amount
-                                </th>
-
-
-                                <th className="p-4 text-right">
-                                    Net Payable
-                                </th>
-
-                            </tr>
-
-                        </thead>
-
-                        <tbody>
-
-                            {invoice.items.map(
-                                (item, index) => (
-
-                                    <tr
-                                        key={index}
-                                        className="border-b hover:bg-slate-50"
-                                    >
-
-                                        <td className="p-4">
-
-                                            <div className="font-semibold">
-                                                {item.productName}
-                                            </div>
-
-                                            <div className="text-xs text-gray-500">
-                                                {item.variantName}
-                                            </div>
-
-                                        </td>
-
-                                        <td className="text-right font-medium">
-                                            ₹{(
-                                                item.price -
-                                                item.discountAmount
-                                            ).toFixed(2)}
-                                        </td>
-
-
-                                        <td className="text-center">
-                                            {item.quantity}
-                                        </td>
-
-                                        <td className="text-right">
-                                            ₹{item.taxableAmount.toFixed(2)}
-                                        </td>
-
-                                        <td className="text-center">
-                                            {item.gstPercentage}%
-                                        </td>
-
-                                        <td className="text-right">
-                                            ₹{item.gstAmount.toFixed(2)}
-                                        </td>
-
-                                        <td className="text-right font-semibold">
-                                            ₹{item.finalPaidAmount.toFixed(2)}
-                                        </td>
-
-                                    </tr>
-                                )
-                            )}
-
-                        </tbody>
-
+                <div className="mt-6 overflow-x-auto">
+                    <table className="w-full min-w-[720px] border-collapse text-sm">
+                        <thead><tr className="bg-slate-100 text-left text-xs uppercase text-slate-600"><th className="p-3">#</th><th className="p-3">Product</th><th className="p-3">HSN</th><th className="p-3 text-right">Qty</th><th className="p-3 text-right">Unit price</th><th className="p-3 text-right">Taxable</th><th className="p-3 text-right">GST %</th><th className="p-3 text-right">GST</th><th className="p-3 text-right">Line total</th></tr></thead>
+                        <tbody>{items.map((item, index) => <tr key={item.sellerInvoiceItemId ?? item.orderItemId ?? index} className="border-b"><td className="p-3">{index + 1}</td><td className="p-3 font-medium text-slate-800">{item.productName || "-"}</td><td className="p-3">{item.hsnCode || "-"}</td><td className="p-3 text-right">{Number(item.quantity || 0)}</td><td className="p-3 text-right">{money(item.unitPrice)}</td><td className="p-3 text-right">{money(item.taxableAmount)}</td><td className="p-3 text-right">{Number(item.gstPercentage || 0).toFixed(2)}%</td><td className="p-3 text-right">{money(item.gstAmount)}</td><td className="p-3 text-right font-semibold">{money(item.lineTotal)}</td></tr>)}</tbody>
                     </table>
-
+                    {items.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No invoice line items are available.</p>}
                 </div>
 
-                {/* Summary */}
-
-                <div className="mt-10 flex justify-end">
-
-                    <div className="
-        w-[550px]
-        border
-        rounded-3xl
-        p-8
-        bg-slate-50
-        shadow-sm
-    ">
-
-                        <div className="
-            flex
-            justify-between
-            py-3
-            text-lg
-        ">
-                            <span>
-                                Taxable Amount
-                            </span>
-
-                            <span>
-                                ₹{invoice.taxableAmount.toFixed(2)}
-                            </span>
-                        </div>
-
-                        <div className="
-            flex
-            justify-between
-            py-3
-            text-lg
-        ">
-                            <span>
-                                Total GST Amount
-                            </span>
-
-                            <span>
-                                ₹{invoice.gstTotal.toFixed(2)}
-                            </span>
-                        </div>
-
-                        <div className="
-    flex
-    justify-between
-    py-3
-    text-lg
-">
-                            <span>
-                                Amount Including GST
-                            </span>
-
-                            <span>
-                                ₹{(
-                                    invoice.taxableAmount +
-                                    invoice.gstTotal
-                                ).toFixed(2)}
-                            </span>
-                        </div>
-
-                        <div className="
-            flex
-            justify-between
-            py-3
-            text-lg
-            text-orange-600
-        ">
-                            <span>
-                                Coupon Discount
-                            </span>
-
-                            <span>
-                                -₹{invoice.couponDiscount.toFixed(2)}
-                            </span>
-                        </div>
-
-                        <hr className="my-4" />
-
-                        <div className="
-    mt-4
-    bg-blue-600
-    text-white
-    rounded-2xl
-    p-5
-    flex
-    justify-between
-    items-center
-">
-                            <span className="text-lg">
-                                Final Paid Amount
-                            </span>
-
-                            <span className="
-        text-3xl
-        font-bold
-    ">
-                                ₹{invoice.finalPaidAmount.toFixed(2)}
-                            </span>
-                        </div>
-
-                    </div>
-
-                </div>
-
-
-            </div>
-
-            {
-                downloading && (
-                    <div className="
-            fixed
-            inset-0
-            bg-black/50
-            flex
-            items-center
-            justify-center
-            z-50
-        ">
-                        <div className="
-                bg-white
-                p-8
-                rounded-3xl
-                shadow-xl
-                text-center
-            ">
-
-                            <div className="
-                    h-14
-                    w-14
-                    border-4
-                    border-blue-600
-                    border-t-transparent
-                    rounded-full
-                    animate-spin
-                    mx-auto
-                " />
-
-                            <p className="mt-4 font-semibold">
-                                Generating Invoice...
-                            </p>
-
-                        </div>
-                    </div>
-                )
-            }
-
-            <div
-                style={{
-                    position: "fixed",
-                    left: "-10000px",
-                    top: 0,
-                    width: "800px",
-                    background: "#fff"
-                }}
-            
-            >
-                <InvoicePdf
-                    ref={invoicePdfRef}
-                    invoice={invoice}
-                />
-            </div>
-
-        </>
-    );
+                <section className="mt-8 flex justify-end">
+                    <dl className="w-full max-w-sm space-y-3 rounded-xl bg-slate-50 p-5 text-sm">
+                        <div className="flex justify-between gap-4"><dt className="text-slate-600">Taxable total</dt><dd className="font-medium">{money(invoice.taxableTotal)}</dd></div>
+                        <div className="flex justify-between gap-4"><dt className="text-slate-600">GST total</dt><dd className="font-medium">{money(invoice.gstTotal)}</dd></div>
+                        <div className="flex justify-between gap-4 border-t pt-3 text-base"><dt className="font-semibold text-slate-900">Invoice total</dt><dd className="font-bold text-slate-900">{money(invoice.invoiceTotal)}</dd></div>
+                    </dl>
+                </section>
+                <footer className="mt-8 border-t pt-5 text-xs text-slate-500">This page displays the saved invoice snapshot. For an official copy, use Download PDF.</footer>
+            </article>
+        </div>
+    </main>;
 }

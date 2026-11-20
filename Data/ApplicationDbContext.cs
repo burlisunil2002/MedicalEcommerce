@@ -60,6 +60,16 @@ public class ApplicationDbContext
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
+    public DbSet<SellerInvoiceModel> SellerInvoices { get; set; } = null!;
+
+    public DbSet<SellerInvoiceItemModel> SellerInvoiceItems { get; set; } = null!;
+
+    public DbSet<DeliveryBatchModel> DeliveryBatches
+    { get; set; } = null!;
+
+    public DbSet<DeliveryBatchItemModel> DeliveryBatchItems
+    => Set<DeliveryBatchItemModel>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -155,5 +165,104 @@ public class ApplicationDbContext
 
         modelBuilder.Entity<AdminOrderTableModel>()
             .HasNoKey();
+
+
+        modelBuilder.Entity<SellerInvoiceModel>(e =>
+        {
+            e.HasIndex(x => x.InvoiceNumber).IsUnique();
+
+            // One seller invoice per dispatch batch
+            e.HasIndex(x => new { x.DeliveryBatchId, x.SellerId })
+                .IsUnique()
+                .HasFilter(
+                    "\"DeliveryBatchId\" IS NOT NULL AND \"SellerId\" IS NOT NULL");
+
+            // One JEDE invoice per dispatch batch
+            e.HasIndex(x => x.DeliveryBatchId)
+                .IsUnique()
+                .HasFilter(
+                    "\"DeliveryBatchId\" IS NOT NULL AND \"SellerId\" IS NULL");
+
+            e.Property(x => x.TaxableTotal).HasPrecision(18, 2);
+            e.Property(x => x.GstTotal).HasPrecision(18, 2);
+            e.Property(x => x.InvoiceTotal).HasPrecision(18, 2);
+
+            e.HasMany(x => x.Items)
+                .WithOne(x => x.Invoice)
+                .HasForeignKey(x => x.SellerInvoiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+
+        modelBuilder.Entity<SellerInvoiceItemModel>(e =>
+        {
+            e.Property(x => x.UnitPrice).HasPrecision(18, 2);
+            e.Property(x => x.TaxableAmount).HasPrecision(18, 2);
+            e.Property(x => x.GstPercentage).HasPrecision(5, 2);
+            e.Property(x => x.GstAmount).HasPrecision(18, 2);
+            e.Property(x => x.LineTotal).HasPrecision(18, 2);
+
+            e.HasOne(x => x.DeliveryBatchItem)
+                .WithMany()
+                .HasForeignKey(x => x.DeliveryBatchItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasIndex(x => x.DeliveryBatchItemId)
+                .IsUnique()
+                .HasFilter("\"DeliveryBatchItemId\" IS NOT NULL");
+        });
+
+
+        modelBuilder.Entity<DeliveryBatchModel>(e =>
+        {
+            e.HasOne<OrderModel>()
+                .WithMany()
+                .HasForeignKey(x => x.OrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasMany(x => x.Items)
+                .WithOne(x => x.DeliveryBatch)
+                .HasForeignKey(x => x.DeliveryBatchId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Unique batch for Order + Seller + OutForDelivery date
+            e.HasIndex(x => new
+            {
+                x.OrderId,
+                x.SellerId,
+                x.OutForDeliveryDate
+            }).IsUnique();
+        });
+
+        modelBuilder.Entity<DeliveryBatchItemModel>(entity =>
+        {
+            entity.HasKey(x => x.DeliveryBatchItemId);
+
+            entity.HasOne(x => x.DeliveryBatch)
+                .WithMany(x => x.BatchItems)
+                .HasForeignKey(x => x.DeliveryBatchId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.OrderItem)
+                .WithMany()
+                .HasForeignKey(x => x.OrderItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => new
+            {
+                x.DeliveryBatchId,
+                x.OrderItemId
+            }).IsUnique();
+
+            entity.Property(x => x.TaxableAmount)
+                .HasPrecision(18, 2);
+
+            entity.Property(x => x.GstAmount)
+                .HasPrecision(18, 2);
+
+            entity.Property(x => x.LineTotal)
+                .HasPrecision(18, 2);
+        });
+
     }
 }
