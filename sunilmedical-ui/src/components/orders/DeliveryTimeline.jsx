@@ -1,172 +1,60 @@
-﻿import {
-    ShoppingBag,
-    Package,
-    Truck,
-    MapPin,
-    CheckCircle2
-} from "lucide-react";
+﻿import { ShoppingBag, Package, Truck, MapPin, CheckCircle2 } from "lucide-react";
 
-export default function DeliveryTimeline({ item }) {
+const normalize = value => String(value ?? "").replace(/[\s_-]/g, "").toLowerCase();
+const indexFor = status => {
+    const s = normalize(status);
+    if (s === "delivered") return 4;
+    if (s === "outfordelivery") return 3;
+    if (s === "shipped") return 2;
+    if (s === "packed") return 1;
+    if (["placed", "accepted", "pending", "processing"].includes(s)) return 0;
+    return 0;
+};
+const latest = (items, field) => {
+    const dates = items.map(x => x?.[field]).filter(Boolean).map(x => new Date(x)).filter(d => !Number.isNaN(d.getTime()));
+    return dates.length ? new Date(Math.max(...dates.map(d => d.getTime()))) : null;
+};
+const fmt = date => date ? date.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) : "—";
 
-    const status = item.itemStatus;
-
+export default function DeliveryTimeline({ item, items }) {
+    const rows = Array.isArray(items) && items.length ? items : item ? [item] : [];
+    if (!rows.length) return null;
+    const statuses = rows.map(x => x.itemStatus ?? x.orderItemStatus ?? "Pending");
+    const allDelivered = statuses.every(s => normalize(s) === "delivered");
+    const sharedIndex = allDelivered ? 4 : Math.min(...statuses.map(indexFor));
     const steps = [
-
-        {
-            title: "Ordered",
-            icon: ShoppingBag,
-            completed: true,
-            date: item.orderDate
-        },
-
-        {
-            title: "Packed",
-            icon: Package,
-            completed: [
-                "Packed",
-                "Shipped",
-                "OutForDelivery",
-                "Delivered"
-            ].includes(status),
-            date: item.packedDate
-        },
-
-        {
-            title: "Shipped",
-            icon: Truck,
-            completed: [
-                "Shipped",
-                "OutForDelivery",
-                "Delivered"
-            ].includes(status),
-            date: item.shippedDate
-        },
-
-        {
-            title: "Out For Delivery",
-            icon: MapPin,
-            completed: [
-                "OutForDelivery",
-                "Delivered"
-            ].includes(status),
-            date: item.outForDeliveryDate
-        },
-
-        {
-            title: "Delivered",
-            icon: CheckCircle2,
-            completed: status === "Delivered",
-            date: item.deliveredDate
-        }
-
+        { label: "Ordered", icon: ShoppingBag, date: latest(rows, "orderDate") },
+        { label: "Packed", icon: Package, date: latest(rows, "packedDate") },
+        { label: "Shipped", icon: Truck, date: latest(rows, "shippedDate") },
+        { label: "Out for delivery", icon: MapPin, date: latest(rows, "outForDeliveryDate") },
+        { label: "Delivered", icon: CheckCircle2, date: latest(rows, "deliveredDate") }
     ];
-
-    const completedCount = steps.filter(x => x.completed).length;
-
-    const progressWidth =
-        ((completedCount - 1) / (steps.length - 1)) * 100;
-
     return (
-
-        <div>
-
-            <h4 className="font-semibold text-slate-800 mb-6">
-
-                Delivery Progress
-
-            </h4>
-
-            <div className="relative">
-
-                {/* Background Line */}
-
-                <div className="absolute top-6 left-0 right-0 h-1 rounded-full bg-slate-200"></div>
-
-                {/* Completed Line */}
-
-                <div
-                    className="absolute top-6 left-0 h-1 rounded-full bg-green-600 transition-all duration-700"
-                    style={{
-                        width: `${progressWidth}%`
-                    }}
-                />
-
-                <div className="relative flex justify-between">
-
-                    {steps.map((step, index) => {
-
-                        const Icon = step.icon;
-
-                        return (
-
-                            <div
-                                key={index}
-                                className="flex flex-col items-center flex-1"
-                            >
-
-                                <div
-                                    className={`
-                                        h-12
-                                        w-12
-                                        rounded-full
-                                        border-2
-                                        flex
-                                        items-center
-                                        justify-center
-                                        transition-all
-                                        duration-300
-
-                                        ${step.completed
-                                            ? "bg-green-600 border-green-600 text-white shadow-lg shadow-green-200"
-                                            : "bg-white border-slate-300 text-slate-400"
-                                        }
-                                    `}
-                                >
-
-                                    <Icon size={20} />
-
-                                </div>
-
-                                <p
-                                    className={`
-                                        mt-3
-                                        text-xs
-                                        font-semibold
-                                        text-center
-
-                                        ${step.completed
-                                            ? "text-green-700"
-                                            : "text-slate-500"
-                                        }
-                                    `}
-                                >
-
-                                    {step.title}
-
-                                </p>
-
-                                <p className="mt-1 text-[11px] text-center text-slate-500">
-
-                                    {step.date
-                                        ? new Date(step.date).toLocaleString()
-                                        : step.completed
-                                            ? "Completed"
-                                            : "-"}
-
-                                </p>
-
-                            </div>
-
-                        );
-
-                    })}
-
-                </div>
-
+        <section className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+            <div className="mb-4">
+                <h4 className="text-sm font-bold text-slate-800">Delivery progress</h4>
             </div>
-
-        </div>
-
+            <div className="relative">
+                <div className="absolute left-[8%] right-[8%] top-4 h-1 rounded-full bg-slate-200" />
+                <div className="absolute left-[8%] top-4 h-1 rounded-full bg-emerald-500 transition-all"
+                    style={{ width: `${(sharedIndex / 4) * 84}%` }} />
+                <div className="relative grid grid-cols-5 gap-1">
+                    {steps.map((step, index) => {
+                        const Icon = step.icon;
+                        const done = index <= sharedIndex;
+                        return (
+                            <div key={step.label} className="flex min-w-0 flex-col items-center text-center">
+                                <div className={`z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 ${done ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 bg-white text-slate-400"}`}>
+                                    <Icon size={15} />
+                                </div>
+                                <span className={`mt-2 text-[10px] font-semibold sm:text-xs ${done ? "text-emerald-700" : "text-slate-500"}`}>{step.label}</span>
+                                <span className="mt-1 text-[9px] text-slate-400 sm:text-[10px]">{fmt(step.date)}</span>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+            <p className="mt-3 text-[11px] text-slate-500">One shared tracking timeline for {rows.length} item{rows.length === 1 ? "" : "s"} in this delivery group.</p>
+        </section>
     );
-
 }

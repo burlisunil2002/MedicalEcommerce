@@ -1,16 +1,12 @@
 ﻿import {
-    Truck,
-    Package,
     RotateCcw,
     Star,
     XCircle,
     ShoppingCart,
     Eye,
-    MapPinned,
-    CheckCircle2
+    MapPinned
 } from "lucide-react";
 
-import DeliveryTimeline from "./DeliveryTimeline";
 
 export default function OrderItemCard({
 
@@ -28,7 +24,9 @@ export default function OrderItemCard({
 
     onReview,
 
-    onBuyAgain
+    onBuyAgain,
+    compact = false,
+    hideStatusBadge = false
 
 }) {
 
@@ -39,7 +37,7 @@ export default function OrderItemCard({
     const originalPrice = Number(item.price) || 0;
     const discount = Number(item.discountAmount) || 0;
     const finalPrice = Math.max(0, originalPrice - discount);
-    
+
 
     const quantity = Math.max(
         1,
@@ -114,9 +112,9 @@ export default function OrderItemCard({
 
     return (
 
-        <div className="rounded-2xl border bg-white shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden">
+        <div className={compact ? "w-full bg-white" : "rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden"}>
 
-            <div className="p-5">
+            <div className={compact ? "p-0" : "p-5"}>
 
                 <div className="grid lg:grid-cols-[120px_1fr_auto] gap-6">
 
@@ -169,18 +167,7 @@ export default function OrderItemCard({
 
                             </div>
 
-                            <span
-                                className={`
-                                    px-3
-                                    py-1
-                                    rounded-full
-                                    text-xs
-                                    font-semibold
-                                    ${getStatusStyle()}
-                                `}
-                            >
-                                {item.itemStatus}
-                            </span>
+                            {!hideStatusBadge && <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusStyle()}`}>{item.itemStatus}</span>}
 
                         </div>
 
@@ -232,82 +219,8 @@ export default function OrderItemCard({
 
                     </div>
 
-                    {/*=====================================
-                            QUICK STATUS
-                    =====================================*/}
-
-                    <div className="flex lg:flex-col gap-3 justify-center">
-
-                        {item.itemStatus === "Delivered" && (
-
-                            <div className="flex items-center gap-2 rounded-xl bg-green-50 px-4 py-3">
-
-                                <CheckCircle2
-                                    size={18}
-                                    className="text-green-600"
-                                />
-
-                                <span className="text-sm font-medium text-green-700">
-
-                                    Delivered
-
-                                </span>
-
-                            </div>
-
-                        )}
-
-                        {item.itemStatus === "OutForDelivery" && (
-
-                            <div className="flex items-center gap-2 rounded-xl bg-orange-50 px-4 py-3">
-
-                                <Truck
-                                    size={18}
-                                    className="text-orange-600"
-                                />
-
-                                <span className="text-sm font-medium text-orange-700">
-
-                                    Out For Delivery
-
-                                </span>
-
-                            </div>
-
-                        )}
-
-                        {item.itemStatus === "Shipped" && (
-
-                            <div className="flex items-center gap-2 rounded-xl bg-blue-50 px-4 py-3">
-
-                                <Package
-                                    size={18}
-                                    className="text-blue-600"
-                                />
-
-                                <span className="text-sm font-medium text-blue-700">
-
-                                    Shipped
-
-                                </span>
-
-                            </div>
-
-                        )}
-
-                    </div>
 
                 </div>
-                {/*=====================================
-                        DELIVERY TIMELINE
-                =====================================*/}
-
-                <div className="mt-6 border-t pt-6">
-
-                    <DeliveryTimeline item={item} />
-
-                </div>
-
                 {/*=====================================
                         TRACKING INFORMATION
                 =====================================*/}

@@ -56,18 +56,73 @@ export default function OrderCard({
     const [invoiceLoadError, setInvoiceLoadError] = useState(false);
     const [downloadingInvoiceId, setDownloadingInvoiceId] = useState(null);
     const [invoiceRefreshKey, setInvoiceRefreshKey] = useState(0);
-    const [invoiceAccessNotice, setInvoiceAccessNotice] = useState(null);
 
-    const invoicesByBatch = sellerInvoices.reduce((groups, invoice) => {
-        const batchId = batchIdOf(invoice);
-        const key = batchId != null
-            ? `batch-${batchId}`
-            : `invoice-${invoiceIdOf(invoice) ?? invoice.invoiceNumber ?? groups.length}`;
-        if (!groups.some((entry) => entry.key === key)) {
-            groups.push({ key, invoice });
-        }
-        return groups;
-    }, []);
+    const orderItems = Array.isArray(order?.items) ? order.items : [];
+
+    const normalizeStatus = (value) =>
+        String(value ?? "").replace(/[\s_-]/g, "").toLowerCase();
+
+    const itemIdOf = (item) => item?.orderItemId ?? item?.OrderItemId;
+    const sellerIdOf = (item) => item?.sellerId ?? item?.SellerId ?? item?.seller?.sellerId;
+    const itemBatchIdOf = (item) => item?.deliveryBatchId ?? item?.DeliveryBatchId ?? item?.batchId;
+
+    const deliveryDateOf = (item) =>
+        item?.outForDeliveryDate ?? item?.OutForDeliveryDate ??
+        item?.deliveredDate ?? item?.DeliveredDate ??
+        item?.deliveryDate ?? item?.DeliveryDate;
+
+    const dateKeyOf = (value) => {
+        if (!value) return null;
+        const date = new Date(value);
+        return Number.isNaN(date.getTime())
+            ? null
+            : `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+    };
+
+    const deliveryGroups = (() => {
+        // Group items first, independently of invoices. Persisted batch ID is
+        // authoritative; otherwise same seller + same calendar day + delivered
+        // or out-for-delivery are shown together.
+        const groups = new Map();
+        orderItems.forEach((item, index) => {
+            const rawId = itemIdOf(item);
+            const batchId = itemBatchIdOf(item);
+            const status = normalizeStatus(item?.itemStatus ?? item?.orderItemStatus);
+            const seller = sellerIdOf(item) ?? item?.sellerName ?? item?.SellerName;
+            const day = dateKeyOf(deliveryDateOf(item));
+            let key;
+            if (batchId != null) key = `batch-${batchId}`;
+            else if (seller != null && day && ["outfordelivery", "delivered"].includes(status)) key = `seller-${seller}-${day}`;
+            else key = `item-${rawId ?? index}`;
+            if (!groups.has(key)) groups.set(key, { key, items: [], invoice: null });
+            groups.get(key).items.push(item);
+        });
+
+        const result = [...groups.values()];
+        // Attach each invoice to the best matching group without splitting a
+        // same-seller/same-day delivery group into separate item cards.
+        sellerInvoices.forEach(invoice => {
+            const rows = Array.isArray(invoice?.items) ? invoice.items : [];
+            const invoiceItemIds = new Set(rows.map(row => row?.orderItemId ?? row?.OrderItemId).filter(v => v != null).map(String));
+            const batchId = batchIdOf(invoice);
+            let target = null;
+            if (batchId != null) target = result.find(g => g.items.some(item => String(itemBatchIdOf(item) ?? '') === String(batchId)));
+            if (!target && invoiceItemIds.size) target = result.find(g => g.items.some(item => invoiceItemIds.has(String(itemIdOf(item)))));
+            const sellerId = invoice?.sellerId ?? invoice?.SellerId ?? invoice?.seller?.sellerId;
+            if (!target && sellerId != null) {
+                const day = dateKeyOf(invoice?.batchOutForDeliveryDate ?? invoice?.outForDeliveryDate ?? invoice?.batchDeliveredAt ?? invoice?.deliveredAt ?? invoice?.issuedAtUtc ?? invoice?.invoiceDate);
+                target = result.find(g => g.items.some(item => String(sellerIdOf(item) ?? '') === String(sellerId) && day && dateKeyOf(deliveryDateOf(item)) === day));
+            }
+            if (!target) {
+                target = { key: `invoice-${invoiceIdOf(invoice) ?? invoice.invoiceNumber ?? result.length}`, items: [], invoice: null };
+                result.push(target);
+            }
+            // Prefer an invoice that is actually tied to this batch; keep the
+            // first invoice only to avoid putting duplicate invoice controls in one card.
+            if (!target.invoice || (batchId != null && batchIdOf(target.invoice) == null)) target.invoice = invoice;
+        });
+        return result;
+    })();
 
     useEffect(() => {
         if (!expanded || !order?.orderId) return undefined;
@@ -188,11 +243,55 @@ export default function OrderCard({
                 </div>
 
                 <div className="px-4 py-5 sm:px-6 sm:py-6">
-                    <div className="mb-6 flex items-center justify-between">
-                        <div><h3 className="text-xl font-bold text-slate-800">Ordered Items</h3><p className="mt-1 text-sm text-slate-500">{order.itemCount ?? order.items?.length ?? 0} item(s) in this order</p></div>
-                        <div className="hidden items-center gap-2 text-sm text-slate-500 lg:flex"><PackageCheck size={18} />{overallStatus}</div>
+                    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div><h3 className="text-xl font-bold text-slate-800">Ordered Items</h3><p className="mt-1 text-sm text-slate-500">{order.itemCount ?? orderItems.length} item(s) in this order</p></div>
+                        <div className="flex items-center gap-2 self-start">
+                            {invoicesLoading && <span className="text-xs text-slate-500" role="status">Refreshing invoices…</span>}
+                            <button type="button" onClick={(event) => { event.stopPropagation(); setInvoiceRefreshKey((value) => value + 1); }} disabled={invoicesLoading}
+                                className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                                <RefreshCw size={14} className={invoicesLoading ? "animate-spin" : ""} /> Refresh
+                            </button>
+                        </div>
                     </div>
-                    <OrderItems items={order.items || []} overallStatus={overallStatus} onTrack={onTrack} onCancel={onCancel} onReturn={onReturn} onReview={onReview} onBuyAgain={onBuyAgain} order={order} />
+                    {invoiceLoadError && <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">Invoice status could not be refreshed. Your order items are still shown.</p>}
+                    <div className="space-y-4">
+                        {deliveryGroups.map(({ key, items, invoice }) => {
+                            const invoiceId = invoice ? invoiceIdOf(invoice) : null;
+                            const delivered = invoice ? isBatchDelivered(invoice) : false;
+                            const batchLabel = invoice ? batchNumberOf(invoice) : "Delivery group";
+                            const batchStatus = invoice ? batchStatusOf(invoice) : "";
+                            return (
+                                <section key={key} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                                    {items.length > 0 && <div className="p-2 sm:p-3">
+                                        <OrderItems items={items} overallStatus={overallStatus} onTrack={onTrack} onCancel={onCancel} onReturn={onReturn} onReview={onReview} onBuyAgain={onBuyAgain} order={order} />
+                                    </div>}
+                                    {invoice ? (
+                                        <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-bold text-slate-800">{batchLabel} · {invoiceSupplierOf(invoice)}</p>
+                                                <p className="mt-1 break-all text-xs text-slate-500">{invoice.invoiceNumber || "Invoice number unavailable"} · Invoice total ₹{Number(invoice.invoiceTotal || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                                <p className={`mt-1 text-xs font-semibold ${delivered ? "text-emerald-700" : "text-amber-700"}`}>{delivered ? "Delivery completed · Invoice ready" : `Invoice available after batch delivery${batchStatus ? ` · Current status: ${batchStatus}` : ""}`}</p>
+                                            </div>
+                                            <button type="button" disabled={!invoiceId || downloadingInvoiceId != null || !delivered}
+                                                onClick={(event) => { event.stopPropagation(); downloadSellerInvoice(invoice); }}
+                                                title={delivered ? "Download this delivery batch tax invoice" : "Available after this batch is delivered"}
+                                                className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
+                                                <Download size={16} /> {downloadingInvoiceId === invoiceId ? "Preparing…" : "Tax Invoice"}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-4 py-3">
+                                            <div>
+                                                <p className="text-sm font-semibold text-slate-700">Tax invoice</p>
+                                                <p className="mt-0.5 text-xs text-slate-500">The invoice has not been returned by the server for this delivery batch yet.</p>
+                                            </div>
+                                            <span className="shrink-0 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Pending</span>
+                                        </div>
+                                    )}
+                                </section>
+                            );
+                        })}
+                    </div>
                 </div>
 
                 <div className="min-w-0 border-t bg-slate-50"><PaymentSummary order={order} /></div>
@@ -201,157 +300,9 @@ export default function OrderCard({
                     <button type="button" onClick={(event) => { event.stopPropagation(); onHelp?.(); }} className="w-full rounded-xl border px-5 py-3 text-sm font-medium hover:bg-slate-100 sm:w-auto">Need Help</button>
                 </div>
 
-                <section className="border-t bg-white px-4 py-5 sm:px-6 sm:py-6" aria-label="Tax invoices by delivery batch">
-                    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="min-w-0">
-                            <h4 className="text-base font-bold text-slate-800 sm:text-lg">Tax Invoices by Delivery Batch</h4>
-                            <p className="mt-1 text-xs leading-5 text-slate-500 sm:text-sm">
-                                Each delivery batch has its own seller tax invoice. Downloads become available only after that batch is delivered.
-                            </p>
-                        </div>
-                        <div className="flex items-center gap-2 self-start sm:self-auto">
-                            {invoicesLoading && (
-                                <span className="text-xs text-slate-500 sm:text-sm" role="status">Loading…</span>
-                            )}
-                            <button
-                                type="button"
-                                onClick={(event) => {
-                                    event.stopPropagation();
-                                    setInvoiceRefreshKey((value) => value + 1);
-                                }}
-                                disabled={invoicesLoading}
-                                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
-                            >
-                                <RefreshCw size={14} className={invoicesLoading ? "animate-spin" : ""} />
-                                Refresh status
-                            </button>
-                        </div>
-                    </div>
 
-                    {!invoicesLoading && invoiceLoadError && (
-                        <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800 sm:p-4 sm:text-sm">
-                            Unable to load tax invoices right now. Please refresh or try again later.
-                        </p>
-                    )}
-
-                    {!invoicesLoading && !invoiceLoadError && invoicesByBatch.length === 0 && (
-                        <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3 text-xs leading-5 text-slate-500 sm:p-4 sm:text-sm">
-                            No seller tax invoices are available for this order yet. They will appear here when generated for a delivery batch.
-                        </p>
-                    )}
-
-                    {invoicesByBatch.length > 0 && (
-                        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                            {invoicesByBatch.map(({ key, invoice }) => {
-                                const invoiceId = invoiceIdOf(invoice);
-                                const delivered = isBatchDelivered(invoice);
-                                const batchStatus = batchStatusOf(invoice);
-                                const batchDeliveredAt = batchDeliveredAtOf(invoice);
-                                const batchLabel = batchNumberOf(invoice);
-
-                                return (
-                                    <article
-                                        key={key}
-                                        className="flex min-w-0 flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4"
-                                    >
-                                        <div className="flex min-w-0 items-start justify-between gap-2">
-                                            <div className="min-w-0">
-                                                <p className="break-words text-sm font-bold text-slate-800">
-                                                    {batchLabel}
-                                                </p>
-                                                <p className="mt-1 break-all text-xs text-slate-500">
-                                                    {invoice.invoiceNumber || "Invoice number unavailable"}
-                                                </p>
-                                                <p className="mt-1 text-xs text-slate-500">
-                                                    {invoiceDateOf(invoice)
-                                                        ? new Date(invoiceDateOf(invoice)).toLocaleDateString("en-IN")
-                                                        : "Invoice date unavailable"}
-                                                </p>
-                                            </div>
-                                            <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold sm:text-xs ${delivered
-                                                ? "bg-emerald-100 text-emerald-700"
-                                                : "bg-amber-100 text-amber-800"
-                                                }`}>
-                                                {delivered ? "Delivered" : "Not delivered"}
-                                            </span>
-                                        </div>
-
-                                        <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                                            <span className="font-semibold">Seller: </span>
-                                            <span className="break-words">{invoiceSupplierOf(invoice)}</span>
-                                            <p className="mt-1">Invoice total: <strong>₹{Number(invoice.invoiceTotal || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>
-                                            {batchDeliveredAt && (
-                                                <p className="mt-1">
-                                                    Delivered on {new Date(batchDeliveredAt).toLocaleDateString("en-IN")}
-                                                </p>
-                                            )}
-                                            {!delivered && batchStatus && (
-                                                <p className="mt-1 capitalize">Batch status: {batchStatus.replace(/([a-z])([A-Z])/g, "$1 $2")}</p>
-                                            )}
-                                        </div>
-
-                                        <button
-                                            type="button"
-                                            disabled={!invoiceId || downloadingInvoiceId != null || !delivered}
-                                            onClick={(event) => {
-                                                event.stopPropagation();
-                                                if (!delivered) {
-                                                    setInvoiceAccessNotice({ batchLabel, batchStatus });
-                                                    return;
-                                                }
-                                                downloadSellerInvoice(invoice);
-                                            }}
-                                            title="Download tax invoice PDF"
-                                            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                                        >
-                                            <Download size={16} />
-                                            {downloadingInvoiceId === invoiceId ? "Downloading…" : "Download Tax Invoice"}
-                                        </button>
-                                    </article>
-                                );
-                            })}
-                        </div>
-                    )}
-                </section>
             </>}
 
-            {invoiceAccessNotice && (
-                <div
-                    className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
-                    role="presentation"
-                    onClick={() => setInvoiceAccessNotice(null)}
-                >
-                    <div
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="invoice-access-title"
-                        className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6"
-                        onClick={(event) => event.stopPropagation()}
-                    >
-                        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700">
-                            <PackageCheck size={24} />
-                        </div>
-                        <h3 id="invoice-access-title" className="text-center text-lg font-bold text-slate-900">
-                            Tax invoice available after delivery
-                        </h3>
-                        <p className="mt-3 text-center text-sm leading-6 text-slate-600">
-                            The tax invoice for <strong>{invoiceAccessNotice.batchLabel}</strong> can be downloaded only after this delivery batch is marked as delivered. Please check again once you have received the items.
-                        </p>
-                        {invoiceAccessNotice.batchStatus && (
-                            <p className="mt-2 text-center text-xs text-slate-500"> 
-                                Current batch status: {invoiceAccessNotice.batchStatus.replace(/([a-z])([A-Z])/g, "$1 $2")}
-                            </p>
-                        )}
-                        <button
-                            type="button"
-                            onClick={() => setInvoiceAccessNotice(null)}
-                            className="mt-5 min-h-11 w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
-                        >
-                            Okay, understood
-                        </button>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
