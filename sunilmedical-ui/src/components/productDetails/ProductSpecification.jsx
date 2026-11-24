@@ -1,103 +1,61 @@
 ﻿import { BadgeCheck } from "lucide-react";
 
-export default function ProductSpecification({
-    selectedVariant
-}) {
-    const specifications =
-        selectedVariant?.specifications ??
-        [];
+export default function ProductSpecification({ selectedVariant }) {
+    const specifications = Array.isArray(selectedVariant?.specifications)
+        ? selectedVariant.specifications.filter(
+            (spec) => spec && (spec.key || spec.value)
+        )
+        : [];
 
-    if (!specifications.length) {
-        return null;
-    }
+    if (specifications.length === 0) return null;
 
     return (
-        <article className="
-            overflow-hidden
-            rounded-2xl
-            border
-            border-slate-200
-            bg-white
-            shadow-sm
-        ">
-            <div className="
-                border-b
-                border-slate-100
-                bg-gradient-to-r
-                from-indigo-50
-                to-white
-                px-5
-                sm:px-6
-                py-4
-            ">
-                <p className="
-                    text-[10px]
-                    font-bold
-                    uppercase
-                    tracking-widest
-                    text-indigo-500
-                ">
+        <section
+            aria-labelledby="product-specifications-heading"
+            className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+        >
+            <header className="border-b border-slate-100 bg-gradient-to-r from-indigo-50 via-white to-white px-4 py-4 sm:px-6">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-indigo-600 sm:text-xs">
                     Technical details
                 </p>
-
-                <h2 className="
-                    mt-1
-                    text-base
-                    sm:text-lg
-                    font-bold
-                    text-slate-900
-                ">
-                    Technical Specifications
+                <h2
+                    id="product-specifications-heading"
+                    className="mt-1 text-base font-bold tracking-tight text-slate-900 sm:text-lg"
+                >
+                    Technical specifications
                 </h2>
-            </div>
+                <p className="mt-1 text-xs text-slate-500 sm:text-sm">
+                    Product details and specifications for the selected variant
+                </p>
+            </header>
 
-            <div className="divide-y divide-slate-100">
-                {specifications.map(
-                    (spec, index) => (
+            <dl className="divide-y divide-slate-100">
+                {specifications.map((spec, index) => {
+                    const label = String(spec.key ?? "").trim();
+                    const value = String(spec.value ?? "").trim();
+
+                    return (
                         <div
-                            key={`${spec.key}-${index}`}
-                            className="
-                                grid
-                                grid-cols-1
-                                sm:grid-cols-[minmax(180px,0.8fr)_2fr]
-                                gap-2
-                                sm:gap-6
-                                px-5
-                                sm:px-6
-                                py-3.5
-                                hover:bg-slate-50
-                                transition
-                            "
+                            key={`${label || "specification"}-${index}`}
+                            className="grid grid-cols-1 gap-1.5 px-4 py-3.5 transition-colors hover:bg-slate-50/80 sm:grid-cols-[minmax(0,0.85fr)_minmax(0,2fr)] sm:gap-5 sm:px-6"
                         >
-                            <div className="
-                                flex
-                                items-center
-                                gap-2
-                                text-xs
-                                sm:text-sm
-                                font-semibold
-                                text-slate-800
-                            ">
+                            <dt className="flex min-w-0 items-start gap-2 text-xs font-semibold text-slate-800 sm:text-sm">
                                 <BadgeCheck
-                                    size={15}
-                                    className="text-indigo-500 shrink-0"
+                                    size={16}
+                                    strokeWidth={2}
+                                    aria-hidden="true"
+                                    className="mt-0.5 shrink-0 text-indigo-500"
                                 />
+                                <span className="break-words">{label || "Specification"}</span>
+                            </dt>
 
-                                {spec.key}
-                            </div>
-
-                            <div className="
-                                text-xs
-                                sm:text-sm
-                                leading-6
-                                text-slate-600
-                            ">
-                                {spec.value}
-                            </div>
+                            <dd className="min-w-0 whitespace-pre-wrap break-words pl-6 text-xs leading-6 text-slate-600 sm:pl-0 sm:text-sm">
+                                {value || "—"}
+                            </dd>
                         </div>
-                    )
-                )}
-            </div>
-        </article>
+                    );
+                })}
+            </dl>
+        </section>
     );
 }

@@ -46,6 +46,35 @@ const isBatchDelivered = (invoice) =>
     invoice?.canDownload === true &&
     batchStatusOf(invoice) === "delivered";
 
+// Calculate the estimate in the browser; no additional database column is required.
+const getItemDeliveryDays = (item) => {
+    const rawDays =
+        item?.deliveryDays ?? item?.DeliveryDays ??
+        item?.productDeliveryDays ?? item?.ProductDeliveryDays ??
+        item?.product?.deliveryDays ?? item?.product?.DeliveryDays ??
+        item?.productModel?.deliveryDays ?? item?.productModel?.DeliveryDays;
+    const days = Number(rawDays);
+    return Number.isInteger(days) && days >= 1 && days <= 365 ? days : null;
+};
+
+const parseLocalDate = (value) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+};
+
+const addCalendarDays = (date, days) => {
+    if (!date || !Number.isInteger(days)) return null;
+    const result = new Date(date);
+    result.setDate(result.getDate() + days);
+    return result;
+};
+
+const formatDeliveryDate = (date) => date
+    ? date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+    : "Date unavailable";
+
 export default function OrderCard({
     order, overallStatus, onTrack, onCancel, onReturn,
     onReview, onBuyAgain, onHelp
@@ -262,9 +291,38 @@ export default function OrderCard({
                             const batchStatus = invoice ? batchStatusOf(invoice) : "";
                             return (
                                 <section key={key} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                                    {items.length > 0 && <div className="p-2 sm:p-3">
-                                        <OrderItems items={items} overallStatus={overallStatus} onTrack={onTrack} onCancel={onCancel} onReturn={onReturn} onReview={onReview} onBuyAgain={onBuyAgain} order={order} />
-                                    </div>}
+                                    {items.length > 0 && <>
+                                        <div className="space-y-2 border-b border-slate-100 bg-blue-50/60 p-3 sm:p-4">
+                                            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                                                <Calendar size={16} className="text-blue-600" /> Estimated delivery
+                                            </div>
+                                            {items.map((item, itemIndex) => {
+                                                const productName = item?.productName ?? item?.ProductName ?? item?.name ?? "Ordered product";
+                                                const days = getItemDeliveryDays(item);
+                                                const orderDate = parseLocalDate(order?.orderDate ?? order?.OrderDate);
+                                                const estimatedDate = days != null ? addCalendarDays(orderDate, days) : null;
+                                                const actualDateValue = deliveryDateOf(item);
+                                                const actualDate = parseLocalDate(actualDateValue);
+                                                const status = normalizeStatus(item?.itemStatus ?? item?.orderItemStatus);
+                                                const isDelivered = status === "delivered";
+                                                return (
+                                                    <div key={itemIdOf(item) ?? `${key}-estimate-${itemIndex}`} className="flex flex-col gap-1 rounded-lg bg-white/80 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                                                        <span className="min-w-0 break-words text-xs font-medium text-slate-700">{productName}</span>
+                                                        <span className="shrink-0 text-xs text-slate-600">
+                                                            {isDelivered && actualDate
+                                                                ? <>Delivered on <strong className="text-emerald-700">{formatDeliveryDate(actualDate)}</strong></>
+                                                                : estimatedDate
+                                                                    ? <>Expected by <strong className="text-blue-700">{formatDeliveryDate(estimatedDate)}</strong> ({days} {days === 1 ? "day" : "days"})</>
+                                                                    : "Delivery estimate unavailable"}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        <div className="p-2 sm:p-3">
+                                            <OrderItems items={items} overallStatus={overallStatus} onTrack={onTrack} onCancel={onCancel} onReturn={onReturn} onReview={onReview} onBuyAgain={onBuyAgain} order={order} />
+                                        </div>
+                                    </>}
                                     {invoice ? (
                                         <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
                                             <div className="min-w-0">

@@ -490,7 +490,7 @@ const addHeader = (doc, order) => {
     [
         "GSTIN: 37AKLPA6711H1ZA",
         "480/2, AMTZ CAMPUS, Pragathi Maiden, Visakhapatnam Steel Plant, Pedagantyada, Visakhapatnam, Andhra Pradesh, India",
-        "Phone: 6301427306, 9014060858"
+        "Phone: 6301427306, 9390630297"
     ].forEach((value) => {
         const wrapped = doc.splitTextToSize(value, leftWidth);
         doc.text(wrapped, margin, sellerY);

@@ -40,7 +40,7 @@ export default function MainHeader() {
        WHATSAPP
     ========================================================= */
 
-    const whatsappNumber = "919014060858";
+    const whatsappNumber = "919390630297";
 
     const handleChat = () => {
         const msg = encodeURIComponent(

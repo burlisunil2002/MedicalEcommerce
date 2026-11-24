@@ -2159,6 +2159,7 @@ namespace VivekMedicalProducts.Controllers
             }
         }
 
+
         [Authorize]
         [HttpGet("my-orders")]
         public async Task<IActionResult> GetMyOrders(
@@ -2188,12 +2189,13 @@ namespace VivekMedicalProducts.Controllers
                     .Where(o => o.UserId == userId)
                     .OrderByDescending(o => o.OrderDate);
 
-                // Load one extra record to cheaply know whether another
-                // page exists, without a separate COUNT query.
                 var orders = await query
                     .Include(o => o.UserAddress)
-                    .Include(o => o.OrderItems).ThenInclude(i => i.Product)
-                    .Include(o => o.OrderItems).ThenInclude(i => i.ProductVariant).ThenInclude(v => v.Images)
+                    .Include(o => o.OrderItems)
+                        .ThenInclude(i => i.Product)
+                    .Include(o => o.OrderItems)
+                        .ThenInclude(i => i.ProductVariant)
+                            .ThenInclude(v => v.Images)
                     .Skip((page - 1) * pageSize)
                     .Take(pageSize + 1)
                     .ToListAsync(cancellationToken);
@@ -2207,7 +2209,9 @@ namespace VivekMedicalProducts.Controllers
 
                 var response = orders.Select(order =>
                 {
-                    var orderStatus = DeriveOrderStatus(order.OrderItems.Select(x => x.OrderItemStatus));
+                    var orderStatus = DeriveOrderStatus(
+                        order.OrderItems.Select(x => x.OrderItemStatus)
+                    );
 
                     return new
                     {
@@ -2237,24 +2241,37 @@ namespace VivekMedicalProducts.Controllers
                         items = order.OrderItems.Select(item => new
                         {
                             orderItemId = item.OrderItemId,
+
                             orderDate = order.OrderDate,
+
+                            // Product delivery estimate in days
+                            deliveryDays = item.Product != null
+                                ? item.Product.DeliveryDays
+                                : (int?)null,
+
                             sellerId = item.SellerId,
                             productId = item.ProductId,
                             variantId = item.ProductVariantId,
+
                             productName = item.ProductName,
                             variantName = item.ProductVariant?.Model ?? "",
 
-                            productImage = item.ProductVariant != null && item.ProductVariant.Images.Any()
+                            productImage =
+                                item.ProductVariant != null &&
+                                item.ProductVariant.Images.Any()
+                                    ? item.ProductVariant.Images
+                                        .OrderBy(x => x.DisplayOrder)
+                                        .Select(x => x.ImageUrl)
+                                        .FirstOrDefault()
+                                    : !string.IsNullOrWhiteSpace(item.Product?.ImageUrl)
+                                        ? item.Product.ImageUrl
+                                        : "/images/no-image.png",
+
+                            productImages = item.ProductVariant != null
                                 ? item.ProductVariant.Images
                                     .OrderBy(x => x.DisplayOrder)
                                     .Select(x => x.ImageUrl)
-                                    .FirstOrDefault()
-                                : !string.IsNullOrWhiteSpace(item.Product?.ImageUrl)
-                                    ? item.Product.ImageUrl
-                                    : "/images/no-image.png",
-
-                            productImages = item.ProductVariant != null
-                                ? item.ProductVariant.Images.OrderBy(x => x.DisplayOrder).Select(x => x.ImageUrl).ToList()
+                                    .ToList()
                                 : new List<string>(),
 
                             quantity = item.Quantity,
@@ -2273,7 +2290,10 @@ namespace VivekMedicalProducts.Controllers
                             returnStatus = item.ReturnStatus,
 
                             remainingReturnDays = item.ReturnEligibleTill.HasValue
-                                ? Math.Max(0, (item.ReturnEligibleTill.Value - DateTime.UtcNow).Days)
+                                ? Math.Max(
+                                    0,
+                                    (item.ReturnEligibleTill.Value - DateTime.UtcNow).Days
+                                )
                                 : 0,
 
                             packedDate = item.PackedDate,
@@ -2298,13 +2318,19 @@ namespace VivekMedicalProducts.Controllers
                 }).ToList();
 
                 await LogAuditAsync(
-                    action: "ViewMyOrders",
-                    status: "Success",
-                    entityType: "Order",
-                    entityId: null,
-                    description: "Customer viewed their order history.",
-                    newValues: new { Page = page, PageSize = pageSize, ReturnedCount = response.Count },
-                    cancellationToken: cancellationToken);
+    action: "ViewMyOrders",
+    status: "Success",
+    entityType: "Order",
+    entityId: null,
+    description: "Customer viewed their order history.",
+    newValues: new
+    {
+        Page = page,
+        PageSize = pageSize,
+        ReturnedCount = response.Count
+    },
+    cancellationToken: cancellationToken
+);
 
                 return Ok(new
                 {
@@ -2321,9 +2347,15 @@ namespace VivekMedicalProducts.Controllers
             }
             catch (Exception ex)
             {
-                return ErrorResponse(ex, "Failed to load orders for user.", StatusCodes.Status500InternalServerError, userId);
+                return ErrorResponse(
+                    ex,
+                    "Failed to load orders for user.",
+                    StatusCodes.Status500InternalServerError,
+                    userId
+                );
             }
         }
+
 
         [Authorize]
         [HttpGet("invoice/{id}")]
@@ -2651,7 +2683,7 @@ namespace VivekMedicalProducts.Controllers
 
                 CompanyPhone =
                     _config["Company:Phone"]
-                    ?? "6301427306, 9014060858",
+                    ?? "6301427306, 9390630297",
 
 
                 // --------------------------------------------------------

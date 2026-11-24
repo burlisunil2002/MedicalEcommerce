@@ -94,6 +94,14 @@ export default function ProductDetails() {
         }
     }, []);
 
+    useEffect(() => {
+        return () => {
+            if (messageTimerRef.current) {
+                clearTimeout(messageTimerRef.current);
+            }
+        };
+    }, []);
+
     // ============================================================
     // LOAD CURRENT PRODUCT
     // ============================================================
@@ -1040,22 +1048,22 @@ export default function ProductDetails() {
                 MAIN PRODUCT PAGE
             ===================================================== */}
 
-            <main className="min-h-screen overflow-x-hidden bg-slate-50 pb-[190px] lg:pb-8">
+            <main className="min-h-screen overflow-x-clip bg-slate-50 pb-[190px] lg:pb-10">
 
-                <div className="mx-auto w-full max-w-[1440px] px-3 py-3 sm:px-5 sm:py-6 lg:px-8">
+                <div className="mx-auto w-full max-w-[1440px] px-3 py-4 sm:px-5 sm:py-6 lg:px-8 lg:py-8">
 
                     {/* =================================================
                         PRODUCT HERO
                     ================================================== */}
 
-                    <div className="grid min-w-0 grid-cols-1 items-start gap-3 sm:gap-4 lg:grid-cols-[minmax(320px,390px)_minmax(0,1fr)] lg:gap-5 xl:grid-cols-[minmax(360px,430px)_minmax(0,1fr)] xl:gap-6">
+                    <div className="grid min-w-0 grid-cols-1 items-start gap-4 sm:gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-6 xl:grid-cols-[minmax(360px,0.95fr)_minmax(0,1.05fr)] xl:gap-8">
 
                         {/* ===============================
                             GALLERY
                         ================================ */}
 
                         <section className="min-w-0 w-full">
-                            <div className="mx-auto w-full max-w-[390px] lg:mx-0">
+                            <div className="mx-auto w-full max-w-[520px] lg:sticky lg:top-5 lg:mx-0">
 
                                 <ProductGallery
                                     product={

@@ -683,6 +683,42 @@ export default function ProductPurchaseSection({
 
                 </div>
 
+                {/* =================================================
+                    DELIVERY ESTIMATE
+                ================================================== */}
+
+                {(() => {
+                    const deliveryDays = Number(
+                        product?.deliveryDays ?? product?.DeliveryDays ?? 0
+                    );
+
+                    if (!Number.isFinite(deliveryDays) || deliveryDays <= 0) {
+                        return null;
+                    }
+
+                    const deliveryRange = deliveryDays === 1
+                        ? "1 day"
+                        : `${Math.max(1, deliveryDays - 1)}–${deliveryDays} days`;
+
+                    return (
+                        <section
+                            aria-label="Delivery information"
+                            className="mb-5 flex min-w-0 items-start gap-3 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white p-3.5 sm:p-4"
+                        >
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-700 shadow-sm ring-1 ring-emerald-100 sm:h-11 sm:w-11">
+                                <Truck size={20} strokeWidth={1.9} aria-hidden="true" />
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                               
+                                <p className="mt-1 break-words text-sm font-bold leading-5 text-slate-900 sm:text-base">
+                                    Delivery in {deliveryRange}
+                                </p>
+                                
+                            </div>
+                        </section>
+                    );
+                })()}
 
                 {/* =================================================
                     PURCHASE ACTION

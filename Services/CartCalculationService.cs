@@ -21,7 +21,7 @@ namespace VivekMedicalProducts.Services
 
         public CartCalculationService(
             ApplicationDbContext context,
-            ICouponService couponService)
+            ICouponService couponService)   
         {
             _context = context;
             _couponService = couponService;
@@ -83,7 +83,7 @@ namespace VivekMedicalProducts.Services
                 var discountPercentage =
                     Math.Max(
                         0m,
-                        cartItem.Product.DiscountPercentage ?? 0m
+                        cartItem.Product.DiscountPercentage
                     );
 
                 var finalUnitPrice =
@@ -242,7 +242,7 @@ namespace VivekMedicalProducts.Services
                     var discountPercentage =
                         Math.Max(
                             0m,
-                            cartItem.Product.DiscountPercentage ?? 0m
+                            cartItem.Product.DiscountPercentage
                         );
 
                     var finalUnitPrice =

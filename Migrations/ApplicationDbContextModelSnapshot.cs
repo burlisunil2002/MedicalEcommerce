@@ -1435,15 +1435,17 @@ namespace VivekMedicalProducts.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<string>("BatchNumber")
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("Brand")
-                        .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
 
                     b.Property<string>("Category")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("timestamp with time zone");
@@ -1451,24 +1453,27 @@ namespace VivekMedicalProducts.Migrations
                     b.Property<DateTime?>("DealEndDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("DeliveryDays")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Description")
-                        .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<decimal?>("DiscountPercentage")
-                        .HasColumnType("numeric");
+                    b.Property<decimal>("DiscountPercentage")
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<DateTime?>("ExpiryDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal>("GSTPercentage")
-                        .HasColumnType("numeric");
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<string>("HSNCode")
-                        .HasColumnType("text");
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("ImageUrl")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<bool>("IsFragile")
@@ -1484,7 +1489,8 @@ namespace VivekMedicalProducts.Migrations
 
                     b.Property<string>("PriceType")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("QuotationUrl")
                         .HasColumnType("text");
@@ -1494,10 +1500,11 @@ namespace VivekMedicalProducts.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<decimal?>("Weight")
-                        .HasColumnType("numeric");
+                        .HasColumnType("decimal(10,3)");
 
                     b.HasKey("Id");
 

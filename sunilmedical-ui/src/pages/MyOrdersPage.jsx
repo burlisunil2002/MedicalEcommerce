@@ -17,7 +17,7 @@ import LoadingOrders from "../components/orders/LoadingOrders";
 import CancelDialog from "../components/orders/CancelDialog";
 import ReturnDialog from "../components/orders/ReturnDialog";
 
-const ORDERS_CACHE_KEY = "my-orders-cache-v3"; // Refresh cached order payload after delivery-batch UI update.
+const ORDERS_CACHE_KEY = "my-orders-cache-v4"; // Refresh cached orders for calculated delivery estimates.
 const PAGE_SIZE = 3;
 
 const normalizeOrders = (data) => {

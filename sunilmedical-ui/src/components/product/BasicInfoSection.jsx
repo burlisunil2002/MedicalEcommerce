@@ -42,7 +42,7 @@ export default function BasicInfoSection({
 
                 <h2
                     className="
-                    text-2xl
+                    text-lg sm:text-xl lg:text-2xl
                     font-bold
                     text-gray-800
                 "
@@ -66,7 +66,7 @@ export default function BasicInfoSection({
                 grid
                 grid-cols-1
                 md:grid-cols-2
-                gap-6
+                gap-4 sm:gap-5 lg:gap-6
             "
             >
 

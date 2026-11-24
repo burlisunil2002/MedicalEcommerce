@@ -35,7 +35,8 @@ export default function ProductForm({
             quotationFile: "Quotation file",
             gstPercentage: "GST percentage",
             hsnCode: "HSN code",
-            variants: "Variants"
+            variants: "Variants",
+            deliveryDays: "Delivery time"
         };
 
         const entries = Object.entries(errorObject || {})
@@ -106,6 +107,7 @@ export default function ProductForm({
         hsnCode: "",
 
         priceType: "Normal",
+        deliveryDays: "",
 
         imageFiles: [],
         imagePreviews: [],
@@ -224,6 +226,7 @@ export default function ProductForm({
             setProduct({
 
                 ...p,
+                deliveryDays: p.deliveryDays ?? p.DeliveryDays ?? "",
 
                 // Product Image (Single)
                 imageFile: null,
@@ -768,8 +771,17 @@ export default function ProductForm({
             e.description = "Description is required.";
         }
 
+        if (!product.hsnCode?.trim()) {
+            e.hsnCode = "HSN Code is required.";
+        }
+
         if (!product.priceType) {
             e.priceType = "Select Price Type.";
+        }
+
+        const deliveryDays = Number(product.deliveryDays);
+        if (product.deliveryDays === "" || !Number.isInteger(deliveryDays) || deliveryDays < 1 || deliveryDays > 365) {
+            e.deliveryDays = "Enter delivery time from 1 to 365 days.";
         }
 
         // Required when adding a new product
@@ -888,6 +900,8 @@ export default function ProductForm({
             else if (/^category$/i.test(key)) fieldKey = "category";
             else if (/^description$/i.test(key)) fieldKey = "description";
             else if (/^pricetype$/i.test(key)) fieldKey = "priceType";
+            else if (/^hsncode$/i.test(key)) fieldKey = "hsnCode";
+            else if (/^(deliverydays|deliverytimeindays)$/i.test(key)) fieldKey = "deliveryDays";
             else if (/^(imagefile|imageurl)$/i.test(key)) fieldKey = "imageFile";
             else if (/^quotation(file|url)$/i.test(key)) fieldKey = "quotationFile";
 
@@ -918,8 +932,12 @@ export default function ProductForm({
                     add('[name="category"]'); add('#category'); add('[name="Category"]');
                 } else if (lower === "description") {
                     add('[name="description"]'); add('#description'); add('[name="Description"]');
+                } else if (lower === "hsncode") {
+                    add('[name="hsnCode"]'); add('#hsnCode'); add('[name="HSNCode"]');
                 } else if (lower === "pricetype") {
                     add('[name="priceType"]'); add('#priceType'); add('[name="PriceType"]');
+                } else if (lower === "deliverydays" || lower === "deliverytimeindays") {
+                    add('[name="deliveryDays"]'); add('#deliveryDays'); add('[name="DeliveryDays"]');
                 } else if (lower === "imagefile") {
                     add('[name="imageFile"]'); add('#imageFile'); add('#imageFile-input'); add('#imageFile-section');
                     add('input[type="file"]:not([name="quotationFile"])');
@@ -1047,6 +1065,8 @@ export default function ProductForm({
             "PriceType",
             product.priceType
         );
+
+        formData.append("DeliveryDays", String(product.deliveryDays));
 
         formData.append(
             "IsHotDeal",
@@ -1345,6 +1365,40 @@ export default function ProductForm({
                     handleChange={handleChange}
                     errors={errors}
                 />
+
+                <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                    <div className="mb-3">
+                        <h3 className="text-base font-semibold text-slate-900">Delivery Information</h3>
+                        <p className="mt-1 text-sm text-slate-500">Set the estimated number of days required to deliver this product.</p>
+                    </div>
+                    <div className="max-w-sm">
+                        <label htmlFor="deliveryDays" className="mb-1.5 block text-sm font-medium text-slate-700">
+                            Estimated Delivery Time <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                            <input
+                                id="deliveryDays"
+                                name="deliveryDays"
+                                type="number"
+                                min="1"
+                                max="365"
+                                step="1"
+                                inputMode="numeric"
+                                value={product.deliveryDays}
+                                onChange={handleChange}
+                                placeholder="Enter number of days"
+                                aria-invalid={Boolean(errors.deliveryDays)}
+                                className={`w-full rounded-xl border bg-white px-3.5 py-2.5 pr-16 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${errors.deliveryDays ? "border-red-400" : "border-slate-300"}`}
+                            />
+                            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-500">days</span>
+                        </div>
+                        {errors.deliveryDays ? (
+                            <p className="mt-1.5 text-xs text-red-600">{errors.deliveryDays}</p>
+                        ) : (
+                            <p className="mt-1.5 text-xs text-slate-500">Enter a whole number between 1 and 365.</p>
+                        )}
+                    </div>
+                </section>
 
                 <MedicalInfoSection
                     product={product}

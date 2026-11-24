@@ -2,7 +2,7 @@
 
 export default function FloatingWhatsApp() {
 
-    const phone = "919014060858"; // Replace with your number
+    const phone = "919390630297"; // Replace with your number
 
     const message =
         encodeURIComponent(

@@ -153,8 +153,8 @@ export default function MainFooter() {
                             />
 
                             <PhoneLink
-                                number="+91 90140 60858"
-                                href="tel:+919014060858"
+                                number="+91 93906 30297" 
+                                href="tel:+91930630297"
                             />
 
                         </div>

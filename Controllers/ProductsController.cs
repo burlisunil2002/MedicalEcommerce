@@ -189,8 +189,9 @@ namespace VivekMedicalProducts.Controllers
                     imageUrl = p.ImageUrl,
                     priceType = p.PriceType,
                     isHotDeal = p.IsHotDeal,
-                    discount = p.DiscountPercentage ?? 0,
+                    discount = p.DiscountPercentage,
                     dealEndDate = p.DealEndDate,
+                    deliveryDays = p.DeliveryDays,
 
                     // Use active variants consistently for price range and default variant.
                     minPrice = p.Variants
@@ -264,7 +265,8 @@ namespace VivekMedicalProducts.Controllers
                     imageUrl = p.ImageUrl,
                     priceType = p.PriceType,
                     isHotDeal = p.IsHotDeal,
-                    discount = p.DiscountPercentage ?? 0,
+                    discount = p.DiscountPercentage,
+                    deliveryDays = p.DeliveryDays,
 
                     minPrice = p.Variants
                         .Where(v => v.Status == "Active")
@@ -468,6 +470,19 @@ namespace VivekMedicalProducts.Controllers
                     return BadRequest(new { success = false, message = "Description is required." });
                 }
 
+                if (string.IsNullOrWhiteSpace(product.HSNCode))
+                {
+                    return BadRequest(new { success = false, message = "HSN Code is required." });
+                }
+
+                if (product.DeliveryDays < 1 || product.DeliveryDays > 365)
+                {
+                    return BadRequest(new { success = false, message = "Delivery days must be between 1 and 365." });
+                }
+
+                // Normalize the mandatory tax classification code before persistence.
+                product.HSNCode = product.HSNCode.Trim();
+
                 if (imageFile == null || imageFile.Length == 0)
                 {
                     return BadRequest(new { success = false, message = "Please upload a product image." });
@@ -616,6 +631,7 @@ namespace VivekMedicalProducts.Controllers
                         product.PriceType,
                         product.GSTPercentage,
                         product.HSNCode,
+                        product.DeliveryDays,
                         product.Status,
                         product.SellerId,
                         Variants = product.Variants.Select(v => new
@@ -800,6 +816,7 @@ namespace VivekMedicalProducts.Controllers
                         p.IsHotDeal,
                         p.DiscountPercentage,
                         p.DealEndDate,
+                        p.DeliveryDays,
                         p.Status,
                         p.CreatedDate,
                         p.SellerId,
@@ -996,6 +1013,7 @@ namespace VivekMedicalProducts.Controllers
                     product.PriceType,
                     product.GSTPercentage,
                     product.HSNCode,
+                    product.DeliveryDays,
                     product.Weight,
                     product.IsHotDeal,
                     product.DiscountPercentage,
@@ -1040,6 +1058,16 @@ namespace VivekMedicalProducts.Controllers
                     return BadRequest(new { success = false, message = "Description is required." });
                 }
 
+                if (string.IsNullOrWhiteSpace(model.HSNCode))
+                {
+                    return BadRequest(new { success = false, message = "HSN Code is required." });
+                }
+
+                if (model.DeliveryDays < 1 || model.DeliveryDays > 365)
+                {
+                    return BadRequest(new { success = false, message = "Delivery days must be between 1 and 365." });
+                }
+
                 if (model.Variants == null || !model.Variants.Any())
                 {
                     return BadRequest(new { success = false, message = "Please add at least one variant." });
@@ -1062,7 +1090,8 @@ namespace VivekMedicalProducts.Controllers
                 product.Description = model.Description;
                 product.PriceType = model.PriceType;
                 product.GSTPercentage = model.GSTPercentage;
-                product.HSNCode = model.HSNCode;
+                product.HSNCode = model.HSNCode.Trim();
+                product.DeliveryDays = model.DeliveryDays;
                 product.Weight = model.Weight;
                 product.BatchNumber = model.BatchNumber;
                 product.IsFragile = model.IsFragile;
@@ -1237,6 +1266,7 @@ namespace VivekMedicalProducts.Controllers
                         product.PriceType,
                         product.GSTPercentage,
                         product.HSNCode,
+                        product.DeliveryDays,
                         product.Weight,
                         product.IsHotDeal,
                         product.DiscountPercentage,
@@ -1386,7 +1416,8 @@ namespace VivekMedicalProducts.Controllers
                         p.PriceType,
                         p.IsHotDeal,
                         p.DiscountPercentage,
-                        p.DealEndDate
+                        p.DealEndDate,
+                        p.DeliveryDays
                     })
                     .FirstOrDefaultAsync(cancellationToken);
 
@@ -1461,7 +1492,8 @@ namespace VivekMedicalProducts.Controllers
                         maxPrice = p.Variants.Any() ? p.Variants.Max(v => v.Price) : 0,
 
                         isHotDeal = p.IsHotDeal,
-                        discount = p.DiscountPercentage ?? 0,
+                        discount = p.DiscountPercentage,
+                        deliveryDays = p.DeliveryDays,
 
                         defaultVariant = p.Variants
                             .Where(v => v.Status == "Active")
@@ -1549,6 +1581,7 @@ namespace VivekMedicalProducts.Controllers
                             isHotDeal = p.IsHotDeal,
                             discountPercentage = p.DiscountPercentage,
                             gstPercentage = p.GSTPercentage,
+                            deliveryDays = p.DeliveryDays,
 
                             variants = p.Variants
                                 .Where(v => v.Status == "Active")
