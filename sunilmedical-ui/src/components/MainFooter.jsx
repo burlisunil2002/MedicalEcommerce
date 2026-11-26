@@ -1,405 +1,185 @@
-﻿import React, { useState } from "react";
+﻿import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
-    ChevronDown,
-    ChevronUp,
-    Phone,
-    ArrowUp
+    ArrowUp, ChevronDown, MapPin, Mail, Phone,
+    HeartPulse, ShoppingBag, UserRound, Store, FileText, MessageCircle
 } from "lucide-react";
+
+const sections = [
+    {
+        id: "shop", title: "Shop", icon: ShoppingBag, links: [
+            { label: "All Products", to: "/" }, { label: "Wishlist", to: "/wishlist" },
+            { label: "Shopping Cart", to: "/cart" }, { label: "FAQ", to: "/faq" }
+        ]
+    },
+    {
+        id: "account", title: "Orders & Account", icon: UserRound, links: [
+            { label: "My Profile", to: "/profile" }, { label: "My Orders", to: "/my-orders" }
+        ]
+    },
+    {
+        id: "seller", title: "For Sellers", icon: Store, links: [
+            { label: "Seller Home", to: "/seller-home" }, { label: "Become a Seller", to: "/seller-register" },
+            { label: "Seller Login", to: "/seller-login" }
+        ]
+    },
+    {
+        id: "company", title: "Company", icon: HeartPulse, links: [
+            { label: "About Us", to: "/about-us" }, { label: "Contact Us", to: "/contact-us" }
+        ]
+    },
+    {
+        id: "legal", title: "Policies & Legal", icon: FileText, links: [
+            { label: "Terms & Conditions", to: "/terms-and-conditions" },
+            { label: "Privacy Policy", to: "/privacy-policy" },
+            { label: "Refund & Cancellation", to: "/refund-cancellation" }
+        ]
+    }
+];
+
+const email = "aasraj2026@gmail.com";
+const phones = [
+    { number: "+91 63014 27306", href: "tel:+916301427306" },
+    { number: "+91 93906 30297", href: "tel:+919390630297" }
+];
+const address = "AMTZ Campus, Pragati Maidan, VM Steel Project S.O, Siddeswaram / Nadupuru, Visakhapatnam, Andhra Pradesh – 530031, India";
 
 export default function MainFooter() {
     const [openSection, setOpenSection] = useState(null);
+    const year = new Date().getFullYear();
 
-    const currentYear = new Date().getFullYear();
-
-    const sections = {
-        shop: {
-            title: "Shop",
-            links: [
-                { label: "Products", to: "/" },
-                { label: "Wishlist", to: "/wishlist" },
-                { label: "Cart", to: "/cart" }
-            ]
-        },
-
-        account: {
-            title: "Orders & Account",
-            links: [
-                { label: "My Orders", to: "/my-orders" },
-                { label: "FAQ", to: "/faq" },
-            ]
-        },
-
-        seller: {
-            title: "For Sellers",
-            links: [
-                { label: "Seller Home", to: "/seller-home" },
-                { label: "Become a Seller", to: "/seller-register" },
-                { label: "Seller Login", to: "/seller-login" }
-            ]
-        }
-    };
-
-    const toggleSection = (section) => {
-        setOpenSection((current) =>
-            current === section ? null : section
-        );
-    };
-
-    const scrollToTop = () => {
-        window.scrollTo({
-            top: 0,
-            behavior: "smooth"
-        });
-    };
+    const toggleSection = (id) =>
+        setOpenSection(current => current === id ? null : id);
 
     return (
-        <footer className="mt-14 bg-[#131a22] text-slate-300">
-
-            {/* Back to Top */}
+        <footer className="mt-12 w-full bg-[#111923] text-slate-300">
             <button
                 type="button"
-                onClick={scrollToTop}
-                className="
-                    flex w-full items-center justify-center gap-2
-                    bg-[#232f3e] px-4 py-3.5
-                    text-xs font-semibold text-slate-200
-                    transition-colors hover:bg-[#2d3d50]
-                "
+                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                className="group flex w-full items-center justify-center gap-2 bg-[#202d3b] px-4 py-3 text-xs font-semibold tracking-wide text-slate-200 transition hover:bg-[#2b3b4d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
                 aria-label="Back to top"
             >
-                <ArrowUp size={15} />
+                <ArrowUp size={15} className="transition-transform group-hover:-translate-y-0.5" />
                 Back to top
             </button>
 
-            {/* Main Footer */}
-            <div className="
-                mx-auto max-w-7xl px-5 py-10
-                sm:px-6 lg:px-8 lg:py-12
-            ">
-
-                {/* Desktop */}
-                <div className="
-                    hidden lg:grid
-                    lg:grid-cols-[1.5fr_1fr_1.2fr_1fr_1.15fr]
-                    lg:gap-10 xl:gap-14
-                ">
-
-                    {/* Company */}
-                    <div>
-                        <Link
-                            to="/"
-                            className="
-                                inline-block text-xl font-bold
-                                tracking-tight text-white
-                            "
-                        >
+            <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8 lg:py-14">
+                <div className="grid gap-9 lg:grid-cols-[1.3fr_3fr] lg:gap-12">
+                    {/* Company identity and contact */}
+                    <div className="max-w-md">
+                        <Link to="/" className="inline-flex items-center gap-2 text-xl font-extrabold tracking-tight text-white hover:text-cyan-300">
+                            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-400/10 text-cyan-300">
+                                <HeartPulse size={23} />
+                            </span>
                             JEDE MEDTECH
                         </Link>
-
-                        <p className="
-                            mt-1 text-[11px] font-semibold
-                            uppercase tracking-[0.18em]
-                            text-cyan-400
-                        ">
+                        <p className="mt-2 pl-12 text-[10px] font-bold uppercase tracking-[0.19em] text-cyan-400 sm:text-[11px]">
                             India Private Limited
                         </p>
-
-                        <p className="
-                            mt-5 max-w-xs text-sm leading-6
-                            text-slate-400
-                        ">
-                            Medical equipment, consumables and
-                            disposables for healthcare professionals,
-                            institutions and customers across India.
+                        <p className="mt-5 text-sm leading-7 text-slate-400">
+                            Medical equipment, healthcare products, consumables and disposables for healthcare professionals, institutions and customers across India.
                         </p>
+
+                        <div className="mt-6 space-y-4">
+                            <a href={`mailto:${email}`} className="group flex items-start gap-3 text-sm text-slate-300 transition hover:text-cyan-300">
+                                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-cyan-300"><Mail size={16} /></span>
+                                <span className="break-all pt-1">{email}</span>
+                            </a>
+                            {phones.map(phone => (
+                                <a key={phone.href} href={phone.href} className="group flex items-center gap-3 text-sm text-slate-300 transition hover:text-cyan-300">
+                                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-cyan-300"><Phone size={16} /></span>
+                                    {phone.number}
+                                </a>
+                            ))}
+                            <div className="flex items-start gap-3 text-xs leading-6 text-slate-400">
+                                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-cyan-300"><MapPin size={16} /></span>
+                                <span>{address}</span>
+                            </div>
+                        </div>
                     </div>
 
-                    <FooterColumn
-                        title={sections.shop.title}
-                        links={sections.shop.links}
-                    />
-
-                    <FooterColumn
-                        title={sections.account.title}
-                        links={sections.account.links}
-                    />
-
-                    <FooterColumn
-                        title={sections.seller.title}
-                        links={sections.seller.links}
-                    />
-
-                    {/* Contact */}
-                    <div>
-                        <h3 className="
-                            text-sm font-bold text-white
-                        ">
-                            Contact Us
-                        </h3>
-
-                        <p className="
-                            mt-4 text-xs leading-5 text-slate-400
-                        ">
-                            For product, order and customer service
-                            enquiries.
-                        </p>
-
-                        <div className="mt-5 space-y-3">
-
-                            <PhoneLink
-                                number="+91 63014 27306"
-                                href="tel:+916301427306"
-                            />
-
-                            <PhoneLink
-                                number="+91 93906 30297" 
-                                href="tel:+91930630297"
-                            />
-
-                        </div>
+                    {/* Desktop: five columns */}
+                    <div className="hidden grid-cols-2 gap-x-6 gap-y-9 sm:grid-cols-3 md:grid-cols-5 lg:grid">
+                        {sections.map(section => <FooterColumn key={section.id} section={section} />)}
                     </div>
                 </div>
 
-                {/* Mobile */}
-                <div className="lg:hidden">
+                {/* Tablet and mobile: interactive accordion */}
+                <div className="mt-9 border-y border-slate-700/70 lg:hidden">
+                    {sections.map(section => {
+                        const Icon = section.icon;
+                        const isOpen = openSection === section.id;
+                        return (
+                            <div key={section.id} className="border-b border-slate-700/70 last:border-0">
+                                <button
+                                    type="button"
+                                    onClick={() => toggleSection(section.id)}
+                                    aria-expanded={isOpen}
+                                    aria-controls={`footer-${section.id}`}
+                                    className="flex min-h-14 w-full items-center justify-between gap-3 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-400"
+                                >
+                                    <span className="flex items-center gap-3 text-sm font-semibold text-white">
+                                        <Icon size={17} className="text-cyan-400" />{section.title}
+                                    </span>
+                                    <ChevronDown size={18} className={`text-slate-400 transition-transform duration-200 ${isOpen ? "rotate-180 text-cyan-300" : ""}`} />
+                                </button>
+                                <div id={`footer-${section.id}`} hidden={!isOpen} className="pb-4 pl-8">
+                                    <ul className="grid gap-3 sm:grid-cols-2">
+                                        {section.links.map(link => (
+                                            <li key={link.to + link.label}>
+                                                <Link to={link.to} onClick={() => setOpenSection(null)} className="inline-block text-sm text-slate-400 transition hover:translate-x-1 hover:text-cyan-300">
+                                                    {link.label}
+                                                </Link>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
 
-                    {/* Brand */}
-                    <div className="pb-7">
-                        <Link
-                            to="/"
-                            className="
-                                text-lg font-bold tracking-tight
-                                text-white
-                            "
-                        >
-                            JEDE MEDTECH
-                        </Link>
-
-                        <p className="
-                            mt-1 text-[10px] font-semibold
-                            uppercase tracking-[0.17em]
-                            text-cyan-400
-                        ">
-                            India Private Limited
-                        </p>
-
-                        <p className="
-                            mt-4 max-w-md text-sm leading-6
-                            text-slate-400
-                        ">
-                            Medical equipment, consumables and
-                            disposables for healthcare needs.
-                        </p>
-                    </div>
-
-                    {/* Mobile Navigation */}
-                    <div className="
-                        divide-y divide-slate-800
-                        border-y border-slate-800
-                    ">
-                        {Object.entries(sections).map(
-                            ([key, section]) => {
-                                const isOpen = openSection === key;
-
-                                return (
-                                    <div key={key}>
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                toggleSection(key)
-                                            }
-                                            aria-expanded={isOpen}
-                                            className="
-                                                flex w-full
-                                                items-center justify-between
-                                                py-4 text-left
-                                            "
-                                        >
-                                            <span className="
-                                                text-sm font-semibold
-                                                text-white
-                                            ">
-                                                {section.title}
-                                            </span>
-
-                                            {isOpen ? (
-                                                <ChevronUp
-                                                    size={17}
-                                                    className="text-slate-400"
-                                                />
-                                            ) : (
-                                                <ChevronDown
-                                                    size={17}
-                                                    className="text-slate-400"
-                                                />
-                                            )}
-                                        </button>
-
-                                        {isOpen && (
-                                            <div className="space-y-3 pb-5">
-                                                {section.links.map((link) => (
-                                                    <Link
-                                                        key={link.label}
-                                                        to={link.to}
-                                                        className="
-                                                            block text-sm
-                                                            text-slate-400
-                                                            transition-colors
-                                                            hover:text-white
-                                                        "
-                                                    >
-                                                        {link.label}
-                                                    </Link>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            }
-                        )}
-                    </div>
-
-                    {/* Mobile Contact */}
-                    <div className="pt-7">
-                        <h3 className="
-                            text-sm font-semibold text-white
-                        ">
-                            Contact Us
-                        </h3>
-
-                        <p className="
-                            mt-2 text-xs leading-5 text-slate-500
-                        ">
-                            For product, order and customer service
-                            enquiries.
-                        </p>
-
-                        <div className="
-                            mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2
-                        ">
-                            <PhoneCard
-                                number="+91 63014 27306"
-                                href="tel:+916301427306"
-                            />
-
-                            <PhoneCard
-                                number="+91 93906 30297"
-                                href="tel:+919390630297"
-                            />
-                        </div>
-                    </div>
+                {/* Mobile/tablet quick contact */}
+                <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:hidden">
+                    <a href={`mailto:${email}`} className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-700 bg-white/[0.03] p-3 hover:bg-white/[0.07]">
+                        <Mail size={18} className="shrink-0 text-cyan-300" />
+                        <span className="min-w-0">
+                            <span className="block text-[10px] uppercase tracking-wider text-slate-500">Email support</span>
+                            <span className="block break-all text-sm font-semibold text-white">{email}</span>
+                        </span>
+                    </a>
+                    <a href="https://wa.me/919390630297" target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-xl border border-slate-700 bg-white/[0.03] p-3 hover:bg-white/[0.07]">
+                        <MessageCircle size={18} className="text-emerald-400" />
+                        <span>
+                            <span className="block text-[10px] uppercase tracking-wider text-slate-500">Quick assistance</span>
+                            <span className="block text-sm font-semibold text-white">Chat on WhatsApp</span>
+                        </span>
+                    </a>
                 </div>
             </div>
 
-            {/* Bottom Bar */}
-            <div className="
-                border-t border-slate-800 bg-[#0f151c]
-            ">
-                <div className="
-                    mx-auto flex max-w-7xl flex-col
-                    items-center justify-between gap-2
-                    px-5 py-5 text-center
-                    sm:px-6 md:flex-row md:text-left lg:px-8
-                ">
-                    <p className="
-                        text-[11px] leading-5 text-slate-500 sm:text-xs
-                    ">
-                        © {currentYear} JEDE MEDTECH INDIA PRIVATE LIMITED.
-                        All rights reserved.
+            <div className="border-t border-slate-800 bg-[#0c121a]">
+                <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-5 text-center sm:px-6 md:flex-row md:text-left lg:px-8">
+                    <p className="text-[11px] leading-5 text-slate-500 sm:text-xs">
+                        © {year} JEDE MEDTECH INDIA PRIVATE LIMITED. All rights reserved.
                     </p>
-
-                    <p className="
-                        text-[11px] text-slate-600 sm:text-xs
-                    ">
-                        Medical Equipment • Consumables • Disposables
+                    <p className="text-[10px] leading-5 text-slate-600 sm:text-xs">
+                        Medical Equipment <span className="px-1">•</span> Consumables <span className="px-1">•</span> Disposables
                     </p>
                 </div>
             </div>
-
         </footer>
     );
 }
 
-function PhoneLink({ number, href }) {
+function FooterColumn({ section }) {
     return (
-        <a
-            href={href}
-            className="
-                group flex items-center gap-3
-                text-sm text-slate-300
-                transition-colors hover:text-white
-            "
-        >
-            <span className="
-                flex h-8 w-8 shrink-0 items-center justify-center
-                rounded-lg bg-white/5 text-cyan-400
-                transition-colors group-hover:bg-white/10
-            ">
-                <Phone size={15} />
-            </span>
-
-            <span>{number}</span>
-        </a>
-    );
-}
-
-function PhoneCard({ number, href }) {
-    return (
-        <a
-            href={href}
-            className="
-                flex items-center gap-3 rounded-xl
-                border border-slate-800 bg-white/[0.03]
-                px-4 py-3.5 transition-colors
-                hover:bg-white/[0.06]
-            "
-        >
-            <Phone
-                size={17}
-                className="shrink-0 text-cyan-400"
-            />
-
-            <div>
-                <p className="
-                    text-[10px] uppercase tracking-wide
-                    text-slate-500
-                ">
-                    Call
-                </p>
-
-                <p className="
-                    mt-0.5 text-sm font-semibold text-white
-                ">
-                    {number}
-                </p>
-            </div>
-        </a>
-    );
-}
-
-function FooterColumn({ title, links }) {
-    return (
-        <div>
-            <h3 className="
-                text-sm font-bold text-white
-            ">
-                {title}
-            </h3>
-
-            <ul className="mt-4 space-y-2.5">
-                {links.map((link) => (
-                    <li key={link.label}>
-                        <Link
-                            to={link.to}
-                            className="
-                                inline-block text-sm text-slate-400
-                                transition-colors
-                                hover:text-white
-                                hover:underline
-                                hover:underline-offset-4
-                            "
-                        >
+        <div className="min-w-0">
+            <h3 className="text-sm font-bold text-white">{section.title}</h3>
+            <ul className="mt-5 space-y-3">
+                {section.links.map(link => (
+                    <li key={link.to + link.label}>
+                        <Link to={link.to} className="inline-block text-sm leading-5 text-slate-400 transition hover:translate-x-1 hover:text-cyan-300">
                             {link.label}
                         </Link>
                     </li>

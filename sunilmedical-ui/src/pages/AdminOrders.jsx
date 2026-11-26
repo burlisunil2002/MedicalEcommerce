@@ -987,6 +987,7 @@ export default function AdminOrders() {
                 await API.put(
                     `/api/Seller/orders/items/${orderItemId}/status`,
                     {
+                        paymentStatus,
                         itemOrderStatus:
                             orderStatus
                     }
@@ -1010,10 +1011,7 @@ export default function AdminOrders() {
                         orderItemId
                         ? {
                             ...order,
-                            paymentStatus:
-                                isAdmin
-                                    ? paymentStatus
-                                    : order.paymentStatus,
+                            paymentStatus,
                             orderStatus
                         }
                         : order
@@ -2132,8 +2130,8 @@ export default function AdminOrders() {
                             </h2>
 
                             <p className="text-xs text-slate-500 mt-1">
-                                Item Amount is the paid amount allocated to each order item.
-                                Order-level delivery/coupon differences are not added to this item value.
+                                Admins can change payment status per order item using the Payment column and Save Payment button.
+                                Sellers can view payment status but cannot modify it. Item Amount is the paid amount allocated to each order item.
                                 Showing{" "}
                                 {number(
                                     visibleOrders.length
@@ -2179,6 +2177,9 @@ export default function AdminOrders() {
                                             }
                                             isAdmin={
                                                 isAdmin
+                                            }
+                                            isSeller={
+                                                isSeller
                                             }
                                             edited={
                                                 editedOrders[
@@ -2317,6 +2318,9 @@ export default function AdminOrders() {
                                                 }
                                                 isAdmin={
                                                     isAdmin
+                                                }
+                                                isSeller={
+                                                    isSeller
                                                 }
                                                 edited={
                                                     editedOrders[
@@ -2698,6 +2702,7 @@ function StatusBadge({
 function DesktopOrderRow({
     order,
     isAdmin,
+    isSeller,
     edited,
     updating,
     onEdit,
@@ -2819,40 +2824,54 @@ function DesktopOrderRow({
 
 
             <td className="p-4 align-top">
-                {isAdmin ? (
-                    <select
-                        value={
-                            paymentStatus
-                        }
-                        disabled={
-                            updating
-                        }
-                        onChange={event =>
-                            onEdit(
-                                "paymentStatus",
-                                event.target.value
-                            )
-                        }
-                        className="px-2.5 py-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                        {PAYMENT_STATUSES
-                            .filter(Boolean)
-                            .map(status => (
-                                <option
-                                    key={status}
-                                    value={status}
-                                >
-                                    {status}
-                                </option>
-                            ))}
-                    </select>
+                {(isAdmin || isSeller) ? (
+                    <div className="min-w-[155px] space-y-2">
+                        <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                            Manage payment status
+                        </label>
+                        <select
+                            value={
+                                paymentStatus
+                            }
+                            disabled={
+                                updating
+                            }
+                            onChange={event =>
+                                onEdit(
+                                    "paymentStatus",
+                                    event.target.value
+                                )
+                            }
+                            className="px-2.5 py-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            {PAYMENT_STATUSES
+                                .filter(Boolean)
+                                .map(status => (
+                                    <option
+                                        key={status}
+                                        value={status}
+                                    >
+                                        {status}
+                                    </option>
+                                ))}
+                        </select>
+                        <button
+                            type="button"
+                            disabled={updating || edited.paymentStatus == null || edited.paymentStatus === order.paymentStatus}
+                            onClick={() => onUpdate(paymentStatus, orderStatus)}
+                            className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-[11px] font-black text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+                        >
+                            {updating ? "Saving..." : "Save Payment"}
+                        </button>
+                    </div>
                 ) : (
-                    <StatusBadge
-                        value={
-                            paymentStatus
-                        }
-                        type="payment"
-                    />
+                    <div className="space-y-1">
+                        <StatusBadge
+                            value={paymentStatus}
+                            type="payment"
+                        />
+                        <p className="text-[10px] text-slate-400">Access required to change</p>
+                    </div>
                 )}
             </td>
 
@@ -2946,6 +2965,7 @@ function DesktopOrderRow({
 function MobileOrderCard({
     order,
     isAdmin,
+    isSeller,
     edited,
     updating,
     onEdit,
@@ -3082,44 +3102,53 @@ function MobileOrderCard({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
 
-                <div>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase mb-1">
-                        Payment
+                <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3">
+                    <p className="text-[11px] font-black text-blue-700 uppercase mb-2">
+                        Manage Payment Status
                     </p>
 
-                    {isAdmin ? (
-                        <select
-                            value={
-                                paymentStatus
-                            }
-                            disabled={
-                                updating
-                            }
-                            onChange={event =>
-                                onEdit(
-                                    "paymentStatus",
-                                    event.target.value
-                                )
-                            }
-                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                            {PAYMENT_STATUSES
-                                .filter(Boolean)
-                                .map(status => (
-                                    <option
-                                        key={status}
-                                        value={status}
-                                    >
-                                        {status}
-                                    </option>
-                                ))}
-                        </select>
+                    {(isAdmin || isSeller) ? (
+                        <div className="space-y-2">
+                            <select
+                                value={
+                                    paymentStatus
+                                }
+                                disabled={
+                                    updating
+                                }
+                                onChange={event =>
+                                    onEdit(
+                                        "paymentStatus",
+                                        event.target.value
+                                    )
+                                }
+                                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                {PAYMENT_STATUSES
+                                    .filter(Boolean)
+                                    .map(status => (
+                                        <option
+                                            key={status}
+                                            value={status}
+                                        >
+                                            {status}
+                                        </option>
+                                    ))}
+                            </select>
+                            <button
+                                type="button"
+                                disabled={updating || edited.paymentStatus == null || edited.paymentStatus === order.paymentStatus}
+                                onClick={() => onUpdate(paymentStatus, orderStatus)}
+                                className="w-full rounded-xl bg-emerald-600 px-3 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+                            >
+                                {updating ? "Saving payment..." : "Save Payment Status"}
+                            </button>
+                        </div>
                     ) : (
-                        <StatusBadge
-                            value={
-                                paymentStatus
-                            }
-                        />
+                        <div className="space-y-1">
+                            <StatusBadge value={paymentStatus} />
+                            <p className="text-[10px] text-slate-400">Access required to change</p>
+                        </div>
                     )}
                 </div>
 

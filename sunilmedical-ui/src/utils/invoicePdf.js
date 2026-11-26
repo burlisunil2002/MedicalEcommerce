@@ -1017,193 +1017,196 @@ export const generateSellerInvoicePdf = async (invoice) => {
         throw new Error("No invoice line items were returned by the server.");
     }
 
-    const doc = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-        compress: true,
-    });
-
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4", compress: true });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 14;
+    const margin = 12;
     const right = pageWidth - margin;
-
     const money = (value) => `Rs. ${roundMoney(value).toFixed(2)}`;
     const safe = (value, fallback = "-") =>
-        value === null || value === undefined || String(value).trim() === ""
-            ? fallback
-            : String(value);
+        value === null || value === undefined || String(value).trim() === "" ? fallback : String(value);
+    const firstNumber = (...values) => {
+        for (const value of values) {
+            if (value !== null && value !== undefined && value !== "") return Math.max(0, toNumber(value));
+        }
+        return 0;
+    };
 
-    // Supplier header comes from the issued seller invoice, never a hard-coded JEDE identity.
+    // Seller-issued invoice identity and amounts are read from the persisted invoice payload.
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    const supplierName = safe(invoice.supplierName, "Supplier");
-    const supplierNameLines = doc.splitTextToSize(supplierName, 105);
-    doc.text(supplierNameLines, margin, 18);
+    const supplierNameLines = doc.splitTextToSize(safe(invoice.supplierName, "Supplier"), 145);
+    doc.text(supplierNameLines, margin, 16);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    let supplierY = 18 + supplierNameLines.length * 5;
+    let supplierY = 16 + supplierNameLines.length * 5;
     [
         invoice.supplierGSTIN ? `GSTIN: ${invoice.supplierGSTIN}` : null,
         invoice.supplierAddress,
         invoice.supplierType ? `Supplier Type: ${invoice.supplierType}` : null,
+        invoice.supplierPhone ? `Phone: ${invoice.supplierPhone}` : null,
     ].filter(Boolean).forEach((line) => {
-        const wrapped = doc.splitTextToSize(String(line), 105);
+        const wrapped = doc.splitTextToSize(String(line), 145);
         doc.text(wrapped, margin, supplierY);
         supplierY += wrapped.length * 3.8 + 1;
     });
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
-    doc.text("TAX INVOICE", right, 18, { align: "right" });
-
+    doc.text("TAX INVOICE", right, 16, { align: "right" });
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    const invoiceMeta = [
+    const meta = [
         `Invoice No: ${safe(invoice.invoiceNumber)}`,
         `Order No: ${safe(invoice.orderNumber)}`,
         `Batch No: ${safe(invoice.batchNumber, invoice.deliveryBatchId ? `Batch #${invoice.deliveryBatchId}` : "-")}`,
         `Date: ${invoice.issuedAtUtc ? new Date(invoice.issuedAtUtc).toLocaleDateString("en-IN") : "-"}`,
         `Place of Supply: ${safe(invoice.placeOfSupply)}`,
-    ];
-    let metaY = 26;
-    invoiceMeta.forEach((line) => {
-        const wrapped = doc.splitTextToSize(line, 68);
+        invoice.paymentMethod ? `Payment Mode: ${invoice.paymentMethod}` : null,
+    ].filter(Boolean);
+    let metaY = 23;
+    meta.forEach((line) => {
+        const wrapped = doc.splitTextToSize(line, 82);
         doc.text(wrapped, right, metaY, { align: "right" });
         metaY += wrapped.length * 3.8 + 1;
     });
 
-    const dividerY = Math.max(supplierY, metaY) + 3;
+    const dividerY = Math.max(supplierY, metaY) + 2;
     doc.setDrawColor(190);
     doc.line(margin, dividerY, right, dividerY);
 
-    const columnGap = 8;
-    const colWidth = (pageWidth - margin * 2 - columnGap) / 2;
-    const addressY = dividerY + 9;
-
-    const drawTextBlock = (title, content, x) => {
+    const gap = 10;
+    const colWidth = (pageWidth - margin * 2 - gap) / 2;
+    const addressY = dividerY + 7;
+    const drawBlock = (title, values, x) => {
         doc.setFont("helvetica", "bold");
         doc.setFontSize(9);
         doc.text(title, x, addressY);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
-        const lines = doc.splitTextToSize(safe(content, "Not provided"), colWidth);
-        doc.text(lines, x, addressY + 6);
-        return addressY + 6 + lines.length * 4;
+        const lines = doc.splitTextToSize(values.filter(Boolean).join("\n") || "Not provided", colWidth);
+        doc.text(lines, x, addressY + 5);
+        return addressY + 5 + lines.length * 3.8;
     };
+    const buyerEnd = drawBlock("BILL TO / SHIP TO", [
+        invoice.customerName,
+        invoice.customerAddress,
+        invoice.customerPhone ? `Phone: ${invoice.customerPhone}` : null,
+        invoice.customerEmail ? `Email: ${invoice.customerEmail}` : null,
+        invoice.customerGSTIN ? `GSTIN: ${invoice.customerGSTIN}` : null,
+    ], margin);
+    const supplierEnd = drawBlock("SUPPLIER DETAILS", [
+        invoice.supplierName,
+        invoice.supplierAddress,
+        invoice.supplierGSTIN ? `GSTIN: ${invoice.supplierGSTIN}` : null,
+        invoice.placeOfSupply ? `Place of Supply: ${invoice.placeOfSupply}` : null,
+    ], margin + colWidth + gap);
 
-    const buyerEnd = drawTextBlock(
-        "BILL TO / SHIP TO",
-        [
-            invoice.customerName,
-            invoice.customerAddress,
-            invoice.customerPhone ? `Phone: ${invoice.customerPhone}` : null,
-            invoice.customerGSTIN ? `GSTIN: ${invoice.customerGSTIN}` : null,
-        ].filter(Boolean).join("\n"),
-        margin
-    );
-
-    const supplierEnd = drawTextBlock(
-        "SUPPLIER DETAILS",
-        [
-            invoice.supplierName,
-            invoice.supplierAddress,
-            invoice.supplierGSTIN ? `GSTIN: ${invoice.supplierGSTIN}` : null,
-            invoice.placeOfSupply ? `Place of Supply: ${invoice.placeOfSupply}` : null,
-        ].filter(Boolean).join("\n"),
-        margin + colWidth + columnGap
-    );
-
-    const tableRows = items.map((item) => [
-        safe(item.productName),
-        safe(item.hsnCode),
-        String(Math.max(0, Number(item.quantity) || 0)),
-        money(item.unitPrice),
-        money(item.taxableAmount),
-        `${roundMoney(item.gstPercentage).toFixed(2)}%`,
-        money(item.gstAmount),
-        money(item.lineTotal),
-    ]);
+    // Prefer explicit backend discount fields. If only original unit price and final
+    // line total exist, classify the unexplained difference as product discount only
+    // when no coupon amount is present; otherwise retain it as an unallocated discount.
+    let productDiscountTotal = 0;
+    let couponDiscountTotal = 0;
+    let unallocatedDiscountTotal = 0;
+    let grossProductTotal = 0;
+    const tableRows = items.map((item) => {
+        const qty = Math.max(0, toNumber(item.quantity));
+        const unitPrice = firstNumber(item.originalUnitPrice, item.listPrice, item.unitPrice, item.price);
+        const gross = roundMoney(unitPrice * qty);
+        const lineTotal = roundMoney(firstNumber(item.lineTotal, item.totalAmount, item.finalAmount));
+        const explicitProductDiscount = firstNumber(item.productDiscountAmount, item.discountAmount, item.discountTotal);
+        const explicitCoupon = firstNumber(item.couponDiscount, item.couponDiscountAmount);
+        const difference = roundMoney(Math.max(0, gross - lineTotal));
+        let productDiscount = explicitProductDiscount;
+        let couponDiscount = explicitCoupon;
+        let unallocated = Math.max(0, roundMoney(difference - productDiscount - couponDiscount));
+        if (difference > 0 && explicitProductDiscount === 0 && explicitCoupon === 0) {
+            const invoiceCouponExists = firstNumber(invoice.couponDiscount, invoice.couponAmount, invoice.couponDiscountTotal) > 0;
+            if (invoiceCouponExists) unallocated = difference;
+            else productDiscount = difference;
+        }
+        productDiscount = Math.min(gross, productDiscount);
+        couponDiscount = Math.min(Math.max(0, gross - productDiscount), couponDiscount);
+        unallocated = Math.min(Math.max(0, gross - productDiscount - couponDiscount), unallocated);
+        productDiscountTotal += productDiscount;
+        couponDiscountTotal += couponDiscount;
+        unallocatedDiscountTotal += unallocated;
+        grossProductTotal += gross;
+        return [
+            safe(item.productName),
+            safe(item.hsnCode),
+            String(qty),
+            money(unitPrice),
+            money(productDiscount),
+            money(couponDiscount),
+            money(item.taxableAmount),
+            `${roundMoney(item.gstPercentage).toFixed(2)}%`,
+            money(item.gstAmount),
+            money(lineTotal),
+        ];
+    });
 
     autoTable(doc, {
-        startY: Math.max(buyerEnd, supplierEnd) + 8,
-        margin: { left: margin, right: margin, bottom: 18 },
-        head: [[
-            "Product",
-            "HSN",
-            "Qty",
-            "Unit Price",
-            "Taxable",
-            "GST %",
-            "GST Amt",
-            "Line Total",
-        ]],
+        startY: Math.max(buyerEnd, supplierEnd) + 7,
+        margin: { left: margin, right: margin, bottom: 17 },
+        head: [["Product", "HSN", "Qty", "Original Unit Price", "Product Discount", "Coupon Discount", "Taxable Value", "GST %", "GST Amount", "Line Total"]],
         body: tableRows,
         theme: "grid",
         showHead: "everyPage",
-        styles: {
-            font: "helvetica",
-            fontSize: 7,
-            cellPadding: 2,
-            overflow: "linebreak",
-            valign: "middle",
-        },
+        styles: { font: "helvetica", fontSize: 7, cellPadding: 2, overflow: "linebreak", valign: "middle" },
         headStyles: { fontStyle: "bold", fontSize: 7 },
         columnStyles: {
-            0: { cellWidth: 39 },
-            1: { cellWidth: 17 },
-            2: { cellWidth: 10, halign: "center" },
-            3: { cellWidth: 23, halign: "right" },
-            4: { cellWidth: 23, halign: "right" },
-            5: { cellWidth: 13, halign: "right" },
-            6: { cellWidth: 22, halign: "right" },
-            7: { cellWidth: 25, halign: "right" },
+            0: { cellWidth: 42 }, 1: { cellWidth: 15 }, 2: { cellWidth: 9, halign: "center" },
+            3: { cellWidth: 25, halign: "right" }, 4: { cellWidth: 24, halign: "right" },
+            5: { cellWidth: 23, halign: "right" }, 6: { cellWidth: 24, halign: "right" },
+            7: { cellWidth: 12, halign: "right" }, 8: { cellWidth: 23, halign: "right" },
+            9: { cellWidth: 24, halign: "right" },
         },
         didDrawPage: () => {
             doc.setFont("helvetica", "normal");
             doc.setFontSize(7);
-            doc.text(`Invoice: ${safe(invoice.invoiceNumber)}`, margin, pageHeight - 8);
-            doc.text(`Page ${doc.getNumberOfPages()}`, right, pageHeight - 8, { align: "right" });
+            doc.text(`Invoice: ${safe(invoice.invoiceNumber)}`, margin, pageHeight - 7);
+            doc.text(`Page ${doc.getNumberOfPages()}`, right, pageHeight - 7, { align: "right" });
         },
     });
 
-    let y = (doc.lastAutoTable?.finalY || 100) + 10;
-    if (y > pageHeight - 55) {
-        doc.addPage();
-        y = 22;
-    }
-
+    let y = (doc.lastAutoTable?.finalY || 100) + 8;
+    if (y > pageHeight - 48) { doc.addPage(); y = 18; }
+    const shipping = firstNumber(invoice.deliveryCharge, invoice.shippingAmount, invoice.shippingCharge, invoice.shippingCost);
+    const invoiceCoupon = firstNumber(invoice.couponDiscount, invoice.couponAmount, invoice.couponDiscountTotal);
     const summaryRows = [
+        ["Gross Product Value", roundMoney(grossProductTotal)],
+        ["Product Discount", -roundMoney(productDiscountTotal)],
+        ["Coupon Discount", -roundMoney(couponDiscountTotal || invoiceCoupon)],
+        ...(unallocatedDiscountTotal > 0 ? [["Unallocated Discount (backend breakdown required)", -roundMoney(unallocatedDiscountTotal)]] : []),
         ["Taxable Total", invoice.taxableTotal],
         ["GST Total", invoice.gstTotal],
+        ["Delivery / Shipping Charges", shipping],
     ];
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     summaryRows.forEach(([label, amount]) => {
-        doc.text(label, right - 75, y);
+        doc.text(String(label), right - 100, y);
         doc.text(money(amount), right, y, { align: "right" });
-        y += 6;
+        y += 5;
     });
-
     doc.setDrawColor(170);
-    doc.line(right - 75, y - 2, right, y - 2);
+    doc.line(right - 100, y - 2, right, y - 2);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
-    doc.text("INVOICE TOTAL", right - 75, y + 5);
+    doc.text("INVOICE TOTAL", right - 100, y + 5);
     doc.text(money(invoice.invoiceTotal), right, y + 5, { align: "right" });
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.text(
-        "This is a computer-generated seller tax invoice.",
-        margin,
-        Math.min(y + 18, pageHeight - 12)
-    );
+    doc.setFontSize(7);
+    const note = unallocatedDiscountTotal > 0
+        ? "Note: Discount difference is shown as unallocated because the seller invoice payload does not identify its product/coupon split. Update the backend invoice DTO to provide separate discount fields."
+        : "This is a computer-generated seller tax invoice. Values are taken from the issued seller invoice record.";
+    const noteLines = doc.splitTextToSize(note, pageWidth - margin * 2);
+    doc.text(noteLines, margin, Math.min(y + 15, pageHeight - 15));
 
-    const filename = String(invoice.invoiceNumber)
-        .replace(/[^a-zA-Z0-9._-]/g, "_");
+    const filename = String(invoice.invoiceNumber).replace(/[^a-zA-Z0-9._-]/g, "_");
     doc.save(`${filename}.pdf`);
 };
 

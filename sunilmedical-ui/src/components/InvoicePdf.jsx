@@ -111,6 +111,46 @@ const getFinalUnitPrice = (item) => {
     );
 };
 
+const getHsnCode = (item) =>
+    String(
+        item?.hsnCode ??
+        item?.hsn ??
+        item?.product?.hsnCode ??
+        item?.product?.hsn ??
+        ""
+    ).trim() || "Not provided";
+
+const getStateCode = (value) => {
+    const text = String(value ?? "").trim().toLowerCase();
+    const stateCodes = {
+        "andhra pradesh": "37",
+        "telangana": "36",
+        "tamil nadu": "33",
+        "karnataka": "29",
+        "maharashtra": "27",
+        "delhi": "07",
+        "kerala": "32",
+        "odisha": "21",
+        "west bengal": "19",
+        "gujarat": "24",
+        "rajasthan": "08",
+        "uttar pradesh": "09",
+        "madhya pradesh": "23"
+    };
+    if (/^\d{2}$/.test(text)) return text;
+    return stateCodes[text] || null;
+};
+
+const getPlaceOfSupplyState = (order) =>
+    order?.placeOfSupplyStateCode ??
+    order?.placeOfSupplyCode ??
+    order?.deliveryAddress?.stateCode ??
+    order?.billingAddress?.stateCode ??
+    order?.deliveryAddress?.state ??
+    order?.billingAddress?.state ??
+    order?.placeOfSupply ??
+    "";
+
 const getProductDisplayName = (item) => {
     const productName =
         item?.productName ??
@@ -141,18 +181,18 @@ const buildInvoiceLine = (item) => {
     );
 
     // DiscountAmount from the backend is PER UNIT.
-    const discountPerUnit = roundMoney(
-        getProductDiscountPerUnit(
-            item,
-            originalUnitPrice
-        )
+    const explicitFinalUnitPrice = getExplicitFinalUnitPrice(item);
+    const calculatedDiscountPerUnit = getProductDiscountPerUnit(
+        item,
+        originalUnitPrice
     );
-
     const finalUnitPrice = roundMoney(
-        Math.max(
-            0,
-            originalUnitPrice - discountPerUnit
-        )
+        explicitFinalUnitPrice > 0 && explicitFinalUnitPrice <= originalUnitPrice
+            ? explicitFinalUnitPrice
+            : Math.max(0, originalUnitPrice - calculatedDiscountPerUnit)
+    );
+    const discountPerUnit = roundMoney(
+        Math.max(0, originalUnitPrice - finalUnitPrice)
     );
 
     const originalLineTotal = roundMoney(
@@ -187,6 +227,7 @@ const buildInvoiceLine = (item) => {
 
     return {
         name: getProductDisplayName(item),
+        hsnCode: getHsnCode(item),
         quantity,
         gstRate,
         originalUnitPrice,
@@ -458,6 +499,46 @@ const buildTotals = (order, lines) => {
     };
 };
 
+const getTaxSplit = (gstAmount, order) => {
+    const supplierStateCode = SUPPLIER_LEGAL_DETAILS.stateCode;
+    const placeStateCode = getStateCode(getPlaceOfSupplyState(order));
+
+    if (!placeStateCode) {
+        return {
+            cgst: null,
+            sgst: null,
+            igst: null,
+            label: "GST split requires place of supply"
+        };
+    }
+
+    if (placeStateCode === supplierStateCode) {
+        const half = roundMoney(gstAmount / 2);
+        return {
+            cgst: half,
+            sgst: roundMoney(gstAmount - half),
+            igst: 0,
+            label: "CGST + SGST"
+        };
+    }
+
+    return {
+        cgst: 0,
+        sgst: 0,
+        igst: roundMoney(gstAmount),
+        label: "IGST"
+    };
+};
+
+const SUPPLIER_LEGAL_DETAILS = {
+    legalName: "JEDE MEDTECH INDIA PRIVATE LIMITED",
+    gstin: "37AKLPA6711H1ZA",
+    address: "480/2, AMTZ CAMPUS, Pragathi Maiden, Visakhapatnam Steel Plant, Pedagantyada, Visakhapatnam, Andhra Pradesh, India",
+    phone: "6301427306, 9390630297",
+    stateCode: "37",
+    stateName: "Andhra Pradesh"
+};
+
 const addHeader = (doc, order) => {
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 14;
@@ -488,9 +569,9 @@ const addHeader = (doc, order) => {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     [
-        "GSTIN: 37AKLPA6711H1ZA",
-        "480/2, AMTZ CAMPUS, Pragathi Maiden, Visakhapatnam Steel Plant, Pedagantyada, Visakhapatnam, Andhra Pradesh, India",
-        "Phone: 6301427306, 9390630297"
+        `GSTIN: ${SUPPLIER_LEGAL_DETAILS.gstin}`,
+        SUPPLIER_LEGAL_DETAILS.address,
+        `Phone: ${SUPPLIER_LEGAL_DETAILS.phone}`
     ].forEach((value) => {
         const wrapped = doc.splitTextToSize(value, leftWidth);
         doc.text(wrapped, margin, sellerY);
@@ -508,7 +589,9 @@ const addHeader = (doc, order) => {
         `Invoice No: ${invoiceNo}`,
         `Order ID: #${order?.orderId || "-"}`,
         `Date: ${dateText}`,
-        order?.placeOfSupply ? `Place of Supply: ${order.placeOfSupply}` : null
+        order?.placeOfSupply ? `Place of Supply: ${order.placeOfSupply}` : null,
+        `Payment Mode: ${order?.paymentMethod || order?.paymentMode || "Not specified"}`,
+        `Reverse Charge: ${order?.reverseCharge === true ? "Yes" : "No"}`
     ].filter(Boolean);
 
     let metaY = 25;
@@ -582,9 +665,9 @@ const addAddress = (doc, order, startY = 48) => {
     );
 
     const sellerTaxLines = [
-        "JEDE MEDTECH INDIA PRIVATE LIMITED",
-        "GSTIN: 37AKLPA6711H1ZA",
-        "Andhra Pradesh, India",
+        SUPPLIER_LEGAL_DETAILS.legalName,
+        `GSTIN: ${SUPPLIER_LEGAL_DETAILS.gstin}`,
+        `${SUPPLIER_LEGAL_DETAILS.stateName}, India`,
         order?.placeOfSupply ? `Place of Supply: ${order.placeOfSupply}` : null
     ].filter(Boolean);
 
@@ -654,7 +737,7 @@ const addSummary = (
             totals.totalWithGst,
         ],
         [
-            "Shipping",
+            "Delivery / Shipping Charges",
             totals.shipping,
         ],
         [
@@ -757,13 +840,13 @@ const addSummary = (
     );
 
     doc.text(
-        "Discounted Product Value - Coupon Discount = Final Paid Product Amount; shipping is added separately.",
+        "Discounted Product Value - Coupon Discount + Delivery Charges = Final Invoice Amount.",
         14,
         y + 24.5
     );
 
     doc.text(
-        "This is a computer-generated invoice and does not require a signature.",
+        "This is a computer-generated document. Supplier remains responsible for GST reporting and invoice compliance.",
         14,
         Math.min(
             y + 32,
@@ -848,7 +931,7 @@ export const generateInvoicePdf = async (
         );
 
     const doc = new jsPDF({
-        orientation: "portrait",
+        orientation: "landscape",
         unit: "mm",
         format: "a4",
         compress: true,
@@ -869,31 +952,32 @@ export const generateInvoicePdf = async (
     );
 
     const tableRows =
-        lines.map((line) => [
-            line.name,
-            String(line.quantity),
+        lines.map((line) => {
+            const couponPerUnit = roundMoney(
+                line.quantity > 0 ? line.couponDiscount / line.quantity : 0
+            );
+            const unitAfterProductDiscount = line.finalUnitPrice;
+            const taxSplit = getTaxSplit(line.gstLine, order);
 
-            // FINAL taxable unit price after product discount
-            // and coupon allocation.
-            formatMoney(
-                line.quantity > 0
-                    ? line.taxableLine /
-                    line.quantity
-                    : 0
-            ),
-
-            `${line.gstRate.toFixed(2)}%`,
-
-            // GST contained in the FINAL paid amount
-            // after product discount + coupon.
-            formatMoney(line.gstLine),
-
-            // Order-level coupon allocated to this item.
-            formatMoney(line.couponDiscount),
-
-            // Actual amount paid for this item.
-            formatMoney(line.finalPaidAmount)
-        ]);
+            return [
+                `${line.name}\nHSN: ${line.hsnCode}`,
+                String(line.quantity),
+                formatMoney(line.originalUnitPrice),
+                formatMoney(line.discountPerUnit),
+                formatMoney(unitAfterProductDiscount),
+                formatMoney(couponPerUnit),
+                formatMoney(
+                    line.quantity > 0 ? line.taxableLine / line.quantity : 0
+                ),
+                `${line.gstRate.toFixed(2)}%`,
+                taxSplit.igst === null
+                    ? `GST ${formatMoney(line.gstLine)}`
+                    : taxSplit.igst > 0
+                        ? `IGST ${formatMoney(taxSplit.igst)}`
+                        : `CGST ${formatMoney(taxSplit.cgst)}\nSGST ${formatMoney(taxSplit.sgst)}`,
+                formatMoney(line.finalPaidAmount)
+            ];
+        });
 
     autoTable(doc, {
         startY: Math.max(
@@ -908,13 +992,16 @@ export const generateInvoicePdf = async (
         },
 
         head: [[
-            "Product / Model",
+            "Product / HSN",
             "Qty",
-            "Final Price Excl. GST",
+            "Original Unit",
+            "Product Disc./Unit",
+            "After Product Disc.",
+            "Coupon/Unit",
+            "Taxable Unit",
             "GST %",
-            "GST Amount",
-            "Coupon Discount",
-            "Final Paid",
+            "GST Split",
+            "Line Total"
         ]],
 
         body: tableRows,
@@ -925,45 +1012,28 @@ export const generateInvoicePdf = async (
 
         styles: {
             font: "helvetica",
-            fontSize: 7.5,
-            cellPadding: 2.4,
+            fontSize: 7,
+            cellPadding: 2.2,
             overflow: "linebreak",
             valign: "middle",
         },
 
         headStyles: {
             fontStyle: "bold",
-            fontSize: 7.5,
+            fontSize: 7,
         },
 
         columnStyles: {
-            0: {
-                cellWidth: 43,
-            },
-            1: {
-                cellWidth: 10,
-                halign: "center",
-            },
-            2: {
-                cellWidth: 27,
-                halign: "right",
-            },
-            3: {
-                cellWidth: 13,
-                halign: "right",
-            },
-            4: {
-                cellWidth: 24,
-                halign: "right",
-            },
-            5: {
-                cellWidth: 29,
-                halign: "right",
-            },
-            6: {
-                cellWidth: 36,
-                halign: "right",
-            },
+            0: { cellWidth: 48 },
+            1: { cellWidth: 9, halign: "center" },
+            2: { cellWidth: 22, halign: "right" },
+            3: { cellWidth: 23, halign: "right" },
+            4: { cellWidth: 25, halign: "right" },
+            5: { cellWidth: 20, halign: "right" },
+            6: { cellWidth: 22, halign: "right" },
+            7: { cellWidth: 12, halign: "right" },
+            8: { cellWidth: 28, halign: "right" },
+            9: { cellWidth: 25, halign: "right" }
         },
 
         didDrawPage: () => {

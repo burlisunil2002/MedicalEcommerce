@@ -18,6 +18,11 @@ import MyOrdersPage from "./pages/MyOrdersPage";
 import InvoicePage from "./pages/InvoicePage";
 import OrderSuccessPage from "./pages/OrderSuccessPage";
 import FAQ from "./pages/FAQ";
+import AboutUs from "./pages/AboutUs";
+import ContactUs from "./pages/ContactUs";
+import TermsAndConditions from "./pages/TermsAndConditions";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import RefundCancellation from "./pages/RefundCancellation";
 
 
 
@@ -264,6 +269,12 @@ function App() {
                             path="success-order/:id"
                             element={<OrderSuccessPage />}
                         />
+
+                        <Route path="about-us" element={<AboutUs />} />
+                        <Route path="contact-us" element={<ContactUs />} />
+                        <Route path="terms-and-conditions" element={<TermsAndConditions />} />
+                        <Route path="privacy-policy" element={<PrivacyPolicy />} />
+                        <Route path="refund-cancellation" element={<RefundCancellation />} />
 
                     </Route>
 

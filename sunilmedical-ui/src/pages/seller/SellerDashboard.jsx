@@ -21,7 +21,6 @@ import {
     Plus,
     RefreshCw,
     ShoppingCart,
-    TrendingUp,
     Users,
     XCircle
 } from "lucide-react";
@@ -47,8 +46,6 @@ const EMPTY_DASHBOARD = {
     lowStock: 0,
 
     growth: null,
-    subscriptionEnd: null,
-    isSubscribed: false,
 
     payment: {
         cashOnDelivery: 0,
@@ -117,23 +114,6 @@ const formatCurrency = (value) => {
     }).format(toNumber(value));
 };
 
-const formatDate = (value) => {
-    if (!value) {
-        return "Not available";
-    }
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return "Not available";
-    }
-
-    return date.toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric"
-    });
-};
 
 const formatUpdatedTime = (value) => {
     if (!value) {
@@ -278,17 +258,6 @@ export default function SellerDashboard() {
                                 statistics?.growth !== ""
                                 ? toNumber(statistics.growth)
                                 : null,
-
-                    subscriptionEnd:
-                        data?.subscriptionEnd ||
-                        data?.subscription?.endDate ||
-                        null,
-
-                    isSubscribed: Boolean(
-                        data?.isSubscribed ??
-                        data?.subscription?.isActive ??
-                        false
-                    ),
 
                     payment: {
                         cashOnDelivery: firstNumber(
@@ -537,43 +506,6 @@ export default function SellerDashboard() {
 
 
     // =========================================================
-    // SUBSCRIPTION
-    // =========================================================
-
-    const subscriptionDays = useMemo(() => {
-        if (!dashboard.subscriptionEnd) {
-            return null;
-        }
-
-        const end = new Date(
-            dashboard.subscriptionEnd
-        );
-
-        if (Number.isNaN(end.getTime())) {
-            return null;
-        }
-
-        const today = new Date();
-
-        today.setHours(0, 0, 0, 0);
-        end.setHours(0, 0, 0, 0);
-
-        return Math.ceil(
-            (end - today) / 86400000
-        );
-    }, [dashboard.subscriptionEnd]);
-
-    const subscriptionMessage =
-        dashboard.isSubscribed
-            ? subscriptionDays === null
-                ? "Your seller subscription is active."
-                : subscriptionDays > 0
-                    ? `${subscriptionDays} day${subscriptionDays === 1 ? "" : "s"} remaining`
-                    : "Subscription expires today"
-            : "Renew your subscription to continue selling";
-
-
-    // =========================================================
     // LOADING
     // =========================================================
 
@@ -604,7 +536,7 @@ export default function SellerDashboard() {
     // =========================================================
 
     return (
-        <div className="min-h-full space-y-6 pb-10">
+        <div className="min-h-full w-full space-y-5 overflow-x-hidden pb-8 sm:space-y-6 sm:pb-10">
 
             {/* HEADER */}
 
@@ -848,7 +780,7 @@ export default function SellerDashboard() {
 
             {/* ORDER PERFORMANCE */}
 
-            <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+            <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
                     <div>
                         <h2 className="text-lg font-bold text-slate-900">
@@ -915,7 +847,7 @@ export default function SellerDashboard() {
 
             {/* PAYMENT PERFORMANCE */}
 
-            <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+            <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
                 <div className="flex items-center gap-3 mb-6">
                     <div className="h-11 w-11 rounded-xl bg-blue-50 flex items-center justify-center">
                         <CreditCard
@@ -1001,7 +933,7 @@ export default function SellerDashboard() {
 
             {/* RETURNS */}
 
-            <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+            <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
                 <div className="flex items-center gap-3 mb-6">
                     <div className="h-11 w-11 rounded-xl bg-orange-50 flex items-center justify-center">
                         <Package
@@ -1255,8 +1187,8 @@ export default function SellerDashboard() {
 
                     <div
                         className={`mt-3 flex items-center justify-between rounded-xl p-4 ${dashboard.lowStock > 0
-                                ? "bg-amber-50"
-                                : "bg-emerald-50"
+                            ? "bg-amber-50"
+                            : "bg-emerald-50"
                             }`}
                     >
                         <div className="flex items-center gap-3">
@@ -1300,87 +1232,9 @@ export default function SellerDashboard() {
             </div>
 
 
-            {/* SUBSCRIPTION */}
-
-            <motion.section
-                initial={{
-                    opacity: 0,
-                    y: 12
-                }}
-                animate={{
-                    opacity: 1,
-                    y: 0
-                }}
-                className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm"
-            >
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-                    <div className="flex items-start gap-4">
-                        <div className="h-12 w-12 shrink-0 rounded-xl bg-blue-50 flex items-center justify-center">
-                            <CreditCard
-                                size={24}
-                                className="text-blue-600"
-                            />
-                        </div>
-
-                        <div>
-                            <h2 className="text-lg font-bold text-slate-900">
-                                Subscription
-                            </h2>
-
-                            <p className="text-sm text-slate-500 mt-1">
-                                {subscriptionMessage}
-                            </p>
-
-                            {dashboard.subscriptionEnd && (
-                                <p className="text-xs text-slate-500 mt-2">
-                                    Valid till{" "}
-                                    <span className="font-semibold text-slate-700">
-                                        {formatDate(
-                                            dashboard.subscriptionEnd
-                                        )}
-                                    </span>
-                                </p>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                        <span
-                            className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-bold ${dashboard.isSubscribed
-                                    ? "bg-emerald-50 text-emerald-700"
-                                    : "bg-red-50 text-red-700"
-                                }`}
-                        >
-                            {dashboard.isSubscribed ? (
-                                <CheckCircle2 size={15} />
-                            ) : (
-                                <XCircle size={15} />
-                            )}
-
-                            {dashboard.isSubscribed
-                                ? "Active"
-                                : "Expired"}
-                        </span>
-
-                        <button
-                            type="button"
-                            onClick={() =>
-                                navigate(
-                                    "/seller/subscription"
-                                )
-                            }
-                            className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800"
-                        >
-                            Manage
-                        </button>
-                    </div>
-                </div>
-            </motion.section>
-
-
             {/* QUICK ACTIONS */}
 
-            <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+            <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
                 <div className="mb-5">
                     <h2 className="text-lg font-bold text-slate-900">
                         Quick Actions
@@ -1424,17 +1278,6 @@ export default function SellerDashboard() {
                             )
                         }
                     />
-
-                    <ActionButton
-                        icon={CreditCard}
-                        title="Subscription"
-                        description="Manage plan"
-                        onClick={() =>
-                            navigate(
-                                "/seller/subscription"
-                            )
-                        }
-                    />
                 </div>
             </section>
 
@@ -1469,18 +1312,6 @@ export default function SellerDashboard() {
                             dashboard.pendingOrderItems === 0
                         }
                     />
-
-                    <ChecklistItem
-                        text={
-                            dashboard.isSubscribed
-                                ? "Subscription is active"
-                                : "Renew your seller subscription"
-                        }
-                        done={
-                            dashboard.isSubscribed
-                        }
-                    />
-
                     <ChecklistItem
                         text={
                             dashboard.returns.requested > 0
@@ -1609,7 +1440,7 @@ function SummaryCard({
     children
 }) {
     return (
-        <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+        <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
             <h2 className="text-lg font-bold text-slate-900 mb-5">
                 {title}
             </h2>
